@@ -21,8 +21,9 @@ clients at a $0 license fee.
 
 ## Immediate work queue
 
-- [ ] Issue 1: Record upstream provenance and dependency licenses.
-- [ ] Issue 2: Import the public free source without functional changes.
+- [x] Issue 1a: Record immutable upstream package provenance and manifest.
+- [ ] Issue 1b: Complete the dependency-license inventory.
+- [x] Issue 2: Import the public free source without functional changes.
 - [ ] Issue 3: Add Composer, PHPCS, PHPStan, PHPUnit, and JavaScript checks.
 - [ ] Issue 4: Produce an upstream baseline test report.
 - [ ] Issue 5: Rebrand plugin header, user-facing copy, assets, namespaces, and update URLs.
