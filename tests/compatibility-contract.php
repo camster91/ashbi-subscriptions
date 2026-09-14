@@ -96,6 +96,12 @@ foreach ( $required_hooks as $hook ) {
 	ashbi_assert( false !== strpos( $source, "'{$hook}'" ), "Missing compatibility-critical hook: {$hook}" );
 }
 
+ashbi_assert( false === strpos( $source, 'str_starts_with(' ), 'Maintained code must remain compatible with PHP 7.4.' );
+ashbi_assert( 0 === preg_match( '/(^|[^A-Za-z0-9_>])dd\\s*\\(/m', $source ), 'Debug dump calls must not ship in production code.' );
+ashbi_assert( false === strpos( $source, 'catch ( Exception ' ), 'Namespaced code must catch global \\Exception explicitly.' );
+ashbi_assert( false === strpos( $source, '$variation_id = $variation_id;' ), 'Manual renewal must not discard the stored variation ID.' );
+ashbi_assert( false === strpos( $source, '$product_data->' ), 'PayPal product creation must not dereference undefined product data.' );
+
 if ( $errors ) {
 	fwrite( STDERR, "Compatibility contract failed:\n- " . implode( "\n- ", $errors ) . "\n" );
 	exit( 1 );

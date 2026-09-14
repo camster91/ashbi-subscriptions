@@ -237,7 +237,7 @@ class Subscriptions {
 			),
 			'next_date'        => array(
 				'label' => __( 'Payment due date', 'subscription' ),
-				'value' => ! empty( $next_date ) ? wp_date( 'F d, Y', $trial && $trial_end_date && 'on' === $trial_mode ? $trial_end_date : ( $next_date ?? '-' ) ) : '-',
+				'value' => ! empty( $next_date ) ? wp_date( 'F d, Y', $trial && $trial_end_date && 'on' === $trial_mode ? $trial_end_date : $next_date ) : '-',
 			),
 			'status'           => array(
 				'label' => __( 'Status', 'subscription' ),

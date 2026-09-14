@@ -762,7 +762,7 @@ if ( ! function_exists( 'sdevs_wp_strtotime' ) ) {
 			if ( $modified instanceof DateTime ) {
 				return $modified->getTimestamp();
 			}
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			// Unparsable string — fall through to strtotime().
 			return strtotime( $str, $base );
 		}

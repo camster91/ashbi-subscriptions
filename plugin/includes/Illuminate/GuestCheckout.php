@@ -215,8 +215,9 @@ class GuestCheckout {
 	public function validate_guest_checkout_storeapi( $errors ) {
 		if ( ! $this->is_subs_and_guest_checkout_allowed() ) {
 			$errors->add( 'wp_subscription_login_required', __( 'You are trying to buy a subscription. You must be logged in to continue.', 'subscription' ) );
-			return $errors;
 		}
+
+		return $errors;
 	}
 
 	/**

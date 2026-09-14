@@ -113,10 +113,7 @@ class ActionController {
 		$product_id                = get_post_meta( $subscrpt_id, '_subscrpt_product_id', true );
 		$subscription_variation_id = get_post_meta( $subscrpt_id, '_subscrpt_variation_id', true );
 
-		$variation_id = 0;
-		if ( isset( $variation_id ) ) {
-			$variation_id = $variation_id;
-		}
+		$variation_id = ! empty( $subscription_variation_id ) ? (int) $subscription_variation_id : 0;
 
 		WC()->cart->empty_cart();
 

@@ -177,7 +177,7 @@ trait Email {
 		$order_item_id = get_post_meta( $this->subscription_id, '_subscrpt_order_item_id', true );
 		try {
 			$order_id = wc_get_order_id_by_order_item_id( $order_item_id );
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			return;
 		}
 		$order = wc_get_order( $order_id );

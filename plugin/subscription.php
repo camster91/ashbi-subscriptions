@@ -288,6 +288,8 @@ final class Sdevs_Subscription {
 			case 'frontend':
 				return ( ! is_admin() || defined( 'DOING_AJAX' ) ) && ! defined( 'DOING_CRON' );
 		}
+
+		return false;
 	}
 } // Sdevs_Wc_Subscription
 

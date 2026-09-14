@@ -1003,7 +1003,7 @@ class Menu {
 						);
 						break;
 				}
-			} catch ( Exception $e ) {
+			} catch ( \Exception $e ) {
 				$errors[] = sprintf(
 					// translators: Subscription ID, Error message.
 					__( 'Error processing subscription #%1$d: %2$s', 'subscription' ),

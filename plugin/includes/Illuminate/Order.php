@@ -38,12 +38,13 @@ class Order {
 		$type            = Helper::get_typos( 1, $order_item_meta['type'] );
 		$trial           = get_post_meta( $subscription_id, '_subscrpt_trial', true );
 		$recurr_timing   = ( $order_item_meta['time'] ?? 1 ) . ' ' . $type;
+		$next_date       = null;
 
 		if ( 'new' === $subscription_history->type ) {
 			$start_date = time();
 			$next_date  = sdevs_wp_strtotime( $recurr_timing, $start_date );
 
-			if ( $trial && ! empty( $trial ) ) {
+			if ( $trial ) {
 				$trial_started = get_post_meta( $subscription_id, '_subscrpt_trial_started', true );
 				$trial_ended   = get_post_meta( $subscription_id, '_subscrpt_trial_ended', true );
 

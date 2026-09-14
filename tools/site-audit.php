@@ -192,9 +192,9 @@ if ( ashbi_audit_table_exists( $relation_table ) ) {
 
 if ( ashbi_audit_table_exists( $token_table ) ) {
 	$token_rows = $wpdb->get_results(
-		"SELECT gateway_id, COUNT(*) AS total FROM {$token_table} GROUP BY gateway_id ORDER BY gateway_id",
+		$wpdb->prepare( 'SELECT gateway_id, COUNT(*) AS total FROM %i GROUP BY gateway_id ORDER BY gateway_id', $token_table ),
 		ARRAY_A
-	); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Aggregate read from a fixed WooCommerce table.
+	);
 	$by_gateway = array();
 	foreach ( (array) $token_rows as $row ) {
 		$by_gateway[ (string) $row['gateway_id'] ] = (int) $row['total'];

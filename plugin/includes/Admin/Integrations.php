@@ -111,10 +111,13 @@ class Integrations {
 	 */
 	public function integrations_handler_callback() {
 		check_ajax_referer( 'wp_subs_integrations_nonce', 'nonce' );
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			wp_send_json_error( array( 'message' => __( 'You are not allowed to manage integrations.', 'subscription' ) ), 403 );
+		}
 
 		$action_callback = ! empty( $_POST['action_callback'] ) ? sanitize_text_field( wp_unslash( $_POST['action_callback'] ) ) : '';
 
-		dd( '🔽 action_callback', $action_callback );
+		wp_send_json_success( array( 'action_callback' => $action_callback ) );
 	}
 
 	/**

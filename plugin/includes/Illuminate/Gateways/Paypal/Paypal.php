@@ -356,7 +356,7 @@ class Paypal extends \WC_Payment_Gateway {
 		$order = wc_get_order( $order_id );
 
 		// Return if order is not valid.
-		if ( ! $order || empty( $order ) ) {
+		if ( ! $order ) {
 			return;
 		}
 		// Return if the order is not using WPSUBS PayPal.
@@ -689,7 +689,7 @@ class Paypal extends \WC_Payment_Gateway {
 
 			return ( 'success' === strtolower( $verification_status ) ) ? true : false;
 
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			$log_message = 'PayPal Webhook Verification Failed: ' . $e->getMessage();
 			subscrpt_write_log( $log_message );
 			subscrpt_write_debug_log( $log_message );
@@ -906,7 +906,7 @@ class Paypal extends \WC_Payment_Gateway {
 				$data = [
 					'product_id' => $paypal_product->id,
 					'image_url'  => $paypal_product->image_url ?? '',
-					'home_url'   => $product_data->home_url ?? '',
+					'home_url'   => home_url(),
 				];
 				update_post_meta( $wc_product_id, $this->get_meta_key( 'product_data' ), $data );
 			}
@@ -1594,7 +1594,7 @@ class Paypal extends \WC_Payment_Gateway {
 			}
 
 			return $response_data->access_token;
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			$log_message = $e->getMessage();
 			subscrpt_write_log( $log_message );
 			subscrpt_write_debug_log( $log_message );
@@ -1659,7 +1659,7 @@ class Paypal extends \WC_Payment_Gateway {
 			}
 
 			return $response_data;
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			$log_message = 'Error creating PayPal product: ' . $e->getMessage();
 			subscrpt_write_log( $log_message );
 			subscrpt_write_debug_log( $log_message );
@@ -1712,7 +1712,7 @@ class Paypal extends \WC_Payment_Gateway {
 			}
 
 			return $response_data;
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			$log_message = 'Error creating PayPal plan: ' . $e->getMessage();
 			subscrpt_write_log( $log_message );
 			subscrpt_write_debug_log( $log_message );
@@ -1757,7 +1757,7 @@ class Paypal extends \WC_Payment_Gateway {
 			}
 
 			return $response_data;
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			$log_message = 'Error creating PayPal subscription: ' . $e->getMessage();
 			subscrpt_write_log( $log_message );
 			subscrpt_write_debug_log( $log_message );
@@ -1837,7 +1837,7 @@ class Paypal extends \WC_Payment_Gateway {
 
 			return new \WP_Error( 'paypal_refund_failed', $error_message );
 
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			$log_message = 'PayPal refund exception: ' . $e->getMessage();
 			subscrpt_write_log( $log_message );
 			subscrpt_write_debug_log( $log_message );
@@ -1881,7 +1881,7 @@ class Paypal extends \WC_Payment_Gateway {
 			}
 
 			return true;
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			$log_message = 'Error cancelling PayPal subscription: ' . $e->getMessage();
 			subscrpt_write_log( $log_message );
 			subscrpt_write_debug_log( $log_message );
@@ -1923,7 +1923,7 @@ class Paypal extends \WC_Payment_Gateway {
 			}
 
 			return $response_data;
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			$log_message = 'Failed to get PayPal order; ' . $e->getMessage();
 			subscrpt_write_log( $log_message );
 			subscrpt_write_debug_log( $log_message );
@@ -1965,7 +1965,7 @@ class Paypal extends \WC_Payment_Gateway {
 			}
 
 			return $response_data;
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			$log_message = 'Failed to get PayPal subscription; ' . $e->getMessage();
 			subscrpt_write_log( $log_message );
 			subscrpt_write_debug_log( $log_message );
