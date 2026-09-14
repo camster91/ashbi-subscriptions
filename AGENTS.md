@@ -24,7 +24,8 @@ clients at a $0 license fee.
 - [x] Issue 1a: Record immutable upstream package provenance and manifest.
 - [x] Issue 1b: Complete the dependency-license inventory.
 - [x] Issue 2: Import the public free source without functional changes.
-- [ ] Issue 3: Add Composer, PHPCS, PHPStan, PHPUnit, and JavaScript checks.
+- [x] Issue 3a: Add Composer, PHPCS, PHPStan, and PHPUnit checks.
+- [ ] Issue 3b: Add JavaScript linting and make the inherited PHPCS baseline clean.
 - [ ] Issue 4: Produce an upstream baseline test report.
 - [ ] Issue 5: Rebrand plugin header, user-facing copy, assets, namespaces, and update URLs.
 - [ ] Issue 6: Preserve compatibility aliases for existing `subscrpt_*` storage and hooks.

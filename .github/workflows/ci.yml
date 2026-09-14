@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  php:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.4', '8.2', '8.5']
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: composer:2
+
+      - name: Validate locked dependencies
+        run: |
+          composer validate --strict
+          composer install --prefer-dist --no-interaction --no-progress
+          composer audit --locked --no-interaction
+
+      - name: Run tests
+        run: composer test
+
+      - name: Run static analysis
+        run: composer lint:phpstan
+
+      - name: Run security-sensitive coding standards
+        run: vendor/bin/phpcs --warning-severity=0 --sniffs=WordPress.Security.NonceVerification,WordPress.DB.PreparedSQL
+
+  coding-standards-baseline:
+    name: Coding standards baseline
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.5'
+          coverage: none
+          tools: composer:2
+
+      - name: Report inherited WordPress coding-standard debt
+        run: |
+          composer install --prefer-dist --no-interaction --no-progress
+          vendor/bin/phpcs --report=summary
