@@ -108,7 +108,26 @@ function ashbi_audit_subscription_statuses() {
 		$out[ (string) $row['post_status'] ] = (int) $row['total'];
 	}
 
-	return $out;
+	return (object) $out;
+}
+
+/**
+ * Return relation-row counts grouped by the non-sensitive relation type.
+ *
+ * @param string $table Relation table name.
+ * @return object
+ */
+function ashbi_audit_relation_types( $table ) {
+	global $wpdb;
+
+	// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Fixed, prefixed table name.
+	$rows = $wpdb->get_results( "SELECT type, COUNT(*) AS total FROM {$table} GROUP BY type ORDER BY type", ARRAY_A );
+	$out  = array();
+	foreach ( (array) $rows as $row ) {
+		$out[ (string) $row['type'] ] = (int) $row['total'];
+	}
+
+	return (object) $out;
 }
 
 /**
@@ -164,6 +183,7 @@ if ( ashbi_audit_table_exists( $relation_table ) ) {
 	$relation = array(
 		'exists'                => true,
 		'rows'                  => ashbi_audit_count( "SELECT COUNT(*) FROM {$relation_table}" ),
+		'type_counts'           => ashbi_audit_relation_types( $relation_table ),
 		'duplicate_links'       => ashbi_audit_count( "SELECT COUNT(*) FROM (SELECT subscription_id, order_id, order_item_id, type, COUNT(*) c FROM {$relation_table} GROUP BY subscription_id, order_id, order_item_id, type HAVING c > 1) duplicates" ),
 		'missing_subscriptions' => ashbi_audit_count( "SELECT COUNT(*) FROM {$relation_table} r LEFT JOIN {$wpdb->posts} p ON p.ID = r.subscription_id WHERE p.ID IS NULL" ),
 		'missing_orders'        => ashbi_audit_count( "SELECT COUNT(*) FROM {$relation_table} r LEFT JOIN {$order_table} orders ON orders.id = r.order_id WHERE orders.id IS NULL" ),
