@@ -28,6 +28,7 @@ function sanitize_text_field( $value ) {
 final class RenewalClaimWpdbFake {
 	public string $prefix = 'wp_';
 	public array $rows = array();
+	public bool $fail_renewal_completion = false;
 	private array $args = array();
 
 	public function prepare( $sql, $args ) {
@@ -133,6 +134,9 @@ final class RenewalClaimWpdbFake {
 				list( $table, $subscription_id, $order_id ) = $this->args;
 				foreach ( $this->rows as $row ) {
 					if ( $subscription_id === (int) $row->subscription_id && $order_id === (int) $row->order_id && 'ready' === $row->state ) {
+						if ( $this->fail_renewal_completion ) {
+							return 0;
+						}
 						$row->schedule_state        = 'complete';
 						$row->schedule_next_attempt = null;
 						$row->schedule_last_error   = '';
@@ -289,6 +293,22 @@ final class RenewalClaimTest extends TestCase {
 		$this->assertTrue( RenewalClaim::mark_payment_failed( 42, 703, 'authentication required' ) );
 		$this->assertSame( 'failed', $this->database->rows[ $key ]->payment_state );
 		$this->assertNull( $this->database->rows[ $key ]->payment_next_attempt );
+	}
+
+	public function test_claim_closure_reports_failure_when_completion_does_not_persist(): void {
+		$claim = RenewalClaim::acquire( 42 );
+		$this->assertTrue( RenewalClaim::finalize( 42, $claim['period_key'], $claim['token'], 704 ) );
+
+		$key = '42|' . $claim['period_key'];
+		$this->database->rows[ $key ]->subscription_id       = 42;
+		$this->database->rows[ $key ]->schedule_state        = 'scheduled';
+		$this->database->rows[ $key ]->schedule_attempts     = 1;
+		$this->database->rows[ $key ]->schedule_next_attempt = '2026-09-14 20:00:00';
+		$this->database->rows[ $key ]->schedule_last_error   = '';
+		$this->database->fail_renewal_completion             = true;
+
+		$this->assertFalse( RenewalClaim::mark_renewal_complete( 42, 704 ) );
+		$this->assertSame( 'scheduled', $this->database->rows[ $key ]->schedule_state );
 	}
 
 	public function test_captured_period_anchor_does_not_change_when_subscription_date_advances(): void {
