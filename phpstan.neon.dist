@@ -1,0 +1,22 @@
+parameters:
+    level: 1
+    paths:
+        - plugin/subscription.php
+        - plugin/includes
+        - tools
+    excludePaths:
+        analyse:
+            - plugin/vendor
+            - plugin/includes/Admin/views
+    scanFiles:
+        - vendor/php-stubs/wordpress-stubs/wordpress-stubs.php
+        - vendor/php-stubs/woocommerce-stubs/woocommerce-stubs.php
+        - tests/stubs/runtime.php
+    treatPhpDocTypesAsCertain: false
+    reportUnmatchedIgnoredErrors: true
+    ignoreErrors:
+        - identifier: includeOnce.fileNotFound
+        - identifier: require.fileNotFound
+        - identifier: requireOnce.fileNotFound
+    parallel:
+        maximumNumberOfProcesses: 2
