@@ -23,6 +23,15 @@ class Ajax {
 	 * Install the WooCommerce Plugin.
 	 */
 	public function install_woocommerce_plugin() {
+		if ( false === check_ajax_referer( 'subscrpt_install_woocommerce_plugin', 'nonce', false ) ) {
+			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'subscription' ) ), 403 );
+		}
+
+		$nonce = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
+		if ( ! $this->can_manage_dependency( 'install_plugins', 'subscrpt_install_woocommerce_plugin', $nonce ) ) {
+			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'subscription' ) ), 403 );
+		}
+
 		include_once ABSPATH . 'wp-admin/includes/plugin-install.php';
 		include_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
 		include_once ABSPATH . 'wp-admin/includes/file.php';
@@ -71,7 +80,13 @@ class Ajax {
 		$url   = 'update.php?action=install-plugin&plugin=' . urlencode( $plugin );
 
 		$upgrader = new \Plugin_Upgrader( new \Plugin_Installer_Skin( compact( 'title', 'url', 'nonce', 'plugin', 'api' ) ) );
-		$upgrader->install( $api->download_link );
+		$result   = $upgrader->install( $api->download_link );
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message() ), 500 );
+		}
+		if ( ! $result ) {
+			wp_send_json_error( array( 'message' => __( 'Plugin installation failed.', 'subscription' ) ), 500 );
+		}
 		wp_send_json(
 			array(
 				'msg' => 'Installed successfully !!',
@@ -89,12 +104,36 @@ class Ajax {
 	}
 
 	public function wps_subscription_activate_woocommerce_plugin() {
-		activate_plugin( 'woocommerce/woocommerce.php' );
+		if ( false === check_ajax_referer( 'subscrpt_activate_woocommerce_plugin', 'nonce', false ) ) {
+			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'subscription' ) ), 403 );
+		}
+
+		$nonce = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
+		if ( ! $this->can_manage_dependency( 'activate_plugins', 'subscrpt_activate_woocommerce_plugin', $nonce ) ) {
+			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'subscription' ) ), 403 );
+		}
+
+		$result = activate_plugin( 'woocommerce/woocommerce.php' );
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message() ), 500 );
+		}
 		wp_send_json(
 			array(
 				'msg' => 'Activated successfully !!',
 			)
 		);
+	}
+
+	/**
+	 * Verify a dependency-management request without performing the mutation.
+	 *
+	 * @param string $capability Required WordPress capability.
+	 * @param string $nonce_action Action-specific nonce action.
+	 * @param string $nonce Supplied nonce.
+	 * @return bool
+	 */
+	public function can_manage_dependency( string $capability, string $nonce_action, string $nonce ): bool {
+		return current_user_can( $capability ) && (bool) wp_verify_nonce( $nonce, $nonce_action );
 	}
 
 	/**

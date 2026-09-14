@@ -7,9 +7,13 @@ migration, support, monitoring, and managed updates may be offered separately.
 
 ## Status
 
-Planning repository. No production-ready payment code has been imported yet.
-An implementation agent should begin with [AGENTS.md](AGENTS.md) and
-[docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
+Active pre-release hardening. The pinned public GPL source is imported, legacy
+storage and hook compatibility are retained, and the current branch adds
+durable renewal claims, gateway reconciliation, migration quarantine, and
+security-boundary fixes. It has not been approved or deployed to a production
+client site. Docker-backed WordPress/WooCommerce tests, clone-based migration
+rehearsals, gateway sandbox validation, and per-site reconciliation remain
+release gates.
 
 ## Non-negotiable boundaries
 
@@ -20,11 +24,28 @@ An implementation agent should begin with [AGENTS.md](AGENTS.md) and
 - Keep distributed derivative code GPL-2.0-or-later.
 - Never deploy payment lifecycle changes without automated integration tests and a staged renewal test.
 
-## Intended first release
+## Current release candidate
 
-Version `0.1.0` should provide a clean, rebranded, updateable fork with parity
-for the public free plugin: simple subscriptions, flexible billing intervals,
-free trials, admin/customer subscription views, and guest checkout.
+The plugin keeps the `subscription/` directory and `subscription.php` basename
+so it can replace the public plugin in place without changing WordPress's plugin
+identity. The first client release will be cut only after independent security
+review, green CI, staging migration rehearsals, and an approved pilot.
+
+## Local verification and packaging
+
+```bash
+composer test
+composer lint:phpstan
+vendor/bin/phpcs --warning-severity=0 --sniffs=WordPress.Security.NonceVerification,WordPress.DB.PreparedSQL
+npm ci --ignore-scripts
+npm run env:start
+npm run test:integration
+npm run env:stop
+bash scripts/build-release.sh
+```
+
+The release ZIP has the legacy-compatible `subscription/` root and excludes
+the disposable integration endpoint under `plugin/tests/`.
 
 ## Documentation
 

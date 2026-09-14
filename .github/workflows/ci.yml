@@ -71,3 +71,35 @@ jobs:
         run: |
           composer install --prefer-dist --no-interaction --no-progress
           vendor/bin/phpcs --report=summary
+
+  wordpress-integration:
+    name: WordPress and WooCommerce integration
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install integration tooling
+        run: npm ci --ignore-scripts
+
+      - name: Audit integration dependencies
+        run: npm audit --audit-level=moderate
+
+      - name: Start disposable WordPress
+        run: npm run env:start
+
+      - name: Run security-boundary integration checks
+        run: npm run test:integration
+
+      - name: Stop disposable WordPress
+        if: always()
+        run: npm run env:stop

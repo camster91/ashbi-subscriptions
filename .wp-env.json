@@ -1,0 +1,12 @@
+{
+  "plugins": [
+    "https://downloads.wordpress.org/plugin/woocommerce.latest-stable.zip",
+    "https://downloads.wordpress.org/plugin/woocommerce-gateway-stripe.latest-stable.zip",
+    "./plugin"
+  ],
+  "config": {
+    "WP_DEBUG": true,
+    "WP_DEBUG_LOG": true
+  },
+  "testsEnvironment": false
+}

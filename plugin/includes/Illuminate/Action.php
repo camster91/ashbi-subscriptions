@@ -37,6 +37,10 @@ class Action {
 			)
 		);
 
+		if ( 'completed' === $status && function_exists( 'subscrpt_finalize_split_payment_completion' ) ) {
+			subscrpt_finalize_split_payment_completion( $subscription_id );
+		}
+
 		// Only note a real transition — never re-log the same status.
 		if ( $write_comment && $old_status !== $status ) {
 			self::write_comment( $status, $subscription_id );
@@ -60,27 +64,48 @@ class Action {
 	public static function write_comment( string $status, int $subscription_id ) {
 		switch ( $status ) {
 			case 'expired':
-				self::expired( $subscription_id );
-				break;
+				return self::expired( $subscription_id );
 			case 'active':
-				self::active( $subscription_id );
-				break;
+				return self::active( $subscription_id );
 			case 'pending':
-				self::pending( $subscription_id );
-				break;
+				return self::pending( $subscription_id );
 			case 'cancelled':
-				self::cancelled( $subscription_id );
-				break;
+				return self::cancelled( $subscription_id );
 			case 'pe_cancelled':
-				self::pe_cancelled( $subscription_id );
-				break;
+				return self::pe_cancelled( $subscription_id );
 			case 'on-hold':
-				self::on_hold( $subscription_id );
-				break;
+				return self::on_hold( $subscription_id );
 			case 'completed':
-				self::completed( $subscription_id );
-				break;
+				return self::completed( $subscription_id );
 		}
+
+		return true;
+	}
+
+	/**
+	 * Insert and verify a subscription lifecycle activity comment.
+	 *
+	 * @param int    $subscription_id Subscription ID.
+	 * @param string $content Comment content.
+	 * @param string $activity Activity label.
+	 * @param string $activity_type Activity type key.
+	 * @return bool
+	 */
+	private static function record_activity( int $subscription_id, string $content, string $activity, string $activity_type ): bool {
+		$comment_id = wp_insert_comment(
+			array(
+				'comment_author'  => 'Subscription for WooCommerce',
+				'comment_content' => $content,
+				'comment_post_ID' => $subscription_id,
+				'comment_type'    => 'order_note',
+			)
+		);
+		if ( ! $comment_id ) {
+			return false;
+		}
+
+		return false !== update_comment_meta( $comment_id, '_subscrpt_activity', $activity )
+			&& false !== update_comment_meta( $comment_id, '_subscrpt_activity_type', $activity_type );
 	}
 
 	/**
@@ -89,18 +114,12 @@ class Action {
 	 * @param int $subscription_id Subscription ID.
 	 */
 	private static function completed( int $subscription_id ) {
-		$comment_id = wp_insert_comment(
-			array(
-				'comment_author'  => 'Subscription for WooCommerce',
-				'comment_content' => 'Subscription completed. All payments made.',
-				'comment_post_ID' => $subscription_id,
-				'comment_type'    => 'order_note',
-			)
-		);
-		update_comment_meta( $comment_id, '_subscrpt_activity', 'Subscription Completed' );
-		update_comment_meta( $comment_id, '_subscrpt_activity_type', 'subs_completed' );
+		if ( ! self::record_activity( $subscription_id, 'Subscription completed. All payments made.', 'Subscription Completed', 'subs_completed' ) ) {
+			return false;
+		}
 
 		do_action( 'subscrpt_subscription_completed', $subscription_id );
+		return true;
 	}
 
 	/**
@@ -109,18 +128,12 @@ class Action {
 	 * @param int $subscription_id Subscription ID.
 	 */
 	private static function expired( int $subscription_id ) {
-		$comment_id = wp_insert_comment(
-			array(
-				'comment_author'  => 'Subscription for WooCommerce',
-				'comment_content' => 'Subscription is Expired',
-				'comment_post_ID' => $subscription_id,
-				'comment_type'    => 'order_note',
-			)
-		);
-		update_comment_meta( $comment_id, '_subscrpt_activity', 'Subscription Expired' );
-		update_comment_meta( $comment_id, '_subscrpt_activity_type', 'subs_expired' );
+		if ( ! self::record_activity( $subscription_id, 'Subscription is Expired', 'Subscription Expired', 'subs_expired' ) ) {
+			return false;
+		}
 
 		do_action( 'subscrpt_subscription_expired', $subscription_id );
+		return true;
 	}
 
 	/**
@@ -129,18 +142,12 @@ class Action {
 	 * @param int $subscription_id Subscription ID.
 	 */
 	private static function active( int $subscription_id ) {
-		$comment_id = wp_insert_comment(
-			array(
-				'comment_author'  => 'Subscription for WooCommerce',
-				'comment_content' => 'Subscription activated. Next payment due date set.',
-				'comment_post_ID' => $subscription_id,
-				'comment_type'    => 'order_note',
-			)
-		);
-		update_comment_meta( $comment_id, '_subscrpt_activity', 'Subscription Activated' );
-		update_comment_meta( $comment_id, '_subscrpt_activity_type', 'subs_activated' );
+		if ( ! self::record_activity( $subscription_id, 'Subscription activated. Next payment due date set.', 'Subscription Activated', 'subs_activated' ) ) {
+			return false;
+		}
 
 		do_action( 'subscrpt_subscription_activated', $subscription_id );
+		return true;
 	}
 
 	/**
@@ -149,18 +156,12 @@ class Action {
 	 * @param int $subscription_id Subscription ID.
 	 */
 	private static function pending( int $subscription_id ) {
-		$comment_id = wp_insert_comment(
-			array(
-				'comment_author'  => 'Subscription for WooCommerce',
-				'comment_content' => 'Subscription is pending.',
-				'comment_post_ID' => $subscription_id,
-				'comment_type'    => 'order_note',
-			)
-		);
-		update_comment_meta( $comment_id, '_subscrpt_activity', 'Subscription Pending' );
-		update_comment_meta( $comment_id, '_subscrpt_activity_type', 'subs_pending' );
+		if ( ! self::record_activity( $subscription_id, 'Subscription is pending.', 'Subscription Pending', 'subs_pending' ) ) {
+			return false;
+		}
 
 		do_action( 'subscrpt_subscription_pending', $subscription_id );
+		return true;
 	}
 
 	/**
@@ -169,16 +170,9 @@ class Action {
 	 * @param int $subscription_id Subscription ID.
 	 */
 	private static function cancelled( int $subscription_id ) {
-		$comment_id = wp_insert_comment(
-			array(
-				'comment_author'  => 'Subscription for WooCommerce',
-				'comment_content' => 'Subscription is Cancelled.',
-				'comment_post_ID' => $subscription_id,
-				'comment_type'    => 'order_note',
-			)
-		);
-		update_comment_meta( $comment_id, '_subscrpt_activity', 'Subscription Cancelled' );
-		update_comment_meta( $comment_id, '_subscrpt_activity_type', 'subs_cancelled' );
+		if ( ! self::record_activity( $subscription_id, 'Subscription is Cancelled.', 'Subscription Cancelled', 'subs_cancelled' ) ) {
+			return false;
+		}
 
 		WC()->mailer();
 		do_action( 'subscrpt_subscription_cancelled_email_notification', $subscription_id );
@@ -186,6 +180,7 @@ class Action {
 
 		// Fire split payment cancelled action
 		do_action( 'subscrpt_split_payment_cancelled', $subscription_id );
+		return true;
 	}
 
 	/**
@@ -194,18 +189,12 @@ class Action {
 	 * @param int $subscription_id Subscription ID.
 	 */
 	private static function on_hold( int $subscription_id ) {
-		$comment_id = wp_insert_comment(
-			array(
-				'comment_author'  => 'Subscription for WooCommerce',
-				'comment_content' => 'Subscription is On Hold. Access suspended after payment failure.',
-				'comment_post_ID' => $subscription_id,
-				'comment_type'    => 'order_note',
-			)
-		);
-		update_comment_meta( $comment_id, '_subscrpt_activity', 'Subscription On Hold' );
-		update_comment_meta( $comment_id, '_subscrpt_activity_type', 'subs_on_hold' );
+		if ( ! self::record_activity( $subscription_id, 'Subscription is On Hold. Access suspended after payment failure.', 'Subscription On Hold', 'subs_on_hold' ) ) {
+			return false;
+		}
 
 		do_action( 'subscrpt_subscription_on_hold', $subscription_id );
+		return true;
 	}
 
 	/**
@@ -214,16 +203,9 @@ class Action {
 	 * @param int $subscription_id Subscription ID.
 	 */
 	private static function pe_cancelled( int $subscription_id ) {
-		$comment_id = wp_insert_comment(
-			array(
-				'comment_author'  => 'Subscription for WooCommerce',
-				'comment_content' => 'Subscription is Pending Cancellation.',
-				'comment_post_ID' => $subscription_id,
-				'comment_type'    => 'order_note',
-			)
-		);
-		update_comment_meta( $comment_id, '_subscrpt_activity', 'Subscription Pending Cancellation' );
-		update_comment_meta( $comment_id, '_subscrpt_activity_type', 'subs_pe_cancel' );
+		if ( ! self::record_activity( $subscription_id, 'Subscription is Pending Cancellation.', 'Subscription Pending Cancellation', 'subs_pe_cancel' ) ) {
+			return false;
+		}
 
 		// WC_Email classes only exist once the mailer has been built, and they
 		// attach their own listeners from their constructors. Without this, an
@@ -232,5 +214,6 @@ class Action {
 		WC()->mailer();
 
 		do_action( 'subscrpt_subscription_pending_cancellation', $subscription_id );
+		return true;
 	}
 }

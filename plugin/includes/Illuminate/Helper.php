@@ -413,17 +413,142 @@ class Helper {
 	}
 
 	/**
+	 * Resolve and validate the exact subscription carried by a renewal checkout.
+	 *
+	 * @param \WC_Order_Item $order_item Order line item.
+	 * @param \WC_Product    $product    Purchased product.
+	 * @return int|false Valid subscription ID, or false for a non-renewal/invalid request.
+	 */
+	public static function resolve_checkout_renewal_subscription( $order_item, $product ) {
+		$request = $order_item->get_meta( '_renew_subscrpt' );
+		if ( empty( $request ) ) {
+			return false;
+		}
+
+		// Legacy carts stored boolean true instead of the selected subscription ID.
+		$subscription_id = in_array( $request, array( true, 'true', 'yes', '1' ), true )
+			? self::subscription_exists( $product->get_id(), 'expired' )
+			: absint( $request );
+		if ( ! $subscription_id || 'expired' !== get_post_status( $subscription_id ) ) {
+			return false;
+		}
+
+		$order             = wc_get_order( $order_item->get_order_id() );
+		$subscription_post = get_post( $subscription_id );
+		if ( ! $order || ! $subscription_post || (int) $subscription_post->post_author !== (int) $order->get_customer_id() ) {
+			return false;
+		}
+
+		$subscription_product   = (int) get_post_meta( $subscription_id, '_subscrpt_product_id', true );
+		$subscription_variation = (int) get_post_meta( $subscription_id, '_subscrpt_variation_id', true );
+		$order_product           = (int) $order_item->get_product_id();
+		$order_variation         = (int) $order_item->get_variation_id();
+		$subscription_plan      = (int) get_post_meta( $subscription_id, '_subscrpt_plan_id', true );
+		$order_plan             = (int) $order_item->get_meta( '_subscrpt_plan_id' );
+		if ( $subscription_product !== $order_product ) {
+			return false;
+		}
+		if ( $subscription_variation > 0 && $subscription_variation !== $order_variation ) {
+			return false;
+		}
+		if ( $subscription_plan !== $order_plan ) {
+			return false;
+		}
+
+		return (int) $subscription_id;
+	}
+
+	/**
 	 * Process renewal on order.
 	 *
 	 * @param int $subscription_id Subscription Id.
 	 * @param int $order_id Order Id.
 	 * @param int $order_item_id Order Item Id.
 	 *
-	 * @return void
+	 * @return bool True when this order owns the renewal period.
 	 */
 	public static function process_order_renewal( $subscription_id, $order_id, $order_item_id ) {
 		global $wpdb;
 		$history_table = $wpdb->prefix . 'subscrpt_order_relation';
+		$period_anchor = (int) get_post_meta( $subscription_id, '_subscrpt_next_date', true );
+		if ( get_option( 'subscrpt_renewal_migration_blocked' ) ) {
+			subscrpt_write_log( 'Renewal checkout blocked until legacy open orders are reconciled.' );
+			return false;
+		}
+
+		if ( 'expired' !== get_post_status( $subscription_id ) || $period_anchor <= 0 || $period_anchor > time() ) {
+			subscrpt_write_log( "Renewal order #{$order_id} rejected because subscription #{$subscription_id} is no longer due." );
+			return false;
+		}
+
+		$claim = RenewalClaim::acquire( (int) $subscription_id, 0, $period_anchor );
+		if ( ! $claim || ( empty( $claim['acquired'] ) && (int) $claim['order_id'] !== (int) $order_id ) ) {
+			subscrpt_write_log( "Renewal order #{$order_id} rejected because another order owns the current period for subscription #{$subscription_id}." );
+			return false;
+		}
+
+		$existing_relation = $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT id FROM %i WHERE subscription_id = %d AND order_id = %d AND type = %s LIMIT 1',
+				array( $history_table, $subscription_id, $order_id, 'renew' )
+			)
+		);
+		if ( $existing_relation ) {
+			if (
+				! empty( $claim['acquired'] )
+				&& ! RenewalClaim::finalize( (int) $subscription_id, $claim['period_key'], $claim['token'], (int) $order_id )
+			) {
+				RenewalClaim::release( (int) $subscription_id, $claim['period_key'], $claim['token'] );
+				return false;
+			}
+
+			$order = wc_get_order( $order_id );
+			if ( $order ) {
+				$order->update_meta_data( '_subscrpt_renewal_period_key', $claim['period_key'] );
+				$order->save();
+			}
+			return true;
+		}
+
+		$inserted = $wpdb->insert(
+			$history_table,
+			array(
+				'subscription_id' => $subscription_id,
+				'order_id'        => $order_id,
+				'order_item_id'   => $order_item_id,
+				'type'            => 'renew',
+			)
+		);
+		if ( false === $inserted ) {
+			if ( ! empty( $claim['acquired'] ) ) {
+				RenewalClaim::release( (int) $subscription_id, $claim['period_key'], $claim['token'] );
+			}
+			subscrpt_write_log( "Renewal relation could not be recorded for order #{$order_id}; checkout stopped." );
+			return false;
+		}
+
+		if (
+			! empty( $claim['acquired'] )
+			&& ! RenewalClaim::finalize( (int) $subscription_id, $claim['period_key'], $claim['token'], (int) $order_id )
+		) {
+			$wpdb->delete(
+				$history_table,
+				array(
+					'subscription_id' => $subscription_id,
+					'order_id'        => $order_id,
+					'type'            => 'renew',
+				),
+				array( '%d', '%d', '%s' )
+			);
+			RenewalClaim::release( (int) $subscription_id, $claim['period_key'], $claim['token'] );
+			return false;
+		}
+
+		$order = wc_get_order( $order_id );
+		if ( $order ) {
+			$order->update_meta_data( '_subscrpt_renewal_period_key', $claim['period_key'] );
+			$order->save();
+		}
 
 		// Check if this is a split payment subscription
 		$payment_type  = function_exists( 'subscrpt_get_payment_type' ) ? subscrpt_get_payment_type( $subscription_id ) : 'recurring';
@@ -462,18 +587,10 @@ class Helper {
 		update_comment_meta( $comment_id, '_subscrpt_activity', $activity_type );
 		update_comment_meta( $comment_id, '_subscrpt_activity_type', 'renewal_order' );
 
-		$wpdb->insert(
-			$history_table,
-			array(
-				'subscription_id' => $subscription_id,
-				'order_id'        => $order_id,
-				'order_item_id'   => $order_item_id,
-				'type'            => 'renew',
-			)
-		);
-
 		// Fire action when split payment is renewed
 		do_action( 'subscrpt_split_payment_renewed', $subscription_id, $order_id, $order_item_id );
+
+		return true;
 	}
 
 	/**
@@ -1047,16 +1164,25 @@ class Helper {
 	 *
 	 * @param  int $subscription_id Subscription ID.
 	 * @return false|\WC_Order Renewal order object or false on failure.
-	 * @throws \WC_Data_Exception Exception.
-	 * @throws \Exception Exception.
+	 * @throws \Throwable Order construction or extension failure.
 	 */
 	public static function create_renewal_order( $subscription_id ) {
-		// Check if maximum payment limit has been reached
+		if ( get_option( 'subscrpt_renewal_migration_blocked' ) ) {
+			subscrpt_write_log( 'Automatic renewal blocked until legacy open orders are reconciled.' );
+			return false;
+		}
+
+		// Check if maximum payment limit has been reached.
 		if ( subscrpt_is_max_payments_reached( $subscription_id ) ) {
-			// Mark subscription as expired due to limit reached
-			Action::status( 'expired', $subscription_id );
+			subscrpt_finalize_split_payment_completion( $subscription_id );
 
 			error_log( "WPS: Maximum payment limit reached for subscription #{$subscription_id}. No renewal order created." );
+			return false;
+		}
+
+		$period_anchor = (int) get_post_meta( $subscription_id, '_subscrpt_next_date', true );
+		if ( $period_anchor <= 0 || $period_anchor > time() ) {
+			subscrpt_write_log( "Subscription #{$subscription_id} is not currently due; renewal order creation skipped." );
 			return false;
 		}
 
@@ -1082,6 +1208,10 @@ class Helper {
 		}
 
 		$order_item         = $old_order->get_item( $order_item_id );
+		if ( ! $order_item instanceof \WC_Order_Item_Product ) {
+			subscrpt_write_log( "Renewal source item not found for subscription #{$subscription_id}." );
+			return false;
+		}
 		$subscription_price = (float) get_post_meta( $subscription_id, '_subscrpt_price', true );
 		$qty                = $order_item->get_quantity();
 
@@ -1101,27 +1231,139 @@ class Helper {
 			'total'    => $line_total,
 		);
 
-		// creating new order.
-		$new_order_data = self::create_new_order_for_renewal( $old_order, $order_item, $product_args );
-		if ( ! $new_order_data ) {
-			subscrpt_write_log( "Failed to create renewal order. [ Subscription ID: {$subscription_id} ]" );
+		$current_anchor = (int) get_post_meta( $subscription_id, '_subscrpt_next_date', true );
+		if ( $current_anchor !== $period_anchor || $current_anchor > time() ) {
+			subscrpt_write_log( "Subscription #{$subscription_id} billing period changed while renewal was being prepared; creation skipped." );
 			return false;
 		}
-		$new_order         = $new_order_data['order'];
-		$new_order_item_id = $new_order_data['order_item_id'];
 
-		self::create_renewal_history( $subscription_id, $new_order->get_id(), $new_order_item_id );
-		update_post_meta( $subscription_id, '_subscrpt_order_id', $new_order->get_id() );
-		update_post_meta( $subscription_id, '_subscrpt_order_item_id', $new_order_item_id );
+		$claim = RenewalClaim::acquire( (int) $subscription_id, 0, $period_anchor );
+		if ( ! $claim ) {
+			subscrpt_write_log( "Renewal claim storage unavailable. Skipping renewal for subscription #{$subscription_id}." );
+			return false;
+		}
 
-		self::clone_order_metadata( $new_order, $old_order );
+		if ( empty( $claim['acquired'] ) ) {
+			$claimed_order = ! empty( $claim['order_id'] ) ? wc_get_order( (int) $claim['order_id'] ) : false;
+			if ( $claimed_order ) {
+				return self::resume_canonical_renewal_order( $claimed_order, $old_order, (int) $subscription_id );
+			}
 
-		// Allow modification of the renewal order before saving.
-		$new_order = apply_filters( 'subscrpt_before_saving_renewal_order', $new_order, $old_order, $subscription_id );
+			subscrpt_write_log( "Renewal period is already being processed for subscription #{$subscription_id}." );
+			return false;
+		}
 
-		// Save the new order.
-		$new_order->calculate_totals();
-		$new_order->save();
+		// Recover an order whose relation and period metadata were persisted before
+		// a worker died while finalizing the durable claim.
+		foreach ( self::get_related_orders( (int) $subscription_id ) as $related_order ) {
+			if ( 'renew' !== ( $related_order->type ?? '' ) ) {
+				continue;
+			}
+			$recovery_order = wc_get_order( (int) ( $related_order->order_id ?? 0 ) );
+			if (
+				! $recovery_order
+				|| $claim['period_key'] !== $recovery_order->get_meta( '_subscrpt_renewal_period_key' )
+				|| ! in_array( $recovery_order->get_status(), array( 'pending', 'failed', 'on-hold' ), true )
+			) {
+				continue;
+			}
+
+			if ( RenewalClaim::finalize( (int) $subscription_id, $claim['period_key'], $claim['token'], (int) $recovery_order->get_id() ) ) {
+				subscrpt_write_log( "Recovered renewal order #{$recovery_order->get_id()} for subscription #{$subscription_id}." );
+				return self::resume_canonical_renewal_order(
+					$recovery_order,
+					$old_order,
+					(int) $subscription_id,
+					(int) ( $related_order->order_item_id ?? 0 )
+				);
+			}
+		}
+
+		$claim_finalized  = false;
+		$history_recorded = false;
+		$new_order        = false;
+		try {
+			// Create and fully prepare the order before publishing it as canonical.
+			$new_order_data = self::create_new_order_for_renewal( $old_order, $order_item, $product_args );
+			if ( ! $new_order_data ) {
+				RenewalClaim::release( (int) $subscription_id, $claim['period_key'], $claim['token'] );
+				subscrpt_write_log( "Failed to create renewal order. [ Subscription ID: {$subscription_id} ]" );
+				return false;
+			}
+			$new_order         = $new_order_data['order'];
+			$new_order_item_id = $new_order_data['order_item_id'];
+
+			self::clone_order_metadata( $new_order, $old_order );
+
+			// Allow modification of the renewal order before saving.
+			$filtered_order = apply_filters( 'subscrpt_before_saving_renewal_order', $new_order, $old_order, $subscription_id );
+			if ( ! $filtered_order instanceof \WC_Order ) {
+				throw new \UnexpectedValueException( 'Renewal order filter must return a WC_Order.' );
+			}
+			$new_order = $filtered_order;
+			$new_order->update_meta_data( '_subscrpt_renewal_period_key', $claim['period_key'] );
+			$new_order->calculate_totals();
+			$new_order->save();
+
+			if ( ! self::create_renewal_history( $subscription_id, $new_order->get_id(), $new_order_item_id ) ) {
+				$new_order->set_status( 'cancelled', __( 'Renewal order cancelled because its subscription relation could not be recorded.', 'subscription' ) );
+				$new_order->save();
+				RenewalClaim::release( (int) $subscription_id, $claim['period_key'], $claim['token'] );
+				return false;
+			}
+			$history_recorded = true;
+
+			$claim_finalized = RenewalClaim::finalize(
+				(int) $subscription_id,
+				$claim['period_key'],
+				$claim['token'],
+				(int) $new_order->get_id()
+			);
+			if ( ! $claim_finalized ) {
+				global $wpdb;
+				$wpdb->delete(
+					$wpdb->prefix . 'subscrpt_order_relation',
+					array(
+						'subscription_id' => $subscription_id,
+						'order_id'        => $new_order->get_id(),
+						'type'            => 'renew',
+					),
+					array( '%d', '%d', '%s' )
+				);
+				$new_order->set_status( 'cancelled', __( 'Renewal order cancelled because its subscription period could not be claimed.', 'subscription' ) );
+				$new_order->save();
+				subscrpt_write_log( "Renewal order #{$new_order->get_id()} cancelled because another order owns the period for subscription #{$subscription_id}." );
+				return false;
+			}
+
+			update_post_meta( $subscription_id, '_subscrpt_order_id', $new_order->get_id() );
+			update_post_meta( $subscription_id, '_subscrpt_order_item_id', $new_order_item_id );
+		} catch ( \Throwable $error ) {
+			if ( ! $claim_finalized ) {
+				if ( $history_recorded && $new_order instanceof \WC_Order ) {
+					global $wpdb;
+					$wpdb->delete(
+						$wpdb->prefix . 'subscrpt_order_relation',
+						array(
+							'subscription_id' => $subscription_id,
+							'order_id'        => $new_order->get_id(),
+							'type'            => 'renew',
+						),
+						array( '%d', '%d', '%s' )
+					);
+				}
+				if ( $new_order instanceof \WC_Order ) {
+					try {
+						$new_order->set_status( 'cancelled', __( 'Renewal order cancelled after an incomplete creation attempt.', 'subscription' ) );
+						$new_order->save();
+					} catch ( \Throwable $cleanup_error ) {
+						subscrpt_write_log( "Could not cancel incomplete renewal order #{$new_order->get_id()}: {$cleanup_error->getMessage()}" );
+					}
+				}
+				RenewalClaim::release( (int) $subscription_id, $claim['period_key'], $claim['token'] );
+			}
+			throw $error;
+		}
 
 		if ( ! is_admin() && function_exists( 'wc_add_notice' ) && WC()->session ) {
 			$message = 'Renewal Order(#' . $new_order->get_id() . ') Created.';
@@ -1131,9 +1373,78 @@ class Helper {
 			wc_add_notice( $message, 'success' );
 		}
 
-		do_action( 'subscrpt_after_create_renew_order', $new_order, $old_order, $subscription_id, false );
+		return self::resume_canonical_renewal_order( $new_order, $old_order, (int) $subscription_id, (int) $new_order_item_id );
+	}
 
-		return $new_order;
+	/**
+	 * Restore subscription pointers and safely resume a canonical renewal order.
+	 *
+	 * The database lock prevents concurrent PHP workers from dispatching the same
+	 * order at once. Stripe retries are additionally protected by the deterministic
+	 * period-and-request idempotency key installed by the Stripe integration.
+	 *
+	 * @param \WC_Order $renewal_order Canonical renewal order.
+	 * @param \WC_Order $old_order     Previous completed order used as payment source.
+	 * @param int       $subscription_id Subscription ID.
+	 * @param int       $order_item_id   Renewal order item ID, if already known.
+	 * @return \WC_Order|false
+	 */
+	private static function resume_canonical_renewal_order( $renewal_order, $old_order, int $subscription_id, int $order_item_id = 0 ) {
+		if ( ! $renewal_order instanceof \WC_Order || ! $old_order instanceof \WC_Order ) {
+			return false;
+		}
+
+		if ( ! $order_item_id ) {
+			foreach ( self::get_related_orders( $subscription_id ) as $relation ) {
+				if ( (int) ( $relation->order_id ?? 0 ) === (int) $renewal_order->get_id() && 'renew' === ( $relation->type ?? '' ) ) {
+					$order_item_id = (int) ( $relation->order_item_id ?? 0 );
+					break;
+				}
+			}
+		}
+
+		if ( ! $order_item_id ) {
+			subscrpt_write_log( "Canonical renewal order #{$renewal_order->get_id()} has no relation item for subscription #{$subscription_id}." );
+			return false;
+		}
+
+		update_post_meta( $subscription_id, '_subscrpt_order_id', $renewal_order->get_id() );
+		update_post_meta( $subscription_id, '_subscrpt_order_item_id', $order_item_id );
+		if (
+			(int) get_post_meta( $subscription_id, '_subscrpt_order_id', true ) !== (int) $renewal_order->get_id()
+			|| (int) get_post_meta( $subscription_id, '_subscrpt_order_item_id', true ) !== $order_item_id
+		) {
+			subscrpt_write_log( "Could not restore canonical renewal pointers for subscription #{$subscription_id}." );
+			return false;
+		}
+
+		if ( ! $renewal_order->has_status( 'pending' ) || ! $renewal_order->needs_payment() ) {
+			RenewalClaim::mark_payment_complete( $subscription_id, (int) $renewal_order->get_id() );
+			return $renewal_order;
+		}
+
+		global $wpdb;
+		$lock_name = 'ashbi_subscrpt_dispatch_' . (int) $renewal_order->get_id();
+		if ( 1 !== (int) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 0)', $lock_name ) ) ) {
+			subscrpt_write_log( "Renewal order #{$renewal_order->get_id()} payment dispatch is already running." );
+			return $renewal_order;
+		}
+
+		try {
+			$renewal_order = wc_get_order( $renewal_order->get_id() );
+			if ( $renewal_order && $renewal_order->has_status( 'pending' ) && $renewal_order->needs_payment() ) {
+				do_action( 'subscrpt_after_create_renew_order', $renewal_order, $old_order, $subscription_id, false );
+			}
+		} finally {
+			$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock_name ) );
+		}
+
+		$renewal_order = wc_get_order( $renewal_order ? $renewal_order->get_id() : 0 );
+		if ( $renewal_order && ( ! $renewal_order->has_status( 'pending' ) || ! $renewal_order->needs_payment() ) ) {
+			RenewalClaim::mark_payment_complete( $subscription_id, (int) $renewal_order->get_id() );
+		}
+
+		return $renewal_order ?: false;
 	}
 
 	/**
@@ -1362,12 +1673,12 @@ class Helper {
 	 * @param int $new_order_id New Order Id.
 	 * @param int $new_order_item_id New Order Item Id.
 	 *
-	 * @return void
+	 * @return bool True when the relation and audit note were recorded.
 	 */
 	public static function create_renewal_history( $subscription_id, $new_order_id, $new_order_item_id ) {
 		global $wpdb;
 		$history_table = $wpdb->prefix . 'subscrpt_order_relation';
-		$wpdb->insert(
+		$inserted = $wpdb->insert(
 			$history_table,
 			array(
 				'subscription_id' => $subscription_id,
@@ -1376,6 +1687,9 @@ class Helper {
 				'type'            => 'renew',
 			)
 		);
+		if ( false === $inserted ) {
+			return false;
+		}
 
 		$comment_id = wp_insert_comment(
 			array(
@@ -1387,6 +1701,8 @@ class Helper {
 		);
 		update_comment_meta( $comment_id, '_subscrpt_activity', 'Renewal Order' );
 		update_comment_meta( $comment_id, '_subscrpt_activity_type', 'renewal_order' );
+
+		return true;
 	}
 
 	/**
@@ -1554,15 +1870,19 @@ class Helper {
 	public static function create_new_order_for_renewal( \WC_Order $old_order, \WC_Order_Item_Product $order_item, array $product_args ) {
 		$product      = $order_item->get_product();
 		$user_id      = $old_order->get_user_id();
+		$product_meta = apply_filters( 'subscrpt_renewal_item_meta', wc_get_order_item_meta( $order_item->get_id(), '_subscrpt_meta', true ), $product, $order_item );
+		$product_args = apply_filters( 'subscrpt_renewal_product_args', $product_args, $product, $order_item );
+		if ( ! $product || ! $product_args ) {
+			return false;
+		}
+
 		$new_order    = wc_create_order(
 			array(
 				'customer_id' => $user_id,
 				'status'      => 'pending',
 			)
 		);
-		$product_meta = apply_filters( 'subscrpt_renewal_item_meta', wc_get_order_item_meta( $order_item->get_id(), '_subscrpt_meta', true ), $product, $order_item );
-		$product_args = apply_filters( 'subscrpt_renewal_product_args', $product_args, $product, $order_item );
-		if ( ! $product_args ) {
+		if ( is_wp_error( $new_order ) || ! $new_order instanceof \WC_Order ) {
 			return false;
 		}
 
@@ -1571,6 +1891,11 @@ class Helper {
 			$order_item->get_quantity(),
 			$product_args
 		);
+		if ( ! $new_order_item_id ) {
+			$new_order->set_status( 'cancelled', __( 'Renewal order cancelled because its product could not be added.', 'subscription' ) );
+			$new_order->save();
+			return false;
+		}
 		wc_update_order_item_meta(
 			$new_order_item_id,
 			'_subscrpt_meta',

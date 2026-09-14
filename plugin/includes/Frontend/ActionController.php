@@ -82,7 +82,11 @@ class ActionController {
 				Action::status( $action, $subscrpt_id );
 			}
 		} elseif ( 'reactivate' === $action ) {
-			Action::status( 'active', $subscrpt_id );
+			if ( ! self::can_reactivate_subscription( (int) $subscrpt_id ) ) {
+				wc_add_notice( __( 'This subscription can no longer be reactivated without completing a renewal payment.', 'subscription' ), 'error' );
+			} else {
+				Action::status( 'active', $subscrpt_id );
+			}
 		} elseif ( 'renew-on' === $action ) {
 			update_post_meta( $subscrpt_id, '_subscrpt_auto_renew', 1 );
 		} elseif ( 'renew-off' === $action ) {
@@ -105,6 +109,26 @@ class ActionController {
 	}
 
 	/**
+	 * Decide whether a customer may undo a pending cancellation without payment.
+	 *
+	 * @param int $subscription_id Subscription ID.
+	 * @param int $now Current timestamp override for tests.
+	 * @return bool
+	 */
+	public static function can_reactivate_subscription( int $subscription_id, int $now = 0 ): bool {
+		if ( 'pe_cancelled' !== get_post_status( $subscription_id ) || subscrpt_is_max_payments_reached( $subscription_id ) ) {
+			return false;
+		}
+
+		$cancel_at = (int) get_post_meta( $subscription_id, '_subscrpt_cancel_at', true );
+		if ( ! $cancel_at ) {
+			$cancel_at = (int) get_post_meta( $subscription_id, '_subscrpt_next_date', true );
+		}
+
+		return $cancel_at > ( $now ?: time() );
+	}
+
+	/**
 	 * Manually Renew Subscription.
 	 *
 	 * @param Int $subscrpt_id Subscription ID.
@@ -112,17 +136,23 @@ class ActionController {
 	public function manual_renew_product( $subscrpt_id ) {
 		$product_id                = get_post_meta( $subscrpt_id, '_subscrpt_product_id', true );
 		$subscription_variation_id = get_post_meta( $subscrpt_id, '_subscrpt_variation_id', true );
+		$plan_id                   = (int) get_post_meta( $subscrpt_id, '_subscrpt_plan_id', true );
 
 		$variation_id = ! empty( $subscription_variation_id ) ? (int) $subscription_variation_id : 0;
 
 		WC()->cart->empty_cart();
+
+		$cart_item_data = array( 'renew_subscrpt' => (int) $subscrpt_id );
+		if ( $plan_id > 0 ) {
+			$cart_item_data['subscrpt_plan_id'] = $plan_id;
+		}
 
 		WC()->cart->add_to_cart(
 			$product_id,
 			1,
 			$variation_id,
 			array(),
-			array( 'renew_subscrpt' => true )
+			$cart_item_data
 		);
 
 		// Empty unless the store set one, and wc_add_notice( '' ) renders an empty

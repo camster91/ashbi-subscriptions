@@ -649,6 +649,12 @@ class Cart {
 	 * @return array
 	 */
 	public function set_renew_status( $cart_item_data, $product_id ) {
+		// Plan purchases are new subscriptions unless an explicit renewal action
+		// already carried the exact subscription and plan into the cart.
+		if ( empty( $cart_item_data['renew_subscrpt'] ) && function_exists( 'subscrpt_product_has_plan' ) && subscrpt_product_has_plan( $product_id ) ) {
+			return $cart_item_data;
+		}
+
 		$expired = Helper::subscription_exists( $product_id, 'expired' );
 		if ( $expired ) {
 			// Check if maximum payment limit has been reached
@@ -657,7 +663,9 @@ class Cart {
 				return $cart_item_data; // Don't add renew status
 			}
 
-			$cart_item_data['renew_subscrpt'] = true;
+			if ( empty( $cart_item_data['renew_subscrpt'] ) ) {
+				$cart_item_data['renew_subscrpt'] = (int) $expired;
+			}
 		}
 
 		return $cart_item_data;

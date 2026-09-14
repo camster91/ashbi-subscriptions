@@ -33,12 +33,20 @@ validated, timestamped, auditable, and safe to replay.
 
 ## Renewal flow
 
-1. Action Scheduler claims a due subscription with an idempotency key.
+1. Every renewal entry point atomically claims `(subscription_id, billing-period)` in `subscrpt_renewal_claim`; a five-minute lease permits recovery only before an order is attached.
 2. The service validates status, due date, gateway, and payment token.
-3. A renewal order is created once and linked to the subscription.
-4. The gateway adapter requests payment without handling raw card data.
-5. Signed webhook events reconcile authoritative payment state.
-6. Success advances the schedule; failure enters the configured retry policy.
+3. A renewal order is fully prepared, atomically attached as the period's canonical order, and recorded in the unchanged legacy relation history.
+4. The gateway adapter reconciles the canonical order's existing remote payment object, then requests payment with stable per-period idempotency metadata without handling raw card data.
+5. Signed webhook events reconcile authoritative payment state; PayPal lifecycle delivery is ordered with full-precision event and remote status-update timestamps.
+
+Canonical subscription posts and internal item posts are not exposed through the
+generic WordPress REST posts controller. Administrative plan APIs use the
+versioned plugin controller and WooCommerce management authorization.
+
+Guest checkout never treats possession of an existing billing email as account
+ownership. Existing-email orders remain guest-owned unless that exact customer
+is already authenticated, isolating account records and saved payment methods.
+6. Success advances and marks the exact order's schedule under a database lock before activation; persistence failure remains fail-closed in durable claim state, enters Action Scheduler, and is independently swept by the hourly repair job.
 7. Every step writes a redacted audit event.
 
 ## Update delivery

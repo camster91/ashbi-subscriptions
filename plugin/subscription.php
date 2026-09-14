@@ -36,6 +36,12 @@ use SpringDevs\Subscription\Illuminate\Gateways\Paypal\Paypal_Blocks_Integration
 
 require_once __DIR__ . '/vendor/autoload.php';
 
+// Disposable integration endpoint. Its callback is local-environment/admin-only,
+// and the tests directory is excluded from release packages.
+if ( file_exists( __DIR__ . '/tests/integration/security-boundaries.php' ) ) {
+	require_once __DIR__ . '/tests/integration/security-boundaries.php';
+}
+
 /**
  * Sdevs_Subscription class
  *

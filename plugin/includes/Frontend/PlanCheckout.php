@@ -138,7 +138,10 @@ class PlanCheckout {
 		// Read from the request so both the product-page form (POST) and direct
 		// checkout links (`?add-to-cart=ID&subscrpt_plan_id=TERM`, GET) select a plan.
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- WooCommerce verifies the add-to-cart request; we only read a plan id.
-		$plan_id = isset( $_REQUEST['subscrpt_plan_id'] ) ? absint( wp_unslash( $_REQUEST['subscrpt_plan_id'] ) ) : 0;
+		$plan_id = ! empty( $cart_item_data['subscrpt_plan_id'] ) ? absint( $cart_item_data['subscrpt_plan_id'] ) : 0;
+		if ( ! $plan_id ) {
+			$plan_id = isset( $_REQUEST['subscrpt_plan_id'] ) ? absint( wp_unslash( $_REQUEST['subscrpt_plan_id'] ) ) : 0;
+		}
 		if ( ! $plan_id ) {
 			// Bare add-to-cart (direct link, no plan chosen): fall back to one-time
 			// when enabled, otherwise the product's first plan.
@@ -225,6 +228,47 @@ class PlanCheckout {
 	public function create_plan_subscription( $order_item, $product, $post_status ) {
 		$plan_id = (int) $order_item->get_meta( '_subscrpt_plan_id' );
 		if ( ! $plan_id ) {
+			return;
+		}
+
+		$renewal_requested       = ! empty( $order_item->get_meta( '_renew_subscrpt' ) );
+		$renewal_subscription_id = Helper::resolve_checkout_renewal_subscription( $order_item, $product );
+		if ( $renewal_requested && ! $renewal_subscription_id ) {
+			$order = wc_get_order( $order_item->get_order_id() );
+			if ( $order ) {
+				$order->set_status( 'cancelled', esc_html__( 'Renewal checkout cancelled because the selected subscription is no longer eligible.', 'subscription' ) );
+				$order->save();
+			}
+			throw new \Exception( esc_html__( 'The selected subscription cannot be renewed from this checkout.', 'subscription' ) );
+		}
+		if ( $renewal_subscription_id && 'cancelled' === $post_status ) {
+			return;
+		}
+		if ( $renewal_subscription_id ) {
+			$renewal_timing_per    = (int) get_post_meta( $renewal_subscription_id, '_subscrpt_timing_per', true );
+			$renewal_timing_option = (string) get_post_meta( $renewal_subscription_id, '_subscrpt_timing_option', true );
+			wc_update_order_item_meta(
+				$order_item->get_id(),
+				'_subscrpt_meta',
+				array(
+					'time'  => $renewal_timing_per > 0 ? $renewal_timing_per : 1,
+					'type'  => $renewal_timing_option,
+					'trial' => null,
+				)
+			);
+
+			if ( ! Helper::process_order_renewal( $renewal_subscription_id, $order_item->get_order_id(), $order_item->get_id() ) ) {
+				$order = wc_get_order( $order_item->get_order_id() );
+				if ( $order ) {
+					$order->set_status( 'cancelled', esc_html__( 'Renewal checkout cancelled because another order already owns this subscription period.', 'subscription' ) );
+					$order->save();
+				}
+				throw new \Exception( esc_html__( 'A renewal order already exists for this subscription period. Please pay the existing order from your account.', 'subscription' ) );
+			}
+
+			update_post_meta( $renewal_subscription_id, '_subscrpt_order_id', $order_item->get_order_id() );
+			update_post_meta( $renewal_subscription_id, '_subscrpt_order_item_id', $order_item->get_id() );
+			do_action( 'subscrpt_order_checkout', $renewal_subscription_id, $order_item );
 			return;
 		}
 

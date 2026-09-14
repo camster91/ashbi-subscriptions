@@ -6,11 +6,16 @@ The only permitted upstream is the public WordPress.org plugin package at:
 
 `https://downloads.wordpress.org/plugin/subscription.zip`
 
-The inspected public release was version 2.0.0 and declared
-`GPL-2.0-or-later` in both the plugin header and `composer.json`.
-The implementation agent must re-download the current public package and pin
-its version and SHA-256 before import; this planning note is not a substitute
-for an immutable provenance record.
+The imported public release is version 2.0.0 and declared
+`GPL-2.0-or-later` in both the plugin header and `composer.json`. Its immutable
+record is:
+
+- URL: `https://downloads.wordpress.org/plugin/subscription.2.0.0.zip`
+- SHA-256: `232e0eb4bfb5535d1ddcb4de19aba2d60f2461b14f5af1c1354919faa9842a90`
+- Unmodified import commit: `5508935`
+
+Run `bash scripts/verify-upstream.sh` to download that exact package, verify
+its digest, and compare it byte-for-byte with the imported tree.
 
 ## Prohibited material
 

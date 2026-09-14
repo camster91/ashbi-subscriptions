@@ -341,6 +341,14 @@ class GuestCheckout {
 		$user    = get_user_by( 'email', $user_info['billing_email'] );
 		$user_id = $user ? $user->ID : 0;
 
+		// Possession of a billing email is not proof of account ownership. Keep an
+		// existing-email checkout guest-owned unless that exact user is already
+		// authenticated; this also isolates their saved payment methods.
+		if ( $user_id && ( ! is_user_logged_in() || (int) get_current_user_id() !== (int) $user_id ) ) {
+			subscrpt_write_log( 'Guest subscription checkout matched an existing account; account binding was skipped.' );
+			return null;
+		}
+
 		if ( ! $user_id ) {
 			$is_new_customer = true;
 

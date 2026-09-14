@@ -112,7 +112,11 @@ class Required {
 			wp_localize_script(
 				'sdevs_installer',
 				'sdevs_installer_helper_obj',
-				array( 'ajax_url' => admin_url( 'admin-ajax.php' ) )
+				array(
+					'ajax_url'      => admin_url( 'admin-ajax.php' ),
+					'install_nonce' => wp_create_nonce( 'subscrpt_install_woocommerce_plugin' ),
+					'activate_nonce' => wp_create_nonce( 'subscrpt_activate_woocommerce_plugin' ),
+				)
 			);
 		}
 	}

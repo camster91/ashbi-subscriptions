@@ -375,16 +375,11 @@ class Paypal extends \WC_Payment_Gateway {
 
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended
 		// ? We are checking $_GET parameters directly from PayPal redirect, nonce is not applicable here.
-		$paypal_subscription_id = isset( $_GET['subscription_id'] ) ? sanitize_text_field( wp_unslash( $_GET['subscription_id'] ) ) : '';
-		$paypal_ba_token        = isset( $_GET['ba_token'] ) ? sanitize_text_field( wp_unslash( $_GET['ba_token'] ) ) : '';
-		$paypal_token           = isset( $_GET['token'] ) ? sanitize_text_field( wp_unslash( $_GET['token'] ) ) : '';
+		$returned_subscription_id = isset( $_GET['subscription_id'] ) ? sanitize_text_field( wp_unslash( $_GET['subscription_id'] ) ) : '';
 		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
 		$paypal_payment_approved = false;
-
-		if ( empty( $paypal_subscription_id ) ) {
-			$paypal_subscription_id = $order->get_meta( $this->get_meta_key( 'subscription_id' ), true );
-		}
+		$paypal_subscription_id  = $order->get_meta( $this->get_meta_key( 'subscription_id' ), true );
 
 		// OLD key migration.
 		// If no data check if the data exists with the old key. And update if necessary.
@@ -398,21 +393,21 @@ class Paypal extends \WC_Payment_Gateway {
 			}
 		}
 
-		if ( ! empty( $paypal_subscription_id ) ) {
-			$paypal_subscription_data = $this->get_paypal_subscription( $paypal_subscription_id );
-
-			if ( $paypal_subscription_data && in_array( $paypal_subscription_data->status ?? '', [ 'ACTIVE', 'APPROVED' ], true ) ) {
-				$paypal_payment_approved = true;
-			}
+		// The PayPal approval must be for the exact subscription created for this
+		// WooCommerce order. Never let a return-query identifier select a different
+		// PayPal object and thereby serve as payment proof for the current order.
+		if (
+			empty( $paypal_subscription_id )
+			|| ( ! empty( $returned_subscription_id ) && ! hash_equals( (string) $paypal_subscription_id, (string) $returned_subscription_id ) )
+		) {
+			subscrpt_write_log( "PayPal return did not match the subscription stored for order #{$order_id}." );
+			return;
 		}
 
-		// Fallback to check PayPal Order if Subscription is not available.
-		if ( ! $paypal_payment_approved && ! empty( $paypal_token ) ) {
-			$paypal_order_data = $this->get_paypal_order( $paypal_token );
+		$paypal_subscription_data = $this->get_paypal_subscription( $paypal_subscription_id );
 
-			if ( $paypal_order_data && in_array( $paypal_order_data->status ?? '', [ 'APPROVED', 'COMPLETED' ], true ) ) {
-				$paypal_payment_approved = true;
-			}
+		if ( $paypal_subscription_data && 'ACTIVE' === ( $paypal_subscription_data->status ?? '' ) ) {
+			$paypal_payment_approved = true;
 		}
 
 		if ( $paypal_payment_approved ) {
@@ -420,27 +415,25 @@ class Paypal extends \WC_Payment_Gateway {
 			$order->save();
 
 			// Pre-populate mapping table so the first webhook can resolve without the slow order-meta fallback query.
-			if ( ! empty( $paypal_subscription_id ) ) {
-				$subscriptions = Helper::get_subscriptions_from_order( $order_id );
-				$subscription  = ! empty( $subscriptions ) ? reset( $subscriptions ) : null;
+			$subscriptions = Helper::get_subscriptions_from_order( $order_id );
+			$subscription  = ! empty( $subscriptions ) ? reset( $subscriptions ) : null;
 
-				if ( ! $subscription ) {
-					foreach ( $order->get_items() as $item ) {
-						$tmp = Helper::get_subscription_from_order_item_id( $item->get_id() );
-						if ( ! empty( $tmp ) ) {
-							$subscription = $tmp;
-							break;
-						}
+			if ( ! $subscription ) {
+				foreach ( $order->get_items() as $item ) {
+					$tmp = Helper::get_subscription_from_order_item_id( $item->get_id() );
+					if ( ! empty( $tmp ) ) {
+						$subscription = $tmp;
+						break;
 					}
 				}
+			}
 
-				if ( $subscription ) {
-					PaypalDB::upsert_mapping(
-						$paypal_subscription_id,
-						(int) $subscription->subscription_id,
-						(int) $order_id
-					);
-				}
+			if ( $subscription ) {
+				PaypalDB::upsert_mapping(
+					$paypal_subscription_id,
+					(int) $subscription->subscription_id,
+					(int) $order_id
+				);
 			}
 		}
 	}
@@ -620,11 +613,16 @@ class Paypal extends \WC_Payment_Gateway {
 	 * @param string $raw_body Webhook raw body from PayPal.
 	 */
 	public function verify_webhook( array $headers, string $raw_body ) {
+		if ( empty( $this->webhook_id ) ) {
+			subscrpt_write_log( 'PayPal webhook: Webhook ID is not configured.' );
+			wp_die( 'Error: PayPal webhook ID is not configured.', '401 Unauthorized', array( 'response' => 401 ) );
+		}
+
 		// Get PayPal Access Token.
 		$access_token = $this->get_paypal_access_token();
 		if ( ! $access_token ) {
 			subscrpt_write_log( 'PayPal webhook: Access Token unavailable.' );
-			wp_die( 'Error: Access token not available. Cannot verify webhook.', '401 Unauthorized', array( 'response' => 401 ) );
+			wp_die( 'Error: Access token not available. Cannot verify webhook.', '503 Service Unavailable', array( 'response' => 503 ) );
 		}
 
 		// Prepare the request data to verify the webhook.
@@ -641,11 +639,9 @@ class Paypal extends \WC_Payment_Gateway {
 		// Verify webhook via REST API.
 		$verified = $this->verify_paypal_webhook_rest_api( $payload, $raw_body, $access_token );
 
-		if ( ! $verified ) {
-			// Fallback to manual method if REST API verification fails.
-			subscrpt_write_log( 'PayPal webhook REST API verification failed. Retrying with manual verification.' );
-
-			$verified = $this->verify_paypal_webhook_manual( $payload, $raw_body );
+		if ( null === $verified ) {
+			subscrpt_write_log( 'PayPal webhook verification service unavailable.' );
+			wp_die( 'Error: PayPal webhook verification is temporarily unavailable.', '503 Service Unavailable', array( 'response' => 503 ) );
 		}
 
 		if ( ! $verified ) {
@@ -661,8 +657,9 @@ class Paypal extends \WC_Payment_Gateway {
 	 * @param array  $payload       Payload data for verification.
 	 * @param string $raw_body Webhook raw body from PayPal.
 	 * @param string $access_token  PayPal Access Token.
+	 * @return bool|null True when verified, false when invalid, null when PayPal is unavailable.
 	 */
-	protected function verify_paypal_webhook_rest_api( array $payload, string $raw_body, string $access_token ): bool {
+	protected function verify_paypal_webhook_rest_api( array $payload, string $raw_body, string $access_token ): ?bool {
 		// Fix the webhook_event to be an array.
 		$payload['webhook_event'] = json_decode( $raw_body, true );
 
@@ -678,8 +675,24 @@ class Paypal extends \WC_Payment_Gateway {
 				'body'    => wp_json_encode( $payload ),
 			];
 
-			$response            = wp_remote_post( $url, $args );
-			$response_data       = json_decode( wp_remote_retrieve_body( $response ), true );
+			$response = wp_remote_post( $url, $args );
+			if ( is_wp_error( $response ) ) {
+				subscrpt_write_log( 'PayPal webhook verification request failed: ' . $response->get_error_message() );
+				return null;
+			}
+
+			$status_code = (int) wp_remote_retrieve_response_code( $response );
+			if ( $status_code < 200 || $status_code >= 300 ) {
+				subscrpt_write_log( "PayPal webhook verification returned HTTP {$status_code}." );
+				return ( $status_code >= 500 || 429 === $status_code ) ? null : false;
+			}
+
+			$response_data = json_decode( wp_remote_retrieve_body( $response ), true );
+			if ( ! is_array( $response_data ) ) {
+				subscrpt_write_log( 'PayPal webhook verification returned an invalid response.' );
+				return null;
+			}
+
 			$verification_status = $response_data['verification_status'] ?? null;
 
 			if ( empty( $verification_status ) || 'success' !== strtolower( $verification_status ) ) {
@@ -687,73 +700,14 @@ class Paypal extends \WC_Payment_Gateway {
 				return false;
 			}
 
-			return ( 'success' === strtolower( $verification_status ) ) ? true : false;
+			return true;
 
 		} catch ( \Exception $e ) {
 			$log_message = 'PayPal Webhook Verification Failed: ' . $e->getMessage();
 			subscrpt_write_log( $log_message );
 			subscrpt_write_debug_log( $log_message );
-			return false;
+			return null;
 		}
-	}
-
-	/**
-	 * Verify PayPal webhook manually (self verification).
-	 *
-	 * @param array  $payload       Payload data for verification.
-	 * @param string $raw_body Webhook raw body from PayPal.
-	 */
-	protected function verify_paypal_webhook_manual( array $payload, string $raw_body ): bool {
-		// Enforce CRC32 for 32-bit systems (edge case)
-		$crc = sprintf( '%u', crc32( $raw_body ) );
-
-		// Build Message
-		$message = implode(
-			'|',
-			[
-				$payload['transmission_id'],
-				$payload['transmission_time'],
-				$payload['webhook_id'],
-				$crc,
-			]
-		);
-
-		// Fetch & cache cert
-		$cert_url  = esc_url_raw( $payload['cert_url'] );
-		$cache_key = 'paypal_cert_' . md5( $cert_url );
-
-		$cert_pem = get_transient( $cache_key );
-
-		if ( ! $cert_pem ) {
-			$response = wp_remote_get( $cert_url, [ 'timeout' => 20 ] );
-			if ( is_wp_error( $response ) ) {
-				return false;
-			}
-
-			$cert_pem = wp_remote_retrieve_body( $response );
-			set_transient( $cache_key, $cert_pem, DAY_IN_SECONDS );
-		}
-
-		if ( empty( $cert_pem ) ) {
-			return false;
-		}
-
-		// Signature
-		$signature = base64_decode( $payload['transmission_sig'], true );
-
-		if ( false === $signature ) {
-			return false;
-		}
-
-		// Final verification
-		$verified = openssl_verify(
-			$message,
-			$signature,
-			$cert_pem,
-			OPENSSL_ALGO_SHA256
-		);
-
-		return ( 1 === $verified );
 	}
 
 	/**
@@ -1060,7 +1014,9 @@ class Paypal extends \WC_Payment_Gateway {
 					);
 					subscrpt_write_log( $log_message );
 					subscrpt_write_debug_log( $log_message . ' ' . wp_json_encode( $webhook_data ) );
-					wp_die( esc_html( $log_message ), '404 not found', array( 'response' => 404 ) );
+					$response_code = $wpsubs_id ? 503 : 404;
+					$response_title = $wpsubs_id ? '503 Service Unavailable' : '404 not found';
+					wp_die( esc_html( $log_message ), $response_title, array( 'response' => $response_code ) );
 				}
 
 				if ( ! $order instanceof \WC_Order ) {
@@ -1221,69 +1177,111 @@ class Paypal extends \WC_Payment_Gateway {
 			$subscription_id = $wpsubs_id;
 		}
 
-		switch ( $event ) {
-			case 'BILLING.SUBSCRIPTION.ACTIVATED':
-				if ( ! in_array( get_post_status( $subscription_id ), [ 'active' ], true ) ) {
-					Action::status( 'active', $subscription_id );
-
-					update_post_meta( $subscription_id, $this->get_meta_key( 'paypal_subs_status' ), 'active' );
-
-					$log_message = __( 'Subscription activated by PayPal webhook.', 'subscription' );
-					subscrpt_write_log( $log_message );
-					wp_die( esc_html( $log_message ), '200 success', array( 'response' => 200 ) );
-				}
-
-				// translators: %s: alert name.
-				$log_message = sprintf( __( 'Subscription webhook received [%s]. No actions taken.', 'subscription' ), $event );
-				subscrpt_write_log( $log_message );
-				wp_die( esc_html( $log_message ), '200 success', array( 'response' => 200 ) );
-				break;
-
-			case 'BILLING.SUBSCRIPTION.EXPIRED':
-				if ( in_array( get_post_status( $subscription_id ), [ 'active', 'pe_cancelled' ], true ) ) {
-					Action::status( 'expired', $subscription_id );
-
-					update_post_meta( $subscription_id, $this->get_meta_key( 'paypal_subs_status' ), 'expired' );
-
-					$log_message = __( 'Subscription expired by PayPal webhook.', 'subscription' );
-					subscrpt_write_log( $log_message );
-					wp_die( esc_html( $log_message ), '200 success', array( 'response' => 200 ) );
-				}
-
-				// translators: %s: alert name.
-				$log_message = sprintf( __( 'Subscription webhook received [%s]. No actions taken.', 'subscription' ), $event );
-				subscrpt_write_log( $log_message );
-				wp_die( esc_html( $log_message ), '200 success', array( 'response' => 200 ) );
-				break;
-
-			case 'BILLING.SUBSCRIPTION.CANCELLED':
-				if ( ! in_array( get_post_status( $subscription_id ), [ 'cancelled', 'expired' ], true ) ) {
-					Action::status( 'cancelled', $subscription_id );
-
-					update_post_meta( $subscription_id, $this->get_meta_key( 'paypal_subs_status' ), 'cancelled' );
-
-					$log_message = __( 'Subscription cancelled by PayPal webhook.', 'subscription' );
-					subscrpt_write_log( $log_message );
-					wp_die( esc_html( $log_message ), '200 success', array( 'response' => 200 ) );
-				}
-
-				// translators: %s: alert name.
-				$log_message = sprintf( __( 'Subscription webhook received [%s]. No actions taken.', 'subscription' ), $event );
-				subscrpt_write_log( $log_message );
-				wp_die( esc_html( $log_message ), '200 success', array( 'response' => 200 ) );
-				break;
-
-			default:
-				$log_message = sprintf(
-						// translators: %s: alert name.
-					__( 'Subscription webhook received [%s]. No actions taken.', 'subscription' ),
-					$event,
-				);
-				subscrpt_write_log( $log_message );
-				subscrpt_write_debug_log( $log_message . ' ' . wp_json_encode( $webhook_data ) );
-				wp_die( esc_html( $log_message ), '200 success', array( 'response' => 200 ) );
-				break;
+		$event_time_raw = trim( (string) ( $webhook_data['create_time'] ?? '' ) );
+		if ( '' === $event_time_raw ) {
+			wp_die( 'PayPal subscription event timestamp is invalid.', '400 Bad Request', array( 'response' => 400 ) );
 		}
+		try {
+			$event_datetime = new \DateTimeImmutable( $event_time_raw );
+		} catch ( \Exception $exception ) {
+			wp_die( 'PayPal subscription event timestamp is invalid.', '400 Bad Request', array( 'response' => 400 ) );
+		}
+		$event_time = $event_datetime->getTimestamp();
+		$event_id   = sanitize_text_field( $webhook_data['id'] ?? '' );
+		if ( '' === $event_id ) {
+			wp_die( 'PayPal subscription event ID is missing.', '400 Bad Request', array( 'response' => 400 ) );
+		}
+
+		global $wpdb;
+		$lock_name = 'ashbi_paypal_subscription_' . (int) $subscription_id;
+		if ( 1 !== (int) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 5)', $lock_name ) ) ) {
+			wp_die( 'PayPal subscription event is being reconciled.', '503 Service Unavailable', array( 'response' => 503 ) );
+		}
+
+		if ( hash_equals( (string) get_post_meta( $subscription_id, '_subscrpt_paypal_last_event_id', true ), $event_id ) ) {
+			$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock_name ) );
+			wp_die( 'PayPal subscription event already reconciled.', '200 success', array( 'response' => 200 ) );
+		}
+		$last_event_time_precise = (string) get_post_meta( $subscription_id, '_subscrpt_paypal_last_event_time_precise', true );
+		if ( '' !== $last_event_time_precise ) {
+			try {
+				$last_event_datetime = new \DateTimeImmutable( $last_event_time_precise );
+				if ( $event_datetime < $last_event_datetime ) {
+					$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock_name ) );
+					wp_die( 'Stale PayPal subscription event ignored.', '200 success', array( 'response' => 200 ) );
+				}
+			} catch ( \Exception $exception ) {
+				subscrpt_write_log( "Invalid stored PayPal event watermark for subscription #{$subscription_id}; reconciling from PayPal." );
+			}
+		}
+
+		if ( empty( $paypal_subscription_id ) ) {
+			$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock_name ) );
+			wp_die( 'PayPal subscription identifier is unavailable.', '503 Service Unavailable', array( 'response' => 503 ) );
+		}
+
+		// Re-read the authoritative PayPal object for every distinct event. Delivery
+		// order is not guaranteed, so applying the event name itself can resurrect a
+		// cancelled subscription or discard two transitions created in one second.
+		$paypal_subscription = $this->get_paypal_subscription( $paypal_subscription_id );
+		$remote_status       = strtoupper( (string) ( $paypal_subscription->status ?? '' ) );
+		$status_map          = array(
+			'ACTIVE'    => array( 'active', 'active' ),
+			'SUSPENDED' => array( 'on-hold', 'suspended' ),
+			'CANCELLED' => array( 'cancelled', 'cancelled' ),
+			'EXPIRED'   => array( 'expired', 'expired' ),
+		);
+
+		if ( ! isset( $status_map[ $remote_status ] ) ) {
+			$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock_name ) );
+			wp_die( 'PayPal subscription state is not yet reconcilable.', '503 Service Unavailable', array( 'response' => 503 ) );
+		}
+
+		$expected_remote_status = array(
+			'BILLING.SUBSCRIPTION.ACTIVATED' => 'ACTIVE',
+			'BILLING.SUBSCRIPTION.SUSPENDED' => 'SUSPENDED',
+			'BILLING.SUBSCRIPTION.CANCELLED' => 'CANCELLED',
+			'BILLING.SUBSCRIPTION.EXPIRED'   => 'EXPIRED',
+		);
+		$expected_status = $expected_remote_status[ $event ] ?? '';
+		if ( $expected_status && $remote_status !== $expected_status ) {
+			$remote_update_time = trim( (string) ( $paypal_subscription->status_update_time ?? '' ) );
+			$remote_update_datetime = null;
+			if ( '' !== $remote_update_time ) {
+				try {
+					$remote_update_datetime = new \DateTimeImmutable( $remote_update_time );
+				} catch ( \Exception $exception ) {
+					$remote_update_datetime = null;
+				}
+			}
+
+			// A newer/equal authoritative update proves this webhook is stale. If
+			// PayPal's object is still older than the webhook, ask for redelivery
+			// until the API has converged instead of acknowledging a lost transition.
+			if ( ! $remote_update_datetime || $remote_update_datetime < $event_datetime ) {
+				$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock_name ) );
+				wp_die( 'PayPal subscription state has not converged yet.', '503 Service Unavailable', array( 'response' => 503 ) );
+			}
+		}
+
+		list( $local_status, $stored_status ) = $status_map[ $remote_status ];
+		if ( $local_status !== get_post_status( $subscription_id ) ) {
+			Action::status( $local_status, (int) $subscription_id );
+		}
+		update_post_meta( $subscription_id, $this->get_meta_key( 'paypal_subs_status' ), $stored_status );
+		$log_message = sprintf(
+			/* translators: 1: PayPal event name, 2: authoritative remote status. */
+			__( 'Subscription webhook [%1$s] reconciled to PayPal status %2$s.', 'subscription' ),
+			$event,
+			$remote_status
+		);
+
+		update_post_meta( $subscription_id, '_subscrpt_paypal_last_event_time', $event_time );
+		update_post_meta( $subscription_id, '_subscrpt_paypal_last_event_time_precise', $event_datetime->setTimezone( new \DateTimeZone( 'UTC' ) )->format( 'Y-m-d\TH:i:s.u\Z' ) );
+		update_post_meta( $subscription_id, '_subscrpt_paypal_last_event_id', $event_id );
+		$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock_name ) );
+		subscrpt_write_log( $log_message );
+		wp_die( esc_html( $log_message ), '200 success', array( 'response' => 200 ) );
 	}
 
 	/**

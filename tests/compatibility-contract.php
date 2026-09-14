@@ -59,6 +59,8 @@ ashbi_assert( ! is_dir( $plugin . '/subscription-pro' ), 'Pro source must never 
 ashbi_assert( false !== strpos( $post, "register_post_type( 'subscrpt_order'" ), 'Legacy subscrpt_order post type must remain registered.' );
 ashbi_assert( false !== strpos( $post, "register_post_type( 'subscrpt_order_item'" ), 'Legacy subscrpt_order_item post type must remain registered.' );
 ashbi_assert( false !== strpos( $installer, "'subscrpt_order_relation'" ), 'Legacy relation table name must remain compatible.' );
+ashbi_assert( false !== strpos( $installer, "'subscrpt_renewal_claim'" ), 'Atomic renewal claim table must be installed additively.' );
+ashbi_assert( false !== strpos( $installer, 'backfill_open_renewal_claims' ), 'Open legacy renewal orders must be claimed during migration.' );
 
 $source = '';
 $files  = new RecursiveIteratorIterator(

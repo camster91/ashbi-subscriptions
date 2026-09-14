@@ -3,6 +3,7 @@
 namespace SpringDevs\Subscription;
 
 use SpringDevs\Subscription\Illuminate\Gateways\Paypal\PaypalDB;
+use SpringDevs\Subscription\Illuminate\RenewalClaim;
 
 /**
  * Class Installer
@@ -16,7 +17,7 @@ class Installer {
 	 *
 	 * @var string
 	 */
-	const DB_VERSION = '1.3.0';
+	const DB_VERSION = '1.4.0';
 
 	/**
 	 * Run the installer
@@ -38,7 +39,10 @@ class Installer {
 	 * @return void
 	 */
 	public static function maybe_upgrade() {
-		if ( get_option( 'subscrpt_db_version' ) === self::DB_VERSION ) {
+		if (
+			get_option( 'subscrpt_db_version' ) === self::DB_VERSION
+			&& get_option( 'subscrpt_renewal_claim_backfill_1' )
+		) {
 			return;
 		}
 
@@ -87,9 +91,117 @@ class Installer {
 		$this->create_plan_group_table();
 		$this->create_plan_table();
 		$this->create_plan_relation_table();
+		$this->create_renewal_claim_table();
 		PaypalDB::maybe_create_tables();
+		$this->backfill_open_renewal_claims();
 
 		update_option( 'subscrpt_db_version', self::DB_VERSION );
+	}
+
+	/**
+	 * Claim open renewal orders created before the claim table existed.
+	 *
+	 * Completed renewals are intentionally excluded: their subscription schedule
+	 * already points at a later billing period, which must remain unclaimed.
+	 *
+	 * @return void
+	 */
+	private function backfill_open_renewal_claims() {
+		if ( get_option( 'subscrpt_renewal_claim_backfill_1' ) ) {
+			return;
+		}
+		if ( ! function_exists( 'wc_get_order' ) ) {
+			return;
+		}
+
+		global $wpdb;
+		$relation_table = $wpdb->prefix . 'subscrpt_order_relation';
+		$rows           = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT subscription_id, order_id
+				 FROM %i
+				 WHERE type = 'renew'
+				 ORDER BY subscription_id ASC, id DESC",
+				array( $relation_table )
+			)
+		);
+		if ( ! is_array( $rows ) ) {
+			subscrpt_write_log( 'Renewal claim backfill could not read legacy renewal orders; it will be retried.' );
+			return;
+		}
+
+		$open_orders = array();
+		foreach ( $rows as $row ) {
+			$subscription_id = (int) $row->subscription_id;
+			$order_id        = (int) $row->order_id;
+			$order = wc_get_order( $order_id );
+			if ( ! $order || ! in_array( $order->get_status(), array( 'pending', 'failed', 'on-hold' ), true ) ) {
+				continue;
+			}
+			$open_orders[ $subscription_id ][ $order_id ] = $order;
+		}
+
+		$blocked = array();
+		foreach ( $open_orders as $subscription_id => $orders ) {
+			$period_anchor = (int) get_post_meta( $subscription_id, '_subscrpt_next_date', true );
+			$order         = 1 === count( $orders ) ? reset( $orders ) : false;
+			$date_created  = $order ? $order->get_date_created() : false;
+			$created_at    = $date_created ? $date_created->getTimestamp() : 0;
+			$unambiguous   = $order && $period_anchor > 0 && $created_at >= ( $period_anchor - DAY_IN_SECONDS );
+			$stripe_customer = $order ? (string) $order->get_meta( '_stripe_customer_id' ) : '';
+			$stripe_intent   = $order ? (string) $order->get_meta( '_stripe_intent_id' ) : '';
+			$is_stripe       = $order && (
+				in_array( $order->get_payment_method(), array( 'stripe', 'stripe_ideal', 'stripe_sepa', 'sepa_debit', 'stripe_bancontact' ), true )
+				|| '' !== $stripe_customer
+			);
+			if ( $is_stripe && ( '' === $stripe_customer || 0 !== strpos( $stripe_intent, 'pi_' ) ) ) {
+				// A pre-migration worker may have created a remote PaymentIntent before
+				// saving its ID. Without both historical values, automatic redispatch
+				// cannot conclusively rule out a charge under a prior customer.
+				$unambiguous = false;
+			}
+
+			if ( $unambiguous && RenewalClaim::claim_order( (int) $subscription_id, (int) $order->get_id(), $period_anchor ) ) {
+				$period_key = RenewalClaim::period_key( (int) $subscription_id, $period_anchor );
+				$order->update_meta_data( '_subscrpt_renewal_period_key', $period_key );
+				if ( $is_stripe ) {
+					$order->update_meta_data( '_subscrpt_stripe_renewal_customer', $stripe_customer );
+				}
+				$order->save();
+				$persisted_order = wc_get_order( $order->get_id() );
+				if (
+					! $persisted_order
+					|| ! hash_equals( $period_key, (string) $persisted_order->get_meta( '_subscrpt_renewal_period_key' ) )
+					|| ( $is_stripe && ! hash_equals( $stripe_customer, (string) $persisted_order->get_meta( '_subscrpt_stripe_renewal_customer' ) ) )
+				) {
+					$blocked[] = (int) $subscription_id;
+					$order->update_meta_data( '_subscrpt_renewal_quarantined', 1 );
+					$order->add_order_note( __( 'Payment blocked because the canonical renewal identity could not be persisted during migration. Reconcile this order before accepting payment.', 'subscription' ) );
+					$order->save();
+					subscrpt_write_log( "Renewal migration blocked for subscription #{$subscription_id}; canonical order metadata could not be persisted." );
+				}
+				continue;
+			}
+
+			$blocked[] = (int) $subscription_id;
+			foreach ( $orders as $open_order ) {
+				if ( $open_order->get_meta( '_subscrpt_renewal_quarantined' ) ) {
+					continue;
+				}
+
+				$open_order->update_meta_data( '_subscrpt_renewal_quarantined', 1 );
+				$open_order->add_order_note( __( 'Payment blocked during Ashbi Subscriptions migration because the renewal period is ambiguous. Reconcile this order before accepting payment.', 'subscription' ) );
+				$open_order->save();
+			}
+			subscrpt_write_log( "Renewal migration blocked for subscription #{$subscription_id}; open orders require reconciliation." );
+		}
+
+		if ( empty( $blocked ) ) {
+			delete_option( 'subscrpt_renewal_migration_blocked' );
+			update_option( 'subscrpt_renewal_claim_backfill_1', current_time( 'mysql', true ), false );
+		} else {
+			update_option( 'subscrpt_renewal_migration_blocked', array_values( array_unique( $blocked ) ), false );
+		}
 	}
 
 	/**
@@ -273,6 +385,51 @@ class Installer {
                       KEY `plan_id` (`plan_id`),
                       KEY `plan_lookup` (`plan_id`,`type`,`oid`,`vid`),
                       KEY `product_lookup` (`type`,`oid`,`vid`)
+                    ) $charset_collate";
+
+		dbDelta( $schema );
+	}
+
+	/**
+	 * Create the atomic renewal-period claim table.
+	 *
+	 * This table deliberately remains separate from the legacy order relation
+	 * history. Existing history rows are immutable compatibility data, while a
+	 * claim can temporarily exist before its canonical WooCommerce order does.
+	 *
+	 * @return void
+	 */
+	public function create_renewal_claim_table() {
+		global $wpdb;
+
+		$charset_collate = $wpdb->get_charset_collate();
+		$table_name      = $wpdb->prefix . 'subscrpt_renewal_claim';
+
+		$schema = "CREATE TABLE IF NOT EXISTS `{$table_name}` (
+                      `id` BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+                      `subscription_id` BIGINT(20) UNSIGNED NOT NULL,
+                      `period_key` CHAR(64) NOT NULL,
+					  `period_anchor` BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
+                      `order_id` BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
+                      `state` VARCHAR(20) NOT NULL DEFAULT 'creating',
+                      `claim_token` CHAR(36) NOT NULL,
+                      `lease_expires_at` DATETIME NOT NULL,
+					  `schedule_state` VARCHAR(20) NOT NULL DEFAULT 'waiting',
+					  `schedule_attempts` INT(10) UNSIGNED NOT NULL DEFAULT 0,
+					  `schedule_next_attempt` DATETIME NULL,
+					  `schedule_last_error` VARCHAR(191) NOT NULL DEFAULT '',
+					  `payment_state` VARCHAR(20) NOT NULL DEFAULT 'waiting',
+					  `payment_attempts` INT(10) UNSIGNED NOT NULL DEFAULT 0,
+					  `payment_next_attempt` DATETIME NULL,
+					  `payment_last_error` VARCHAR(191) NOT NULL DEFAULT '',
+                      `created_at` DATETIME NOT NULL,
+                      `updated_at` DATETIME NOT NULL,
+                      PRIMARY KEY (`id`),
+                      UNIQUE KEY `subscription_period` (`subscription_id`,`period_key`),
+                      KEY `order_id` (`order_id`),
+                      KEY `lease_expires_at` (`lease_expires_at`),
+					  KEY `schedule_repair` (`schedule_state`,`schedule_next_attempt`),
+					  KEY `payment_repair` (`payment_state`,`payment_next_attempt`)
                     ) $charset_collate";
 
 		dbDelta( $schema );

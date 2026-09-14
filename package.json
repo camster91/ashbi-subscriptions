@@ -1,0 +1,16 @@
+{
+  "name": "ashbi-subscriptions-integration-tests",
+  "private": true,
+  "devDependencies": {
+    "@wordpress/env": "11.15.0"
+  },
+  "overrides": {
+    "qs": "6.16.0"
+  },
+  "scripts": {
+    "env:start": "wp-env start",
+    "env:start:playground": "wp-env start --runtime=playground",
+    "env:stop": "wp-env stop",
+    "test:integration": "bash scripts/run-integration.sh"
+  }
+}

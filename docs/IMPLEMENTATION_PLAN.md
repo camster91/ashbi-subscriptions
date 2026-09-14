@@ -38,7 +38,7 @@ Exit criteria: clean install and controlled migration on staging; no live paymen
 
 Deliverables:
 
-- Formal lifecycle state machine and idempotent renewal service.
+- Formal lifecycle state machine and idempotent renewal service. The first safety slice now provides a durable per-period claim shared by automated and checkout renewals; gateway sandbox and crash-window validation remain release gates.
 - Stripe test-mode adapter using the official WooCommerce Stripe token model.
 - Signed webhook reconciliation and replay protection.
 - Retry policy, grace periods, dunning notifications, and audit events.

@@ -11,6 +11,12 @@
 namespace SpringDevs\Subscription\Illuminate\Gateways\Stripe;
 
 use SpringDevs\Subscription\Illuminate\Helper;
+use SpringDevs\Subscription\Illuminate\RenewalClaim;
+
+/**
+ * A local reconciliation failure that cannot become safe through blind retry.
+ */
+class RenewalPaymentTerminalException extends \WC_Stripe_Exception {}
 
 /**
  * Class Stripe
@@ -38,6 +44,7 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 		add_filter( 'subscrpt_before_saving_renewal_order', array( $this, 'copy_stripe_metadata' ), 10, 3 );
 
 		add_filter( 'wc_stripe_payment_metadata', array( $this, 'add_payment_metadata' ), 10, 2 );
+		add_filter( 'wc_stripe_idempotency_key', array( $this, 'renewal_idempotency_key' ), 20, 2 );
 
 		// Ensure a reusable payment method is stored for subscription checkouts (needed for iDEAL/SEPA auto-renewals).
 		add_filter( 'wc_stripe_force_save_payment_method', array( $this, 'force_save_payment_method_for_subscriptions' ), 10, 2 );
@@ -56,6 +63,8 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 
 		// Persist whatever Stripe ended up using, so renewals can charge it.
 		add_action( 'woocommerce_payment_complete', [ $this, 'backfill_stripe_meta_for_subscription_order' ], 20, 1 );
+		add_action( 'subscrpt_retry_renewal_payment', array( $this, 'retry_renewal_payment' ), 10, 2 );
+		add_action( 'subscrpt_hourly_cron', array( $this, 'repair_pending_renewal_payments' ), 20 );
 	}
 
 	/**
@@ -66,6 +75,11 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 	 * @param int       $subscription_id Subscription ID.
 	 */
 	public function after_create_renew_order( $new_order, $old_order, $subscription_id ) {
+		if ( ! RenewalClaim::is_claimed_order( (int) $subscription_id, (int) $new_order->get_id() ) ) {
+			subscrpt_write_log( 'Renewal order is not the canonical order for its subscription period.' );
+			return;
+		}
+
 		$is_auto_renew = get_post_meta( $subscription_id, '_subscrpt_auto_renew', true );
 		$is_auto_renew = in_array( $is_auto_renew, [ 1,'1' ], true );
 
@@ -91,7 +105,7 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 			return;
 		}
 
-		$this->pay_renew_order( $new_order );
+		$this->pay_renew_order( $new_order, (int) $subscription_id );
 	}
 
 	/**
@@ -169,14 +183,17 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 	 * Pay renewal Order
 	 *
 	 * @param \WC_Order $renewal_order Renewal order.
+	 * @param int       $subscription_id Subscription ID.
 	 * @throws \WC_Stripe_Exception $e exception.
 	 */
-	public function pay_renew_order( $renewal_order ) {
+	public function pay_renew_order( $renewal_order, int $subscription_id = 0 ) {
 		subscrpt_write_log( "Processing renewal order #{$renewal_order->get_id()} for payment." );
 		subscrpt_write_debug_log( "Processing renewal order #{$renewal_order->get_id()} for payment." );
 
 		$stripe_order_helper = new \WC_Stripe_Order_Helper();
 		$order_locked        = false;
+		$payment_pending     = false;
+		$deterministic_failure = false;
 
 		try {
 			$stripe_order_helper->validate_minimum_order_amount( $renewal_order );
@@ -191,6 +208,16 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 				$this->trigger_renewal_payment_failed( $renewal_order );
 				return new \WP_Error( 'stripe_error', __( 'Customer not found', 'subscription' ) );
 			}
+			if ( ! $subscription_id ) {
+				$relations       = Helper::get_subscriptions_from_order( $renewal_order->get_id() );
+				$relation        = ! empty( $relations ) ? reset( $relations ) : null;
+				$subscription_id = (int) ( $relation->subscription_id ?? 0 );
+			}
+			if ( ! $subscription_id || ! RenewalClaim::mark_payment_pending( $subscription_id, (int) $renewal_order->get_id(), 'Stripe dispatch started.' ) ) {
+				subscrpt_write_log( "Could not persist Stripe payment-dispatch state for renewal order #{$renewal_order->get_id()}. No charge was attempted." );
+				return new \WP_Error( 'stripe_dispatch_state', __( 'The renewal payment could not be prepared safely.', 'subscription' ) );
+			}
+			$payment_pending = true;
 
 			\WC_Stripe_Logger::info( "Begin processing subscription payment for order {$order_id} for the amount of {$amount}" );
 
@@ -201,12 +228,21 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 			// at requires_action with no charge, producing a null charge that then crashed
 			// process_response() (Attempt to read property "id" on null) and silently aborted
 			// the renewal without flagging it as failed.
-			$stripe_order_helper->lock_order_payment( $renewal_order );
+			if ( $stripe_order_helper->lock_order_payment( $renewal_order ) ) {
+				subscrpt_write_log( "Stripe payment processing is already locked for renewal order #{$renewal_order->get_id()}." );
+				$this->schedule_renewal_payment_retry( $subscription_id, (int) $renewal_order->get_id() );
+				return new \WP_Error( 'stripe_payment_locked', __( 'This renewal payment is already being processed.', 'subscription' ) );
+			}
 			$order_locked = true;
 
-			$intent = $this->create_and_confirm_intent_for_off_session( $renewal_order, $prepared_source, $amount );
+			$identity = $this->prepare_renewal_dispatch_identity( $renewal_order, (string) $prepared_source->customer );
+			$intent   = $this->find_existing_renewal_intent( $renewal_order, (string) $prepared_source->customer, $identity, (float) $amount );
+			if ( ! $intent ) {
+				$intent = $this->create_and_confirm_intent_for_off_session( $renewal_order, $prepared_source, $amount );
+			}
 
 			if ( ! empty( $intent->error ) ) {
+				$deterministic_failure = true;
 				$this->maybe_remove_non_existent_customer( $intent->error, $renewal_order );
 				$this->throw_localized_message( $intent, $renewal_order );
 			}
@@ -216,6 +252,7 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 			$response = $this->get_latest_charge_from_intent( $intent );
 			if ( empty( $response ) ) {
 				$status = isset( $intent->status ) ? $intent->status : 'unknown';
+				$deterministic_failure = in_array( $status, array( 'requires_action', 'requires_payment_method', 'canceled' ), true );
 				throw new \WC_Stripe_Exception(
 					"No charge on renewal intent for order #{$renewal_order->get_id()} (status: {$status})",
 					__( 'The subscription renewal payment could not be completed automatically. Customer authentication may be required.', 'subscription' )
@@ -223,11 +260,16 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 			}
 
 			$this->process_response( $response, $renewal_order );
+			RenewalClaim::mark_payment_complete( $subscription_id, (int) $renewal_order->get_id() );
+			$payment_pending = false;
 
 			$stripe_order_helper->unlock_order_payment( $renewal_order );
 			$order_locked = false;
 
 		} catch ( \WC_Stripe_Exception $e ) {
+			if ( $e instanceof RenewalPaymentTerminalException ) {
+				$deterministic_failure = true;
+			}
 			\WC_Stripe_Logger::error( 'Error: ' . $e->getMessage() );
 
 			$log_message = "Error processing renewal order #{$renewal_order->get_id()}: " . $e->getMessage();
@@ -238,10 +280,82 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 				$stripe_order_helper->unlock_order_payment( $renewal_order );
 			}
 
-			do_action( 'wc_gateway_stripe_process_payment_error', $e, $renewal_order );
+			if ( $payment_pending ) {
+				if ( $deterministic_failure ) {
+					RenewalClaim::mark_payment_failed( $subscription_id, (int) $renewal_order->get_id(), $e->getMessage() );
+					do_action( 'wc_gateway_stripe_process_payment_error', $e, $renewal_order );
+					$this->trigger_renewal_payment_failed( $renewal_order );
+				} else {
+					// Transport/retrieval exceptions have an uncertain remote outcome. Keep
+					// the durable phase pending and reconcile the frozen identity before a
+					// retry. The stable idempotency key prevents a second intent.
+					$this->schedule_renewal_payment_retry( $subscription_id, (int) $renewal_order->get_id() );
+				}
+			} else {
+				do_action( 'wc_gateway_stripe_process_payment_error', $e, $renewal_order );
+				$this->trigger_renewal_payment_failed( $renewal_order );
+			}
+		}
+	}
 
-			// Trigger failed actions.
-			$this->trigger_renewal_payment_failed( $renewal_order );
+	/**
+	 * Queue a payment-dispatch retry at the durable claim timestamp.
+	 *
+	 * @param int $subscription_id Subscription ID.
+	 * @param int $order_id Canonical renewal order ID.
+	 * @return void
+	 */
+	private function schedule_renewal_payment_retry( int $subscription_id, int $order_id ): void {
+		$args      = array( $subscription_id, $order_id );
+		$run_at    = RenewalClaim::payment_next_attempt( $subscription_id, $order_id );
+		$run_at    = max( time() + 1, $run_at ?: time() + 300 );
+		$scheduled = false;
+
+		if ( function_exists( 'as_has_scheduled_action' ) && function_exists( 'as_schedule_single_action' ) ) {
+			$scheduled = (bool) as_has_scheduled_action( 'subscrpt_retry_renewal_payment', $args, 'ashbi-subscriptions' );
+			if ( ! $scheduled ) {
+				$scheduled = 0 < (int) as_schedule_single_action( $run_at, 'subscrpt_retry_renewal_payment', $args, 'ashbi-subscriptions' );
+			}
+		} elseif ( wp_next_scheduled( 'subscrpt_retry_renewal_payment', $args ) ) {
+			$scheduled = true;
+		} else {
+			$scheduled = true === wp_schedule_single_event( $run_at, 'subscrpt_retry_renewal_payment', $args, true );
+		}
+
+		if ( ! $scheduled ) {
+			subscrpt_write_log( "Could not queue Stripe payment recovery for subscription #{$subscription_id}, order #{$order_id}; the hourly durable sweep remains armed." );
+		}
+	}
+
+	/**
+	 * Retry one canonical Stripe renewal after a stale gateway lock or crash.
+	 *
+	 * @param int $subscription_id Subscription ID.
+	 * @param int $order_id Canonical renewal order ID.
+	 * @return void
+	 */
+	public function retry_renewal_payment( $subscription_id, $order_id ) {
+		$subscription_id = (int) $subscription_id;
+		$order_id        = (int) $order_id;
+		$next_attempt    = RenewalClaim::payment_next_attempt( $subscription_id, $order_id );
+		if ( $next_attempt > time() ) {
+			$this->schedule_renewal_payment_retry( $subscription_id, $order_id );
+			return;
+		}
+
+		if ( RenewalClaim::is_claimed_order( $subscription_id, $order_id ) ) {
+			Helper::create_renewal_order( $subscription_id );
+		}
+	}
+
+	/**
+	 * Recover durable payment retries whose one-shot queue event was lost.
+	 *
+	 * @return void
+	 */
+	public function repair_pending_renewal_payments() {
+		foreach ( RenewalClaim::due_payment_retries( 100 ) as $retry ) {
+			$this->retry_renewal_payment( (int) $retry->subscription_id, (int) $retry->order_id );
 		}
 	}
 
@@ -347,6 +461,14 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 			'payment_method_types' => $payment_method_types,
 		);
 
+		if ( $this->is_subscription_renewal_order( $order->get_id() ) ) {
+			$period_key = (string) $order->get_meta( '_subscrpt_renewal_period_key' );
+			if ( '' !== $period_key ) {
+				$request['metadata']['ashbi_renewal_claim'] = $period_key;
+				$request['metadata']['ashbi_renewal_identity'] = $this->renewal_payment_identity( $order );
+			}
+		}
+
 		$request = \WC_Stripe_Helper::add_payment_method_to_request_array( $prepared_source->source, $request );
 
 		$force_save_source = apply_filters( 'wc_stripe_force_save_payment_method', false, $order->get_id() );
@@ -391,6 +513,232 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 		 * @param object $source
 		 */
 		return apply_filters( 'wc_stripe_generate_create_intent_request', $request, $order, $prepared_source );
+	}
+
+	/**
+	 * Use a deterministic idempotency key for canonical renewal PaymentIntents.
+	 *
+	 * WooCommerce Stripe generates a new UUID for each PaymentIntent POST. That is
+	 * appropriate for a new payment attempt, but unsafe when this plugin resumes the
+	 * same canonical order after a worker dies before recording Stripe's response.
+	 * The frozen renewal identity keeps every base request on the same key even if
+	 * local order data changes. The level-3 fallback gets its own stable variant so
+	 * Stripe can accept the intentionally different parameter set.
+	 *
+	 * @param string|null $idempotency_key Gateway-generated key.
+	 * @param array       $request         Stripe request body.
+	 * @return string|null
+	 */
+	public function renewal_idempotency_key( $idempotency_key, $request ) {
+		$identity = is_array( $request ) ? (string) ( $request['metadata']['ashbi_renewal_identity'] ?? '' ) : '';
+		if ( '' === $identity ) {
+			return $idempotency_key;
+		}
+
+		$variant = isset( $request['level3'] ) ? 'level3' : 'base';
+		return 'ashbi-renewal-' . $identity . '-' . $variant;
+	}
+
+	/**
+	 * Build a stable, site-and-order-specific identity for one renewal period.
+	 *
+	 * @param \WC_Order $order Canonical renewal order.
+	 * @return string
+	 */
+	private function renewal_payment_identity( $order ): string {
+		$stored_identity = (string) $order->get_meta( '_subscrpt_stripe_renewal_identity' );
+		if ( '' !== $stored_identity ) {
+			return $stored_identity;
+		}
+
+		$period_key = (string) $order->get_meta( '_subscrpt_renewal_period_key' );
+
+		return hash(
+			'sha256',
+			implode(
+				'|',
+				array(
+					(string) get_site_url(),
+					(string) $order->get_id(),
+					(string) $order->get_order_key(),
+					$period_key,
+				)
+			)
+		);
+	}
+
+	/**
+	 * Freeze and verify the remote dispatch identity before any Stripe request.
+	 *
+	 * @param \WC_Order $order Canonical renewal order.
+	 * @param string    $customer_id Prepared Stripe customer ID.
+	 * @return string
+	 * @throws \WC_Stripe_Exception When the identity cannot be persisted safely.
+	 */
+	private function prepare_renewal_dispatch_identity( $order, string $customer_id ): string {
+		$period_key = (string) $order->get_meta( '_subscrpt_renewal_period_key' );
+		if ( '' === $period_key ) {
+			throw new RenewalPaymentTerminalException(
+				'Missing canonical period identity for renewal order #' . $order->get_id(),
+				__( 'The renewal payment is missing its canonical billing-period identity. No charge was attempted.', 'subscription' )
+			);
+		}
+
+		$stored_customer = (string) $order->get_meta( '_subscrpt_stripe_renewal_customer' );
+		if ( '' !== $stored_customer && ! hash_equals( $stored_customer, $customer_id ) ) {
+			throw new RenewalPaymentTerminalException(
+				'Stripe customer changed after renewal dispatch was prepared for order #' . $order->get_id(),
+				__( 'The renewal payment customer changed and requires manual reconciliation. No new charge was attempted.', 'subscription' )
+			);
+		}
+
+		$identity = $this->renewal_payment_identity( $order );
+		$order->update_meta_data( '_subscrpt_stripe_renewal_identity', $identity );
+		$order->update_meta_data( '_subscrpt_stripe_renewal_customer', $customer_id );
+		$order->save();
+		$persisted_order = wc_get_order( $order->get_id() );
+
+		if (
+			! $persisted_order
+			|| ! hash_equals( $identity, (string) $persisted_order->get_meta( '_subscrpt_stripe_renewal_identity' ) )
+			|| ! hash_equals( $customer_id, (string) $persisted_order->get_meta( '_subscrpt_stripe_renewal_customer' ) )
+		) {
+			throw new RenewalPaymentTerminalException(
+				'Could not persist Stripe renewal dispatch identity for order #' . $order->get_id(),
+				__( 'The renewal payment could not be prepared safely. No charge was attempted.', 'subscription' )
+			);
+		}
+
+		return $identity;
+	}
+
+	/**
+	 * Recover a PaymentIntent already created for this canonical order.
+	 *
+	 * Stripe recommends one PaymentIntent per order. Listing by customer is strongly
+	 * consistent, unlike Search, and closes the recovery window after Stripe's
+	 * idempotency-key retention period. Failure to reconcile is fail-closed.
+	 *
+	 * @param \WC_Order $order       Canonical renewal order.
+	 * @param string    $customer_id Stripe customer ID.
+	 * @param string    $identity    Stable renewal identity.
+	 * @param float     $amount      Renewal total in store currency units.
+	 * @return object|false
+	 * @throws \WC_Stripe_Exception When Stripe cannot be reconciled safely.
+	 */
+	private function find_existing_renewal_intent( $order, string $customer_id, string $identity, float $amount ) {
+		$intent_id = (string) $order->get_meta( '_stripe_intent_id' );
+		if ( 0 === strpos( $intent_id, 'pi_' ) ) {
+			$intent = \WC_Stripe_API::retrieve( 'payment_intents/' . rawurlencode( $intent_id ) );
+			if ( ! $intent || is_wp_error( $intent ) || ! empty( $intent->error ) ) {
+				throw new \WC_Stripe_Exception(
+					'Could not retrieve stored Stripe PaymentIntent for renewal order #' . $order->get_id(),
+					__( 'The existing renewal payment could not be reconciled. No new charge was attempted.', 'subscription' )
+				);
+			}
+
+			return $this->accept_reconciled_intent( $intent, $order, $customer_id, $identity, $amount );
+		}
+
+		$starting_after = '';
+		for ( $page = 0; $page < 10; ++$page ) {
+			$query = 'payment_intents?customer=' . rawurlencode( $customer_id ) . '&limit=100';
+			if ( '' !== $starting_after ) {
+				$query .= '&starting_after=' . rawurlencode( $starting_after );
+			}
+			$result = \WC_Stripe_API::retrieve( $query );
+			if ( ! $result || is_wp_error( $result ) || ! empty( $result->error ) || ! isset( $result->data ) || ! is_array( $result->data ) ) {
+				throw new \WC_Stripe_Exception(
+					'Could not reconcile existing Stripe PaymentIntents for renewal order #' . $order->get_id(),
+					__( 'The renewal payment could not be reconciled safely. No new charge was attempted.', 'subscription' )
+				);
+			}
+
+			foreach ( $result->data as $intent ) {
+				$found_identity = (string) ( $intent->metadata->ashbi_renewal_identity ?? '' );
+				if ( '' !== $found_identity && hash_equals( $identity, $found_identity ) ) {
+					return $this->accept_reconciled_intent( $intent, $order, $customer_id, $identity, $amount );
+				}
+
+				// Recover PaymentIntents created by the pre-migration plugin, before
+				// Ashbi's identity metadata existed. WooCommerce Stripe has long stored
+				// the order number and site URL in PaymentIntent metadata.
+				$legacy_order = (string) ( $intent->metadata->order_id ?? '' );
+				$legacy_site  = untrailingslashit( (string) ( $intent->metadata->site_url ?? '' ) );
+				if (
+					'' !== $legacy_order
+					&& hash_equals( (string) $order->get_order_number(), $legacy_order )
+					&& '' !== $legacy_site
+					&& hash_equals( untrailingslashit( (string) get_site_url() ), $legacy_site )
+				) {
+					return $this->accept_reconciled_intent( $intent, $order, $customer_id, $identity, $amount );
+				}
+			}
+
+			if ( empty( $result->has_more ) || empty( $result->data ) ) {
+				return false;
+			}
+			$last           = end( $result->data );
+			$starting_after = (string) ( $last->id ?? '' );
+			if ( '' === $starting_after ) {
+				break;
+			}
+		}
+
+		throw new RenewalPaymentTerminalException(
+			'Stripe PaymentIntent reconciliation exceeded its safe pagination bound for renewal order #' . $order->get_id(),
+			__( 'The renewal payment requires manual reconciliation. No new charge was attempted.', 'subscription' )
+		);
+	}
+
+	/**
+	 * Validate and persist a reconciled PaymentIntent before local processing.
+	 *
+	 * @param object    $intent Stripe PaymentIntent.
+	 * @param \WC_Order $order Canonical renewal order.
+	 * @param string    $customer_id Frozen Stripe customer ID.
+	 * @param string    $identity Stable renewal identity.
+	 * @param float     $amount Renewal total in store currency units.
+	 * @return object
+	 * @throws \WC_Stripe_Exception When the remote object does not match.
+	 */
+	private function accept_reconciled_intent( $intent, $order, string $customer_id, string $identity, float $amount ) {
+		$intent_customer = isset( $intent->customer ) && is_object( $intent->customer ) ? (string) ( $intent->customer->id ?? '' ) : (string) ( $intent->customer ?? '' );
+		$expected_amount = (int) \WC_Stripe_Helper::get_stripe_amount( $amount, strtolower( $order->get_currency() ) );
+		$remote_identity = (string) ( $intent->metadata->ashbi_renewal_identity ?? '' );
+		$legacy_order    = (string) ( $intent->metadata->order_id ?? '' );
+		$legacy_site     = untrailingslashit( (string) ( $intent->metadata->site_url ?? '' ) );
+		$identity_match  = ( '' !== $remote_identity && hash_equals( $identity, $remote_identity ) )
+			|| (
+				'' !== $legacy_order
+				&& hash_equals( (string) $order->get_order_number(), $legacy_order )
+				&& '' !== $legacy_site
+				&& hash_equals( untrailingslashit( (string) get_site_url() ), $legacy_site )
+			);
+
+		if (
+			! $identity_match
+			|| ! hash_equals( $customer_id, $intent_customer )
+			|| $expected_amount !== (int) ( $intent->amount ?? -1 )
+			|| strtolower( $order->get_currency() ) !== strtolower( (string) ( $intent->currency ?? '' ) )
+		) {
+			throw new RenewalPaymentTerminalException(
+				'Stripe PaymentIntent did not match canonical renewal order #' . $order->get_id(),
+				__( 'The existing renewal payment did not match the canonical order. No new charge was attempted.', 'subscription' )
+			);
+		}
+
+		$order->update_meta_data( '_stripe_intent_id', (string) ( $intent->id ?? '' ) );
+		$order->save();
+		$persisted_order = wc_get_order( $order->get_id() );
+		if ( ! $persisted_order || ! hash_equals( (string) ( $intent->id ?? '' ), (string) $persisted_order->get_meta( '_stripe_intent_id' ) ) ) {
+			throw new RenewalPaymentTerminalException(
+				'Could not persist reconciled Stripe PaymentIntent for renewal order #' . $order->get_id(),
+				__( 'The existing renewal payment could not be recorded safely. No new charge was attempted.', 'subscription' )
+			);
+		}
+
+		return $intent;
 	}
 
 	/**
@@ -519,6 +867,14 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 
 		$is_subscription_order = $this->order_has_subscription_relation( $order->get_id() );
 		$is_renewal_order      = $this->is_subscription_renewal_order( $order->get_id() );
+
+		if ( $is_renewal_order ) {
+			$period_key = (string) $order->get_meta( '_subscrpt_renewal_period_key' );
+			if ( '' !== $period_key ) {
+				$request['metadata']['ashbi_renewal_claim'] = $period_key;
+				$request['metadata']['ashbi_renewal_identity'] = $this->renewal_payment_identity( $order );
+			}
+		}
 
 		// Don't add setup_future_usage for renewal orders (payment method already saved)
 		if ( ! $is_subscription_order || $is_renewal_order ) {
@@ -665,18 +1021,16 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 			return;
 		}
 
-		$order_helper = \WC_Stripe_Order_Helper::get_instance();
-
 		// Healthy order — skip the API round trip.
 		if (
-			! empty( $order_helper->get_stripe_customer_id( $order ) )
-			&& ! empty( $order_helper->get_stripe_source_id( $order ) )
+			! empty( $order->get_meta( '_stripe_customer_id' ) )
+			&& ! empty( $order->get_meta( '_stripe_source_id' ) )
 			&& ( ! $order->get_customer_id() || get_user_option( '_stripe_customer_id', $order->get_customer_id() ) )
 		) {
 			return;
 		}
 
-		$intent_id = $order_helper->get_stripe_intent_id( $order );
+		$intent_id = $order->get_meta( '_stripe_intent_id' );
 
 		if ( empty( $intent_id ) || 0 !== strpos( $intent_id, 'pi_' ) ) {
 			return;
@@ -710,13 +1064,13 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 
 		$updated = false;
 
-		if ( empty( $order_helper->get_stripe_customer_id( $order ) ) ) {
-			$order_helper->update_stripe_customer_id( $order, $customer_id );
+		if ( empty( $order->get_meta( '_stripe_customer_id' ) ) ) {
+			$order->update_meta_data( '_stripe_customer_id', $customer_id );
 			$updated = true;
 		}
 
-		if ( ! empty( $source_id ) && empty( $order_helper->get_stripe_source_id( $order ) ) ) {
-			$order_helper->update_stripe_source_id( $order, $source_id );
+		if ( ! empty( $source_id ) && empty( $order->get_meta( '_stripe_source_id' ) ) ) {
+			$order->update_meta_data( '_stripe_source_id', $source_id );
 			$updated = true;
 		}
 

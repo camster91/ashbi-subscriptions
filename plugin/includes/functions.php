@@ -398,19 +398,32 @@ function subscrpt_count_payments_made( $subscription_id ) {
 	// Define all payment-related order types (allow filtering for extensibility)
 	$payment_types = apply_filters( 'subscrpt_payment_order_types', array( 'new', 'renew', 'early-renew' ) );
 
-	// Count successful payments
+	return subscrpt_count_paid_relation_orders( $relations, $payment_types );
+}
+
+/**
+ * Count unique paid orders from subscription relation rows.
+ *
+ * Legacy tables can contain duplicate links. One WooCommerce order represents
+ * one payment regardless of how many relation rows point to it.
+ *
+ * @param array $relations Relation rows.
+ * @param array $payment_types Relation types that represent payments.
+ * @return int
+ */
+function subscrpt_count_paid_relation_orders( array $relations, array $payment_types ) {
 	$successful_count = 0;
+	$seen_order_ids   = array();
 	foreach ( $relations as $relation ) {
-		// Count all payment-related types
-		if ( in_array( $relation->type, $payment_types ) ) {
-			// Get the actual WooCommerce order
-			$order = wc_get_order( $relation->order_id );
-			if ( $order ) {
-				// Check if order was paid/successful
-				if ( $order->is_paid() || in_array( $order->get_status(), array( 'completed', 'processing', 'on-hold' ) ) ) {
-					++$successful_count;
-				}
-			}
+		$order_id = (int) ( $relation->order_id ?? 0 );
+		if ( ! in_array( $relation->type ?? '', $payment_types, true ) || ! $order_id || isset( $seen_order_ids[ $order_id ] ) ) {
+			continue;
+		}
+
+		$seen_order_ids[ $order_id ] = true;
+		$order                        = wc_get_order( $order_id );
+		if ( $order && $order->is_paid() ) {
+			++$successful_count;
 		}
 	}
 
@@ -447,37 +460,58 @@ function subscrpt_is_max_payments_reached( $subscription_id ) {
 	// Enhanced completion logic considering failed payments
 	$is_reached = subscrpt_check_enhanced_completion( $subscription_id, $payments_made, $max_payments );
 
-	// Fire action when split payment plan is completed (first time only)
-	if ( $is_reached && ! get_post_meta( $subscription_id, '_subscrpt_split_payment_completed_fired', true ) ) {
-		// All installments paid: complete the subscription (no renewal / expiry / grace).
-		$expire_status = apply_filters( 'subscrpt_split_payment_expire_status', 'completed', $subscription_id, $payments_made, $max_payments );
+	return $is_reached;
+}
 
-		// Update subscription status if different from current
-		$current_status = get_post_status( $subscription_id );
-		if ( $current_status !== $expire_status ) {
-			wp_update_post(
-				array(
-					'ID'          => $subscription_id,
-					'post_status' => $expire_status,
-				)
-			);
+/**
+ * Apply split-payment completion effects after the caller has durably gated them.
+ *
+ * @param int $subscription_id Subscription ID.
+ * @return bool True when status, schedule removal, callbacks, and marker are complete.
+ */
+function subscrpt_finalize_split_payment_completion( $subscription_id ) {
+	if ( ! subscrpt_is_max_payments_reached( $subscription_id ) ) {
+		return false;
+	}
+
+	$product_id    = get_post_meta( $subscription_id, '_subscrpt_product_id', true );
+	$max_payments  = subscrpt_get_max_payments( $subscription_id );
+	$max_payments  = apply_filters( 'subscrpt_split_payment_total_override', $max_payments, $subscription_id, $product_id );
+	$payments_made = subscrpt_count_payments_made( $subscription_id );
+	$expire_status = apply_filters( 'subscrpt_split_payment_expire_status', 'completed', $subscription_id, $payments_made, $max_payments );
+
+	if ( get_post_status( $subscription_id ) !== $expire_status ) {
+		$updated = wp_update_post(
+			array(
+				'ID'          => $subscription_id,
+				'post_status' => $expire_status,
+			),
+			true
+		);
+		if ( is_wp_error( $updated ) || get_post_status( $subscription_id ) !== $expire_status ) {
+			subscrpt_write_log( "Could not persist split-payment completion status for subscription #{$subscription_id}." );
+			return false;
 		}
+	}
+	delete_post_meta( $subscription_id, '_subscrpt_next_date' );
+	if ( get_post_meta( $subscription_id, '_subscrpt_next_date', true ) ) {
+		subscrpt_write_log( "Could not clear the completed split-payment schedule for subscription #{$subscription_id}." );
+		return false;
+	}
 
-		// Clear the next date so cron never expires it into a grace period.
-		delete_post_meta( $subscription_id, '_subscrpt_next_date' );
-
+	if ( ! get_post_meta( $subscription_id, '_subscrpt_split_payment_completed_fired', true ) ) {
+		// Mark done only after callbacks return. A crash can replay an extension
+		// callback, but it cannot authorize another installment because the paid,
+		// unique-order count is already terminal and checked before order creation.
 		do_action( 'subscrpt_split_payment_completed', $subscription_id, $payments_made, $max_payments );
 		update_post_meta( $subscription_id, '_subscrpt_split_payment_completed_fired', true );
-
-		// Handle split payment access timing if Pro version is active
-		if ( function_exists( 'subscrpt_pro_activated' ) && subscrpt_pro_activated() ) {
-			if ( class_exists( '\SpringDevs\SubscriptionPro\Illuminate\SplitPaymentHandler' ) ) {
-				\SpringDevs\SubscriptionPro\Illuminate\SplitPaymentHandler::handle_split_payment_completion( $subscription_id, $payments_made, $max_payments );
-			}
+		if ( ! get_post_meta( $subscription_id, '_subscrpt_split_payment_completed_fired', true ) ) {
+			subscrpt_write_log( "Could not persist split-payment callback completion for subscription #{$subscription_id}; the durable repair will replay it." );
+			return false;
 		}
 	}
 
-	return $is_reached;
+	return true;
 }
 
 /**

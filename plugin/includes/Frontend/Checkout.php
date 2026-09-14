@@ -42,6 +42,7 @@ class Checkout {
 	 * Create subscription during checkout.
 	 *
 	 * @param int $order_id Order ID.
+	 * @throws \Exception When another order already owns the renewal period.
 	 */
 	public function create_subscription_after_checkout( $order_id ) {
 		$order = wc_get_order( $order_id );
@@ -77,7 +78,14 @@ class Checkout {
 				$is_one_time = function_exists( 'subscrpt_product_has_plan' ) && subscrpt_product_has_plan( $product->get_id() );
 
 				if ( $product->is_enabled() && ! $is_one_time ) {
-					$is_renew = isset( $order_item['renew_subscrpt'] );
+					$renew_requested        = ! empty( $order_item->get_meta( '_renew_subscrpt' ) );
+					$renew_subscription_id = Helper::resolve_checkout_renewal_subscription( $order_item, $product );
+					$is_renew               = false !== $renew_subscription_id;
+					if ( $renew_requested && ! $is_renew ) {
+						$order->set_status( 'cancelled', esc_html__( 'Renewal checkout cancelled because the selected subscription is no longer eligible.', 'subscription' ) );
+						$order->save();
+						throw new \Exception( esc_html__( 'The selected subscription cannot be renewed from this checkout.', 'subscription' ) );
+					}
 
 					$timing_option = $product->get_timing_option();
 					$trial         = $product->get_trial();
@@ -93,11 +101,16 @@ class Checkout {
 					);
 
 					// Renew subscription if need!
-					$renew_subscription_id    = Helper::subscription_exists( $product->get_id(), 'expired' );
 					$selected_subscription_id = null;
-					if ( $is_renew && $renew_subscription_id && 'cancelled' !== $post_status ) {
+					if ( $is_renew && 'cancelled' === $post_status ) {
+						continue;
+					} elseif ( $is_renew ) {
 						$selected_subscription_id = $renew_subscription_id;
-						Helper::process_order_renewal( $selected_subscription_id, $order_id, $order_item->get_id() );
+						if ( ! Helper::process_order_renewal( $selected_subscription_id, $order_id, $order_item->get_id() ) ) {
+							$order->set_status( 'cancelled', esc_html__( 'Renewal checkout cancelled because another order already owns this subscription period.', 'subscription' ) );
+							$order->save();
+							throw new \Exception( esc_html__( 'A renewal order already exists for this subscription period. Please pay the existing order from your account.', 'subscription' ) );
+						}
 					} else {
 						$selected_subscription_id = Helper::process_new_subscription_order( $order_item, $post_status, $product );
 					}

@@ -16,6 +16,7 @@ jQuery(document).ready(function ($) {
       data: {
         install_plugin: "woocommerce",
         action: "subscrpt_install_woocommerce_plugin",
+        nonce: sdevs_installer_helper_obj.install_nonce,
       },
       beforeSend: function () {
         $(".sdevs-loading-icon").show();
@@ -36,6 +37,7 @@ jQuery(document).ready(function ($) {
       data: {
         activate_plugin: "woocommerce",
         action: "subscrpt_activate_woocommerce_plugin",
+        nonce: sdevs_installer_helper_obj.activate_nonce,
       },
       beforeSend: function () {
         $(".sdevs-loading-icon").show();

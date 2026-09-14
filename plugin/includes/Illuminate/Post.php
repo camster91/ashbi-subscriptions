@@ -82,9 +82,9 @@ class Post {
 			'publicly_queryable'    => false,
 			'show_ui'               => true,
 			'delete_with_user'      => false,
-			'show_in_rest'          => true,
-			'rest_base'             => '',
-			'rest_controller_class' => 'WP_REST_Posts_Controller',
+			// Subscription lifecycle records are payment-sensitive and must not use
+			// WordPress's generic post REST controller/capabilities.
+			'show_in_rest'          => false,
 			'has_archive'           => false,
 			'show_in_menu'          => false,
 			'show_in_nav_menus'     => false,
@@ -120,9 +120,7 @@ class Post {
 			'publicly_queryable'    => false,
 			'show_ui'               => false,
 			'delete_with_user'      => false,
-			'show_in_rest'          => true,
-			'rest_base'             => '',
-			'rest_controller_class' => 'WP_REST_Posts_Controller',
+			'show_in_rest'          => false,
 			'has_archive'           => false,
 			'show_in_menu'          => false,
 			'show_in_nav_menus'     => false,

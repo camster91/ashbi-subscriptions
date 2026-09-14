@@ -14,10 +14,12 @@
   "scripts": {
     "test": [
       "@test:contract",
-      "@test:unit"
+      "@test:unit",
+      "@test:package"
     ],
     "test:contract": "php tests/compatibility-contract.php",
     "test:unit": "phpunit",
+    "test:package": "bash scripts/test-release-package.sh",
     "lint": [
       "@lint:syntax",
       "@lint:phpcs",

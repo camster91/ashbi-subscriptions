@@ -25,13 +25,15 @@ clients at a $0 license fee.
 - [x] Issue 1b: Complete the dependency-license inventory.
 - [x] Issue 2: Import the public free source without functional changes.
 - [x] Issue 3a: Add Composer, PHPCS, PHPStan, and PHPUnit checks.
-- [ ] Issue 3b: Add JavaScript linting and make the inherited PHPCS baseline clean.
-- [ ] Issue 4: Produce an upstream baseline test report.
+- [ ] Issue 3b: Add JavaScript linting and reduce the inherited PHPCS baseline debt.
+- [x] Issue 4: Produce an upstream and fleet baseline report.
 - [ ] Issue 5: Rebrand plugin header, user-facing copy, assets, namespaces, and update URLs.
-- [ ] Issue 6: Preserve compatibility aliases for existing `subscrpt_*` storage and hooks.
+- [x] Issue 6: Preserve compatibility aliases for existing `subscrpt_*` storage and hooks.
 - [ ] Issue 7: Implement activation, deactivation, uninstall, and rollback tests.
-- [ ] Issue 8: Build a staging renewal harness for Stripe test mode.
-- [ ] Issue 9: Package and install `0.1.0-alpha.1` on a disposable WooCommerce site.
+- [x] Issue 8a: Add durable renewal claims, Stripe/PayPal reconciliation, and local regression coverage.
+- [ ] Issue 8b: Complete Docker-backed Stripe/PayPal sandbox and crash-window staging tests.
+- [x] Issue 9a: Build and verify a legacy-path-compatible release package.
+- [ ] Issue 9b: Install the candidate on a current disposable site clone and reconcile its data.
 
 ## Engineering rules
 
