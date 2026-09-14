@@ -1,0 +1,362 @@
+*** WPSubscription Changelog ***
+
+2026-09-14 - version 2.0.0
+* new: Plans. Build reusable plans with multiple durations.
+* new: Connect a plan to products, or create one from the product editor.
+* new: One-time purchase option on products.
+* new: Redesigned setup wizard.
+* new: Overview dashboard.
+* new: Edit cancellation reasons without Pro.
+* improved: Filterable integrations page.
+* improved: Simpler settings page.
+* improved: Consistent admin page headers.
+
+2026-08-30 - version 1.11.2
+* new: Relative ordering of renewal orders.
+* fix: Subscription list filters.
+* fix: Guest account reusable token issue.
+* fix: PHP compatibility issue.
+* fix: Subscription details error on My Account page.
+
+2026-08-23 - version 1.11.1
+* fix: Guest account creation.
+* fix: Guest checkout error.
+* fix: Email templates.
+
+2026-08-16 - version 1.11.0
+* fix: Renewal time anchoring.
+* fix: Renewals were delaying by 1/2 days.
+* fix: Discounted amount was not showing properly.
+* fix: Playground resource error.
+
+2026-08-02 - version 1.10.9
+* fix: Stripe renewal error while adding payment information.
+
+2026-07-19 - version 1.10.8
+* fix: Email error due to missing subscriptions.
+* fix: Incorrect subscription dates.
+
+2026-07-12 - version 1.10.7
+* fix: Add to cart validation.
+* fix: Admin table paginations.
+* fix: Subscription expired email timing.
+
+2026-07-05 - version 1.10.6
+* new: Subscription cancellation feedback.
+* fix: Subscription status change cron.
+
+2026-06-28 - version 1.10.5
+* new: Subscription details page.
+* new: Subscription Upgrade/Downgrade settings.
+* fix: PayPal webhook retry.
+* update: WP.Org plugin description.
+
+2026-06-22 - version 1.10.4
+* security: chart.js asset loading.
+
+2026-06-21 - version 1.10.3
+* fix: Admin headers.
+* fix: Subscription status badges.
+* fix: Pro feature previews.
+* fix: Categorize integrations.
+* fix: Pro settings.
+
+2026-06-15 - version 1.10.2
+* new: Subscription Onboarding.
+* fix: Subscription admin list datetime format.
+* fix: Stripe error due to deprecated log method.
+* update: WP.Org banner & screenshots.
+* update: WP.Org plugin description.
+
+2026-06-07 - version 1.10.1
+* new: Subscription settings UI.
+* new: Pro features preview.
+* fix: Stripe Bancontact renewal error.
+
+2026-05-21 - version 1.10.0
+* new: Subscription list UI.
+* new: Health and report page preview.
+* new: Integrations one click install.
+* fix: Same subscription quality.
+* fix: PayPal webhook.
+* improve: Tested up to WordPress v7.
+
+2026-05-11 - version 1.9.6
+* fix: Renewal order creation error when the previous renewal order is unavailable.
+
+2026-05-03 - version 1.9.5
+* fix: More frequent subscription check.
+* fix: Missing auto-renew data in subscription helper.
+
+2026-04-23 - version 1.9.4
+* fix: PayPal price with different decimals.
+* fix: PayPal refunds.
+* fix: PayPal webhook not updating subscriptions.
+* fix: PayPal plan update when product info changes in WooCommerce.
+* fix: Creating duplicate plans for updated product info in WooCommerce.
+
+2026-04-12 - version 1.9.3
+* fix: Stripe unavailable error during renewal.
+* fix: Optional parameter error from some methods.
+* fix: Language base file Project ID version.
+
+2026-03-30 - version 1.9.2
+* fix: Renamed reserved WP_SUBSCRIPTION_* constants to SUBSCRPT_* to comply with WordPress.org naming guidelines.
+* fix: Renamed wp_-prefixed global functions (wp_subscrpt_write_log, wp_subs_multiselect_field, etc.) to subscrpt_ prefix.
+* fix: Renamed non-prefixed AJAX actions (install_woocommerce_plugin, activate_woocommerce_plugin) to subscrpt_ prefix.
+* fix: Stripe gateway class now wrapped in class_exists check to prevent fatal error when WooCommerce Stripe plugin is inactive.
+* fix: Replaced insecure JavaScript redirections in ActionController with wp_safe_redirect().
+* fix: PayPal webhook inputs now sanitized before processing.
+* fix: Plugin name updated to comply with WordPress.org trademark guidelines.
+* fix: Guest checkout improvements.
+* fix: Prevent setup_future_usage from being added to renewal orders in Stripe.
+* compat: Legacy WP_SUBSCRIPTION_* constants and old function names remain available via includes/LegacyCompat.php.
+
+2026-03-15 - version 1.9.1
+* fix: Subscription trials.
+* fix: Cart text issue.
+* fix: Reactivate subscription button.
+* fix: Stripe initialization error.
+
+2026-03-09 - version 1.9.0
+* fix: Unauthorized actions.
+* fix: Admin subscription setting entries.
+* fix: External services documentation.
+* fix: Direct file access.
+* fix: Plugin description.
+
+2026-02-22 - version 1.8.20
+* fix: Deprecated subscription methods.
+* fix: Subscription timing inconsistencies.
+* fix: Subscription verbose status.
+
+2026-02-08 - version 1.8.19
+* fix: Subscriber address information missing.
+* fix: Cart description missing in some cases.
+
+2026-02-01 - version 1.8.18
+* fix: Function return type error.
+* fix: Stripe deprecated functions.
+
+2026-01-18 - version 1.8.17
+* fix: Cart showing incorrect TAX.
+* fix: WC product related error.
+* fix: WC session check error.
+* fix: Cart subscription text.
+
+2026-01-11 - version 1.8.16
+* fix: Load translations from WP.Org.
+* fix: Zero decimal price issue.
+* fix: Cart description visibility issue.
+
+2025-12-29 - version 1.8.15
+* fix: Updated language text-domain.
+
+2025-12-28 - version 1.8.14
+* fix: PayPal webhook signature verification.
+* fix: Missing translations in Cart & Checkout pages.
+* improved: Minor core settings.
+
+2025-12-23 - version 1.8.13
+* security: Unauthorized access to user subscription.
+
+2025-12-21 - version 1.8.12
+* fix: Subscription details default endpoint.
+* fix: Proper subscription timings.
+* fix: WordPress test up to version.
+* fix: Other minor bugs.
+
+2025-12-14 - version 1.8.11
+* fix: My subscriptions & view-subscription links.
+* fix: Subscription links in emails.
+
+2025-12-09 - version 1.8.10
+* new: Added beta badge in the integrations list.
+* fix: Subscription switch action.
+* fix: Core helper methods.
+
+2025-12-07 - version 1.8.9
+* fix: Subscription cron task actions.
+* fix: Status translation giving errors.
+* fix: Integrations filter.
+
+2025-11-30 - version 1.8.8
+* fix: Order timestamp error.
+* fix: Subscription-related order error.
+* fix: Cart page was showing price with tax even if taxes are turned off.
+
+2025-11-23 - version 1.8.7
+* fix: Cart warning messages.
+* fix: Two-way add to cart check (sub <=> non-sub).
+* improved: Settings page.
+
+2025-11-16 - version 1.8.6
+* fix: Guest checkout account creation error.
+
+2025-11-09 - version 1.8.5
+* fix: View subscription from user menu showing "Page not found"
+* new: Added some helper functions.
+
+2025-11-02 - version 1.8.4
+* compat: Compatibility patch for subscription quick check QR code.
+
+2025-10-27 - version 1.8.3
+* fix: Error due to operation with wrong type.
+
+2025-10-26 - version 1.8.2
+* fix: User role not changing for active/inactive subscribers.
+* fix: Auto renewal on/off action visibility (for Stripe paid subscriptions only).
+
+2025-10-20 - version 1.8.1
+* new: Subscription back to list button.
+* fix: Checkout text typo.
+* fix: Subscription details page extra spaces.
+
+2025-10-12 - version 1.8.0
+* new: Guest Checkout.
+* fix: Subscription prices with VAT.
+* improved: Subscription settings page.
+
+2025-10-05 - version 1.7.0
+* new: PolyLang support.
+* new: WPML support.
+* improved: Updated language template files.
+* improved: Some helpers for 3rd party integrations.
+
+2025-09-25 - version 1.6.1
+* fix: Wrong subscription URL in emails.
+
+2025-09-18 - version 1.6.0
+* new: Stripe iDeal integration.
+* new: Stripe SEPA integration.
+
+2025-09-16 - version 1.5.8
+* fix: Removed unused codes and hooks.
+* new: Added language base file.
+
+2025-08-24 - version 1.5.7  
+* fix: PayPal data conflict for Live and SandBox modes.  
+
+2025-08-18 - version 1.5.6  
+* fix: PayPal update order by webhook  
+* fix: Some subscription query dependency  
+* improved: Core plugin to support more hooks and events  
+
+2025-07-22 - version 1.5.5  
+* fix: Subscription history in descending order view.  
+* fix: Changed view subs button to text  
+* new: Add subscription switch info on order - Feature support core.  
+* fix: Fixed Subscription menu duplication bug  
+
+2025-07-17 - version 1.5.4  
+* improved: Enhanced settings page with better user interface and organization  
+* improved: Fixed user role conflicts between subscription customers and administrators  
+* fix: User roles now properly change based on subscription status (active/inactive)  
+* fix: Corrected role assignment system to work with subscription status changes  
+
+2025-07-16 - version 1.5.3  
+* improved: PayPal Integration Improvements.  
+* fix: Subscription Initialization & Compatibility.  
+* fix: Fetal error - legacy method names support.  
+
+2025-07-09 - version 1.5.2  
+* fix: Security vulnerabilities - Added proper sanitization to all register_setting() calls  
+* fix: Nonce verification sanitization - Added wp_unslash() and sanitize_text_field()  
+* fix: JSON decode sanitization - Sanitized data before json_decode() in PayPal webhook  
+* fix: Direct file access prevention - Added ABSPATH checks to all template files  
+* fix: Internationalization issues - Fixed variable usage in translation functions  
+* fix: Unescaped translation functions - Replaced _e() with esc_html_e() and esc_attr_e()  
+* fix: Removed discouraged load_plugin_textdomain() function  
+* fix: Unordered placeholders in translatable strings - Used ordered placeholders  
+* fix: Plugin headers - Added missing "Requires at least" and "Requires PHP" headers  
+* fix: Plugin readme - Shortened description to under 150 characters  
+* fix: Naming conventions - Updated generic function names to use wps_subscription_ prefix  
+* update: WordPress.org compliance - All Plugin Check issues resolved  
+* update: Improved code quality and security standards  
+
+2025-07-08 - version 1.5.1  
+* fix: Naming conversions fixed  
+
+2025-06-03 - version 1.5.0  
+* new: API and Authentication.  
+* new: Stripe auto renewal.  
+* new: Paypal auto renewal support.  
+* new: New actions and Hooks for subscriptions.  
+* fix: Language strings  
+
+2025-06-03 - version 1.4.3  
+* fix: Plugin description and Documentation link update  
+
+2025-05-20 - version 1.4.2  
+* doc: Plugin description and Documentation link update  
+
+2025-05-13 - version 1.4.1  
+* fix: Table style.  
+* fix: Doc links and details.  
+
+2025-05-20 - version 1.4.0  
+* new: New Admin interface  
+* new: Improved user experience  
+
+2025-04-24 - version 1.3.2  
+* fix: Astra theme support added.  
+
+2025-04-21 - version 1.3.1  
+* fix: Add to cart button in product page was not showing certain themes are is used.  
+
+2025-04-20 - version 1.3.0
+* new: Stripe renewal added.  
+* new: Trial feature added.  
+* new: Subscription limit added.  
+* fix: Cancel by customer.  
+* update: Improve user experience and bug fixing!  
+
+2024-08-11 - version 1.2.1  
+* fix: Pagination bug on `subscriptions` template.  
+* fix: Variable product exists on cart when pro plugin is deactivated!  
+* fix: Display '1' inside cart-price after recurring type.  
+* update: Improve order's Related Subscriptions description and status.  
+
+2024-08-11 - version 1.2.0
+* new: Block pages support added.  
+* update: Rebuild the plugin for better long term support.  
+
+2024-05-19 - version 1.1.4  
+* update: Subscription status will be `pending` when order status is `processing`.  
+* new: `subscript_order_status_to_post_status` hook added to filter post status during order status changed event.  
+
+2024-05-19 - version 1.1.3  
+* new: Subscription storeAPI checkout support added.  
+
+2024-05-09 - version 1.1.2  
+* fix: Handle order deletion.  
+* update: WP timezone setting support added.  
+* new: Compatible with pro version.  
+
+2024-05-09 - version 1.1.1  
+* fix: Displaying `/1{type}` inside product details.  
+
+2023-06-18 - version 1.1  
+* update: We rebuild our plugin from scratch to provide better & long terms supports  
+* fix: Severals UI & compatibility issues  
+
+2022-10-11 - version 1.0.4  
+* new: Display color based subscription status  
+* new: Add required plugin installer  
+* fix: Subscription customer box overflow issue  
+* update: Plugin action links added  
+
+2022-04-13 - version 1.0.3  
+* update: Code clean-up  
+* fix: Some minor issues  
+
+2022-04-12 - version 1.0.2  
+* update: Change plugin name  
+* update: Did some Code refactoring  
+* fix: WPCodingStandard related issues using `phpcbf`  
+
+2022-02-28 - version 1.0.1  
+* fix: "total" amount not display in "My Subscription's"  
+
+2022-02-28 - version 1.0.0  
+* new: Initial release  

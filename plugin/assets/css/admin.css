@@ -1,0 +1,820 @@
+.sdevs_subscription_tab > a::before {
+  content: "\f531" !important;
+}
+
+.subscrpt_field {
+  max-width: 480px;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.subscrpt_field > label {
+  width: 100%;
+}
+
+.subscrpt_field > input {
+  width: 70% !important;
+  margin-right: 5px !important;
+}
+
+.subscrpt_field > select {
+  width: 25%;
+}
+
+.subscrpt_field > small {
+  line-height: 14px;
+  margin-top: 5px !important;
+}
+
+.subscrpt-order-label {
+  background: #dbeafe;
+  color: #1e40af;
+  display: inline-block;
+  padding: 5px 10px;
+  font-weight: 500;
+  font-size: 14px;
+  margin-top: 10px;
+  clear: both;
+  margin-bottom: 5px;
+  border-radius: 5px;
+}
+
+@media (min-width: 1024px) {
+  .subscrpt_field > select {
+    width: 20%;
+  }
+}
+
+/* Utility Classes */
+.wp-subscription-flex {
+  display: flex;
+  align-items: center;
+}
+.wp-subscription-space-between {
+  justify-content: space-between;
+}
+.wp-subscription-full-width {
+  width: 100%;
+}
+
+/* Admin Header */
+.wp-subscription-admin-header {
+  background: #fff;
+  border-bottom: 1px solid #e2e4e7;
+  padding: 0 24px;
+  position: sticky;
+  top: 32px;
+  z-index: 100;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.wp-subscription-admin-header-inner {
+  max-width: 1240px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 72px;
+}
+
+.wp-subscription-admin-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wp-subscription-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wp-subscription-breadcrumb-home {
+  display: inline-flex;
+  align-items: center;
+  color: #646970;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.wp-subscription-breadcrumb-home:hover {
+  color: #2271b1;
+}
+
+.wp-subscription-breadcrumb-home .dashicons {
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+}
+
+.wp-subscription-breadcrumb-sep {
+  color: #c3c4c7;
+  font-size: 16px;
+  line-height: 1;
+  user-select: none;
+}
+
+.wp-subscription-breadcrumb-link {
+  color: #646970;
+  font-weight: 500;
+  font-size: 14px;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.wp-subscription-breadcrumb-link:hover {
+  color: #2271b1;
+}
+
+.wp-subscription-breadcrumb-current {
+  color: #1d2327;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.wp-subscription-logo {
+  /* Deliberately small. It is a persistent header mark, not the page's
+     subject — the breadcrumb on the left is what identifies the screen. */
+  height: 22px;
+  width: auto;
+  display: block;
+}
+
+/* The licence badge sits before the logo and must not pick up the underline
+   that admin anchors get, since the inactive state is a link. */
+.wp-subscription-license-badge,
+.wp-subscription-license-badge:hover,
+.wp-subscription-license-badge:focus {
+  text-decoration: none;
+}
+
+a.wp-subscription-license-badge:hover {
+  filter: brightness(0.97);
+}
+
+a.wp-subscription-license-badge:focus {
+  box-shadow: 0 0 0 3px var(--wpsubs-brand-ring, rgba(255, 77, 0, 0.2));
+  outline: none;
+}
+
+.wp-subscription-admin-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wp-subscription-help-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border: 1px solid #c3c4c7;
+  border-radius: 4px;
+  color: #1d2327;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  background: #fff;
+  line-height: 1.4;
+  transition:
+    border-color 0.2s,
+    color 0.2s,
+    background 0.2s;
+}
+
+.wp-subscription-help-btn:hover {
+  border-color: #2271b1;
+  color: #2271b1;
+  background: #f0f6fc;
+}
+
+.wp-subscription-help-btn .dashicons {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+}
+
+/* Admin Content */
+
+.wp-subscription-admin-box {
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 25px;
+  margin-bottom: 20px;
+  transition: box-shadow 0.3s ease;
+}
+
+.wp-subscription-admin-box:hover {
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Typography */
+.wp-subscription-admin-title {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 24px;
+  color: #1d2327;
+  margin: 0 0 20px 0;
+  padding: 0;
+}
+
+.wp-subscription-admin-content p,
+.wp-subscription-admin-content li,
+.wp-subscription-admin-content td,
+.wp-subscription-admin-content th {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1d2327;
+}
+
+/* Navigation (legacy, for reference) */
+.wp-subscription-admin-nav {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.wp-subscription-admin-nav a {
+  color: #1d2327;
+  text-decoration: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.wp-subscription-admin-nav a:hover {
+  background: #f0f0f1;
+}
+
+.wp-subscription-admin-nav a.current {
+  background: #2271b1;
+  color: #fff;
+}
+
+/* Stats Cards */
+.wp-subscription-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.wp-subscription-stat-card {
+  background: #fff;
+  border-radius: 6px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.wp-subscription-stat-card:hover {
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.wp-subscription-stat-title {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 16px;
+  color: #1d2327;
+  margin: 0 0 10px 0;
+}
+
+.wp-subscription-stat-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: #2271b1;
+}
+
+/* Support Grid */
+.wp-subscription-support-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.wp-subscription-support-card {
+  background: #fff;
+  border-radius: 6px;
+  padding: 25px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.wp-subscription-support-card:hover {
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+/* Responsive Design */
+@media screen and (max-width: 900px) {
+  .wp-subscription-admin-header {
+    padding: 0 16px;
+  }
+  .wp-subscription-admin-header-inner {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .wp-subscription-admin-content {
+    padding: 10px;
+  }
+}
+
+@media screen and (max-width: 600px) {
+  .wp-subscription-admin-header {
+    padding: 0 12px;
+  }
+  .wp-subscription-admin-header-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .wp-subscription-admin-header-right {
+    gap: 8px;
+  }
+  .wp-subscription-logo {
+    height: 18px;
+  }
+}
+
+/* Remove left padding on WPSubscription admin pages only */
+body.toplevel_page_wp-subscription #wpcontent,
+body[class*="wpsubscription_page_wp-subscription"] #wpcontent {
+  padding-left: 0 !important;
+}
+
+/* Remove onboarding page menu item */
+.wp-submenu a[href*="page=wp-subscription-onboarding"],
+.wp-submenu a[href*="page=wp-subscription-details"] {
+  display: none !important;
+}
+
+/* Table & List Styles */
+.wp-subscription-list-table {
+  border: none !important;
+  border-radius: 8px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+.wp-subscription-list-table th,
+.wp-subscription-list-table td {
+  border: none;
+  border-bottom: 1px solid #f0f0f1;
+  background: #fff;
+}
+.wp-subscription-list-table tr:last-child td {
+  /* border-bottom: none; */
+}
+
+.wp-subscription-list-table .button-small {
+  font-size: 13px;
+  padding: 5px 14px;
+  border-radius: 5px;
+}
+
+/* Remove default table border */
+.wp-subscription-list-table {
+  border-collapse: separate !important;
+  border-spacing: 0;
+}
+
+/* Row Actions on Title Hover */
+.wp-subscription-title-wrap {
+  position: relative;
+}
+.wp-subscription-row-actions {
+  visibility: hidden;
+  gap: 8px;
+  display: flex;
+}
+.wp-subscription-title-wrap:hover .wp-subscription-row-actions {
+  visibility: visible;
+}
+.wp-subscription-row-actions a {
+  color: #2271b1;
+  font-size: 13px;
+  text-decoration: none;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #f0f6ff;
+  transition:
+    background 0.2s,
+    color 0.2s;
+}
+.wp-subscription-row-actions a:hover {
+  background: #2271b1;
+  color: #fff;
+}
+
+/* =====================
+   Subscriptions List Page
+   ===================== */
+.wp-subscription-title-wrap:hover .wp-subscription-row-actions {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+.wp-subscription-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  box-shadow: none;
+  position: static;
+  padding: 0;
+  border-radius: 0;
+  white-space: nowrap;
+}
+.wp-subscription-row-actions a {
+  color: #2271b1;
+  text-decoration: none;
+  font-size: 13px;
+  padding: 2px 4px;
+  transition: color 0.15s;
+}
+.wp-subscription-row-actions a[style*="color:#d93025"] {
+  color: #d93025 !important;
+}
+.wp-subscription-modern-table {
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  border: none !important;
+  box-shadow: none !important;
+}
+.wp-subscription-modern-table thead tr {
+  background: #e6f0fa !important;
+  border-bottom: 2px solid #b6d4f7 !important;
+}
+.wp-subscription-modern-table th {
+  font-weight: 600 !important;
+  color: #1e293b !important;
+  background: none !important;
+}
+.wp-subscription-modern-table th,
+.wp-subscription-modern-table td {
+  border: none !important;
+  padding: 14px 18px !important;
+  background: none !important;
+}
+.wp-subscription-modern-table tr {
+  border-bottom: 1px solid #f1f3f7 !important;
+  transition: background 0.18s;
+}
+.wp-subscription-modern-table tr:last-child {
+  border-bottom: none !important;
+}
+.wp-subscription-modern-table tbody tr:hover {
+  background: #f0f6ff !important;
+  box-shadow: none !important;
+  z-index: 1;
+}
+.subscrpt-id-link {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.16s;
+}
+.subscrpt-id-link:hover {
+  color: #1e40af;
+  text-decoration: underline;
+}
+.subscrpt-id-title {
+  font-size: 11px;
+  color: #888;
+  margin-top: 2px;
+  line-height: 1.3;
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Subscriptions List Page Layout */
+.wp-subscription-admin-content.list-page {
+  max-width: 1240px;
+  margin: 24px auto 32px auto;
+  background: transparent;
+  padding: 0px 24px;
+}
+.wp-subscription-list-header {
+  margin-bottom: 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.wp-subscription-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+.wp-subscription-bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.wp-subscription-pagination {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+}
+.wp-subscription-pagination .total {
+  color: #888;
+  font-size: 13px;
+}
+.wp-subscription-pagination .goto-label {
+  margin-left: 16px;
+  color: #888;
+  font-size: 13px;
+}
+.wp-subscription-pagination form {
+  display: inline-block;
+  margin: 0;
+}
+.wp-subscription-pagination input[type="number"] {
+  width: 48px;
+}
+.wp-subscription-customer-email {
+  color: #888;
+  font-size: 12px;
+  line-height: 1.3;
+  word-break: break-all;
+}
+@keyframes floatY {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-10px);
+  }
+}
+.wp-subscription-admin-box:hover {
+  box-shadow: 0 4px 16px #e0e7ef;
+  transition: box-shadow 0.2s;
+}
+.wp-subscription-pro-callout {
+  background: #2271b1 !important;
+}
+.wp-subscription-pro-callout h2,
+.wp-subscription-pro-callout p {
+  color: #fff !important;
+}
+.wp-subscription-pro-callout .button-primary {
+  background: #fff !important;
+  color: #2271b1 !important;
+}
+.wp-subscription-pro-callout .button-primary:hover {
+  background: #e0e7ef !important;
+}
+@media (max-width: 900px) {
+  .wp-subscription-support-resources {
+    grid-template-columns: 1fr !important;
+  }
+}
+.wp-subscription-hero-upgrade {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #2196f3;
+  border-radius: 12px;
+  padding: 32px 36px;
+  margin-bottom: 28px;
+  overflow: hidden;
+  min-height: 90px;
+}
+.wp-subscription-hero-upgrade::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0 2px, transparent 2px 40px);
+  opacity: 0.25;
+  pointer-events: none;
+}
+.wp-subscription-hero-content {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  z-index: 1;
+}
+.wp-subscription-hero-icon {
+  font-size: 2em;
+  line-height: 1;
+}
+.wp-subscription-hero-title {
+  font-size: 2em;
+  font-weight: bold;
+  color: #fff;
+  line-height: 1.2;
+}
+.wp-subscription-hero-btn {
+  z-index: 1;
+  background: #fff;
+  color: #2196f3;
+  font-weight: 600;
+  font-size: 1.1em;
+  padding: 16px 32px;
+  border-radius: 8px;
+  text-decoration: none;
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.08);
+  transition:
+    background 0.18s,
+    color 0.18s,
+    transform 0.18s;
+  border: none;
+  outline: none;
+  display: inline-block;
+  text-align: center;
+}
+.wp-subscription-hero-btn:hover {
+  background: #e3f0fd;
+  color: #1565c0;
+  transform: translateY(-2px) scale(1.03);
+}
+
+/* Bulk Actions Styling */
+.tablenav {
+  margin: 8px 0 16px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tablenav .bulkactions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tablenav select {
+  min-width: 120px;
+}
+
+.tablenav .button {
+  margin: 0;
+}
+
+/* Checkbox styling */
+.wp-subscription-modern-table input[type="checkbox"] {
+  margin: 0;
+}
+
+/* Trash row styling */
+.wp-subscription-modern-table tr[data-status="trash"] {
+  opacity: 0.7;
+}
+
+.wp-subscription-modern-table tr[data-status="trash"]:hover {
+  opacity: 1;
+}
+
+/* Empty Trash button styling */
+.button-link-delete {
+  color: #d63638 !important;
+  text-decoration: none;
+  border: 1px solid #d63638;
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  transition: all 0.2s;
+}
+
+.button-link-delete:hover {
+  background: #d63638;
+  color: #fff !important;
+  text-decoration: none;
+}
+
+/* --------------------------------------------------------------------------
+   Integrations: sticky filter rail + results
+
+   Three facet groups and a dozen chips do not fit across the top without
+   pushing the first card off the fold, and a bar up there scrolls away exactly
+   when a long list needs narrowing. They live in a column instead, which stays
+   in reach while the results scroll.
+   -------------------------------------------------------------------------- */
+
+/*
+ * The `hidden` attribute is only `display: none` in the UA stylesheet, so any
+ * class that sets `display` outranks it. `.wpsubs-btn` is `inline-flex`, which
+ * meant the Reset button stayed on screen with `hidden` set — visible, and
+ * still clickable. Anything toggled by the filter script needs this.
+ */
+.subscrpt-int-filters [hidden],
+.subscrpt-int-card[hidden],
+[data-subscrpt-int-section][hidden],
+[data-subscrpt-int-empty][hidden],
+[data-subscrpt-integration-filters][hidden] {
+  display: none !important;
+}
+
+.subscrpt-int-layout {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: 32px;
+  align-items: start;
+}
+
+.subscrpt-int-results {
+  min-width: 0;
+}
+
+/* The rail sticks below the page header, which is itself sticky at 32px. */
+.subscrpt-int-sidebar {
+  position: sticky;
+  top: 104px;
+  max-height: calc(100vh - 124px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.subscrpt-int-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.subscrpt-int-filters__reset {
+  align-self: stretch;
+  justify-content: center;
+  margin: 0 4px;
+}
+
+/* The filter rail is the shared `wpsubs-vnav` component (one nav per facet).
+   Only the count badge at the end of each row is page-specific. */
+.subscrpt-int-chip__count {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  padding: 0 6px;
+  border-radius: 9999px;
+  background: var(--wpsubs-surface-muted, #f3f4f6);
+  color: var(--wpsubs-text-muted, #6b7280);
+  flex-shrink: 0;
+}
+
+.wpsubs-vnav__item.is-active .subscrpt-int-chip__count {
+  background: var(--wpsubs-brand, #ff4d00);
+  color: #fff;
+}
+
+.subscrpt-int-empty {
+  margin: 0 0 20px;
+  padding: 40px 24px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--wpsubs-text-muted, #6b7280);
+  background: var(--wpsubs-surface, #fff);
+  border: 1px solid var(--wpsubs-border, #e5e7eb);
+  border-radius: var(--wpsubs-radius, 8px);
+}
+
+/* Below this the rail would squeeze the card grid to one column, so it goes
+   back on top and stops sticking.
+
+   Measured against WordPress's own fold point rather than a round number: at
+   960px the admin menu collapses to 36px, so the content gains 124px exactly
+   as the viewport loses room, and the rail plus two card columns still fit.
+   The previous 1200px threshold fired on an ordinary laptop — a 1196px window
+   put the filters back on top with 756px of space going spare beside them. */
+@media screen and (max-width: 960px) {
+  .subscrpt-int-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .subscrpt-int-sidebar {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .subscrpt-int-filters {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 12px 20px;
+  }
+
+  /* Each facet's vnav sits as its own column in the wrapped rail. */
+  .subscrpt-int-filters .wpsubs-vnav {
+    flex: 1 1 180px;
+  }
+
+  /* Reset keeps its place under the filters: a full-width last line. */
+  .subscrpt-int-filters__reset {
+    flex: 1 1 100%;
+  }
+
+  [data-subscrpt-int-reset] {
+    flex: 0 0 100%;
+  }
+}

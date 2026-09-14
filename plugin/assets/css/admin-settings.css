@@ -1,0 +1,370 @@
+/* Scoped toggle styles for this settings screen only */
+.woocommerce .form-table .forminp-checkbox label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wp-subscription-toggle {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  visibility: hidden;
+}
+
+.wp-subscription-toggle + .wp-subscription-toggle-ui {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+  border-radius: 999px;
+  background: #cbd5e1; /* slate-300 */
+  transition: all 0.2s cubic-bezier(0.27, 0.2, 0.25, 1.51);
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.wp-subscription-toggle + .wp-subscription-toggle-ui::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s cubic-bezier(0.27, 0.2, 0.25, 1.51);
+}
+
+.wp-subscription-toggle:checked + .wp-subscription-toggle-ui {
+  background: #2271b1; /* WP primary */
+}
+
+.wp-subscription-toggle:checked + .wp-subscription-toggle-ui::after {
+  transform: translateX(20px);
+}
+
+.wp-subscription-toggle:focus + .wp-subscription-toggle-ui {
+  outline: none;
+  outline-offset: 0;
+}
+
+.wp-subscription-toggle:disabled + .wp-subscription-toggle-ui {
+  background: #e5e7eb; /* gray-200 */
+  cursor: not-allowed;
+}
+
+/* Consistent minimum widths for inputs/selects on this screen */
+.woocommerce .form-table td input[type="text"],
+.woocommerce .form-table td input[type="number"],
+.woocommerce .form-table td select,
+.woocommerce .form-table td .select2-container .select2-selection--single {
+  min-width: 25em;
+}
+
+/* Ensure Select2 container reflects min width nicely */
+.woocommerce .form-table td .select2-container {
+  min-width: 25em !important;
+}
+
+/* Minimal, consistent spacing and typography */
+.woocommerce .woocommerce-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+
+.woocommerce .form-table th label {
+  font-weight: 600;
+}
+
+.woocommerce .form-table tr {
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.woocommerce .form-table th,
+.woocommerce .form-table td {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.woocommerce .form-table p.description {
+  color: #64748b; /* slate-500 */
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+/* Inputs/selects: subtle, consistent look */
+.woocommerce .form-table td input[type="text"],
+.woocommerce .form-table td input[type="number"],
+.woocommerce .form-table td select {
+  padding: 6px 10px;
+  min-height: 34px;
+  border-radius: 6px;
+  border: 1px solid #d0d7de;
+  transition: all 0.15s cubic-bezier(0.27, 0.2, 0.25, 1.2);
+}
+
+.woocommerce .form-table td input[type="text"]:focus,
+.woocommerce .form-table td input[type="number"]:focus,
+.woocommerce .form-table td select:focus {
+  outline: none;
+  border-color: #2271b1;
+  box-shadow: 0 0 0 3px rgba(34, 113, 177, 0.1);
+}
+
+/* Select2 alignment with inputs */
+.woocommerce .form-table td .select2-container .select2-selection--single {
+  height: 34px;
+  border-radius: 6px;
+  border-color: #d0d7de;
+}
+
+.woocommerce .form-table td .select2-container--default .select2-selection--single .select2-selection__rendered {
+  line-height: 34px;
+}
+
+.woocommerce .form-table td .select2-container--default .select2-selection--single .select2-selection__arrow {
+  height: 34px;
+}
+
+/* Buttons: match input height and visual rhythm */
+.woocommerce .form-table td .button,
+.woocommerce .form-table td .button-primary,
+.woocommerce .form-table td .button-secondary,
+.woocommerce .woocommerce-card .button,
+.woocommerce .woocommerce-card .button-primary,
+.woocommerce .woocommerce-card .button-secondary,
+.woocommerce .form-table td .button-large,
+.woocommerce .woocommerce-card .button-large {
+  min-height: 34px;
+  line-height: 32px; /* 34px height minus 1px border top/bottom */
+  padding: 4px 12px;
+  border-radius: 6px;
+}
+
+/* Switch Fee type picker: shrink to its content instead of filling the row. */
+.subscrpt-switch-fee-type .wpsubs-adv-select__trigger {
+  width: max-content;
+  min-width: unset;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Page header — the title/description/rule use the shared inline markup from
+   the other admin pages (see views/settings.php). Only the Save button keeps a
+   class, so it doesn't stretch in the flex title row.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.subscrpt-settings__save {
+  flex: 0 0 auto;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Rail and panels
+   Every panel is in the DOM on every request, because the form posts to
+   options.php and an unrendered field is a field that saves nothing.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.subscrpt-settings__layout {
+  display: grid;
+  grid-template-columns: 216px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+/* The rail and the panel share a top edge, but their text does not: a field
+   label sits under the card's 1px border and 20px padding, a rail label under
+   the item's own 7px. The 14px difference is that gap closed, so the first
+   section name and the first setting's label land on the same line. */
+.subscrpt-settings__sidebar {
+  position: sticky;
+  top: 104px;
+  padding-top: 14px;
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The sidebar rail itself is the reusable `wpsubs-vnav` component
+   (admin-components/vnav.css); only its placement lives here. */
+
+/* Stacks the panels in the `All` category, and holds a single one otherwise. */
+.subscrpt-settings__panels {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.subscrpt-settings__panel {
+  padding: 20px 24px;
+}
+
+/* The `hidden` attribute is only a user-agent `display: none`, so any class
+   that sets `display` beats it. Panels carry `wpsubs-table-card`, so say it
+   again with the weight the attribute cannot bring on its own. */
+.subscrpt-settings__panel[hidden] {
+  display: none !important;
+}
+
+.subscrpt-settings__rule {
+  border-top: 1px solid var(--wpsubs-border, #f1f5f9);
+  margin: 16px 0;
+}
+
+@media screen and (max-width: 960px) {
+  .subscrpt-settings__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .subscrpt-settings__sidebar {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .subscrpt-settings__sidebar .wpsubs-vnav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Cancellation Flow
+
+   A wide tab panel with an options rail beside it. Deliberately not the
+   settings layout above: that one leads with a 216px nav rail and makes its
+   sidebar sticky and scrollable, which is right for navigation and wrong for
+   a panel of fields.
+   -------------------------------------------------------------------------- */
+.subscrpt-flow__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .subscrpt-flow__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The options rail is far narrower than a settings panel, so its fields stack
+   rather than using the shared 220px label / 260px control row, which needs
+   about 500px before it fits. */
+.subscrpt-flow__options .wpsubs-settings-field {
+  flex-direction: column;
+  gap: 8px;
+}
+
+.subscrpt-flow__options .wpsubs-settings-field + .wpsubs-settings-field {
+  margin-top: 18px;
+}
+
+.subscrpt-flow__options .wpsubs-settings-field__label {
+  flex: 0 0 auto;
+}
+
+.subscrpt-flow__options .wpsubs-settings-field__control .wpsubs-input,
+.subscrpt-flow__options .wpsubs-settings-field__control .wpsubs-select,
+.subscrpt-flow__options .wpsubs-settings-field__control .wpsubs-adv-select__trigger {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
+/* Both panels share one padding rhythm so the two columns line up. */
+.subscrpt-flow__panel {
+  padding: 20px;
+}
+
+/* The saved reason list: the same row treatment the manage modal uses, so the
+   page and the modal read as one thing. Numbered, because the order is what a
+   customer sees. */
+.subscrpt-flow__reasons {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  counter-reset: subscrpt-reason;
+}
+
+.subscrpt-flow__reasons li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--wpsubs-border, #e5e7eb);
+  border-radius: var(--wpsubs-radius-sm, 5px);
+  background: var(--wpsubs-surface, #fff);
+  font-size: 13px;
+  color: var(--wpsubs-text, #374151);
+}
+
+.subscrpt-flow__reasons li + li {
+  margin-top: 8px;
+}
+
+.subscrpt-flow__reasons li::before {
+  counter-increment: subscrpt-reason;
+  content: counter(subscrpt-reason);
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--wpsubs-surface-muted, #f9fafb);
+  color: var(--wpsubs-text-muted, #6b7280);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* "Other" is not one of the store's reasons: the survey adds it while the
+   comment box is on. Shown in its place, but visibly not editable. */
+.subscrpt-flow__reasons li.subscrpt-flow__reason--auto {
+  border-style: dashed;
+  background: var(--wpsubs-surface-muted, #f9fafb);
+  color: var(--wpsubs-text-muted, #6b7280);
+}
+
+.subscrpt-flow__reason-note {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--wpsubs-text-subtle, #9ca3af);
+}
+
+/* Shown once the list has been edited and not yet saved. */
+.subscrpt-flow__unsaved {
+  font-size: 13px;
+  color: var(--wpsubs-text-muted, #6b7280);
+}
+
+.subscrpt-flow__empty {
+  margin: 0 0 18px;
+  color: var(--wpsubs-text-subtle, #9ca3af);
+  font-size: 13px;
+}
+
+/* The reasons control carries no label of its own - the tab names the panel.
+   The label element is still emitted (with whitespace, so `:empty` never
+   matches) and its `flex: 0 0 220px` becomes a 220px tall gap once the row
+   stacks, so hide it outright. */
+.subscrpt-flow__panel--reasons .wpsubs-settings-field {
+  flex-direction: column;
+  gap: 10px;
+}
+
+.subscrpt-flow__panel--reasons .wpsubs-settings-field__label {
+  display: none;
+}
+
+.subscrpt-flow__note {
+  margin: 18px 0 0;
+  color: var(--wpsubs-text-muted, #6b7280);
+  font-size: 12px;
+  line-height: 1.6;
+}
