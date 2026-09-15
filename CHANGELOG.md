@@ -37,6 +37,7 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 ### Security and operations
 
 - Add a read-only, privacy-minimal fleet migration audit.
+- Add a schema-v2 overdue-disposition worksheet and digest-confirmed, fail-closed no-charge apply command that revalidates live evidence and preserves independent operator holds.
 - Enforce the fleet audit schema and rebuild nested summaries from fixed aggregate allowlists so unexpected record-level fields cannot cross the fleet-safe boundary.
 - Validate HPOS order references against the active WooCommerce order store.
 - Require Stripe auto-renewal charges to originate from the canonical claimed renewal order, with stable per-period idempotency metadata and existing-intent recovery.

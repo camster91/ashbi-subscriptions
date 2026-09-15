@@ -83,6 +83,54 @@ Before production activation:
 10. Force a next-date or marker write failure and verify the subscription remains
    non-active until the exact renewal order's Action Scheduler repair succeeds.
 
+## Overdue disposition rehearsal
+
+Run these steps only on an isolated staging clone with outbound email disabled
+and gateway sandbox credentials. Keep worksheets on the authorized server;
+they contain subscription and order IDs and must never be committed.
+
+1. Generate schema-v2 evidence:
+
+   ```sh
+   wp eval-file tools/overdue-disposition-worksheet.php > /secure/overdue.json
+   chmod 600 /secure/overdue.json
+   ```
+
+2. Review every record and set `operator_disposition` to one value listed in
+   `allowed_dispositions`. Notes and the derived overdue-day count may be edited;
+   source evidence is protected by an immutable checksum.
+3. Run a dry-run with the exact site URL. It rereads every subscription, paid
+   order reference, open renewal, cadence, and payment-limit signal and aborts
+   the entire run if any evidence changed:
+
+   ```sh
+   ASHBI_DISPOSITION_WORKSHEET=/secure/overdue.json \
+   ASHBI_EXPECTED_SITE_URL=https://store.example \
+   wp eval-file tools/apply-overdue-dispositions.php
+   ```
+
+4. Record the printed confirmation digest in the site migration log. After the
+   staging snapshot and plan are approved, apply that exact file by adding:
+
+   ```sh
+   ASHBI_DISPOSITION_MODE=apply-no-charge \
+   ASHBI_DISPOSITION_CONFIRM=<dry-run-digest>
+   ```
+
+The apply command never creates or changes an order, invokes a payment gateway,
+or cancels a subscription. `advance_without_charge` moves the unchanged billing
+anchor forward by whole plan periods until it is in the future, records the
+approved plan digest, and removes only that ID from the overdue quarantine.
+`controlled_retry`, `manual_recovery`, `cancel`, and
+`retain_for_investigation` remain blocked for separately approved workflows.
+An explicit operator hold is established before the first date write, so an
+interruption fails closed. A partial write requires inspection and a newly
+generated worksheet; never clear quarantine options manually.
+
+After applying, regenerate the worksheet, reconcile every expected advance and
+remaining hold, and repeat the full count/checksum comparison. This staging
+rehearsal is evidence for review only; it is not production authorization.
+
 ## Rollback
 
 Take a database backup and retain the previously deployed plugin ZIP before

@@ -26,6 +26,8 @@ namespace {
 
 	class WP_CLI {
 		public static function line( $message ) {}
+		public static function success( $message ) {}
+		public static function error( $message ) {}
 	}
 
 	function as_enqueue_async_action( $hook, $args = array(), $group = '' ) {}
