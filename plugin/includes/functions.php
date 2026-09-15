@@ -86,6 +86,31 @@ function subscrpt_pro_activated(): bool {
 }
 
 /**
+ * Whether migration reconciliation blocks this subscription from renewing.
+ *
+ * Legacy boolean/scalar values remain fail-closed for every subscription. New
+ * migrations store the precise affected IDs so unrelated purchases and
+ * renewals can continue while risky historical periods are reconciled.
+ *
+ * @param int $subscription_id Subscription ID, or zero for any blocked record.
+ * @return bool
+ */
+function subscrpt_renewal_is_migration_blocked( $subscription_id = 0 ): bool {
+	$blocked = get_option( 'subscrpt_renewal_migration_blocked' );
+	if ( empty( $blocked ) ) {
+		return false;
+	}
+	if ( ! is_array( $blocked ) ) {
+		return true;
+	}
+	if ( (int) $subscription_id <= 0 ) {
+		return true;
+	}
+
+	return in_array( (int) $subscription_id, array_map( 'intval', $blocked ), true );
+}
+
+/**
  * Whether a product is tied to at least one active subscription plan.
  *
  * The single fallback guard every surface (storefront, checkout, admin) branches

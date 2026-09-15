@@ -21,4 +21,9 @@ if grep -q '^subscription/tests/' "$test_root/contents.txt"; then
   exit 1
 fi
 
+if grep -Eq '^subscription/assets/images/(logo(-title)?\.(png|svg)|icons/subscription-20(-gray)?\.png)$' "$test_root/contents.txt"; then
+  printf 'Release package contains retired upstream brand assets.\n' >&2
+  exit 1
+fi
+
 printf 'Release package checks passed.\n'

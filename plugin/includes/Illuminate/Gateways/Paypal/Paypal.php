@@ -67,8 +67,8 @@ class Paypal extends \WC_Payment_Gateway {
 	public function __construct() {
 		$this->id                 = 'wp_subscription_paypal';
 		$this->has_fields         = false;
-		$this->method_title       = __( 'PayPal for WPSubscription', 'subscription' );
-		$this->method_description = __( 'Accept wp subscription recurring payments through PayPal. Only WPSubscription is supported.', 'subscription' );
+		$this->method_title       = __( 'PayPal for Ashbi Subscriptions', 'subscription' );
+		$this->method_description = __( 'Accept recurring subscription payments through PayPal.', 'subscription' );
 		$this->supports           = [ 'products', 'subscriptions', 'refunds' ];
 		$this->icon               = apply_filters( 'wp_subscription_paypal_icon', SUBSCRPT_URL . '/assets/images/integrations/paypal.svg' );
 
@@ -169,9 +169,9 @@ class Paypal extends \WC_Payment_Gateway {
 			'enabled'                    => [
 				'title'       => __( 'Enable/Disable', 'subscription' ),
 				'type'        => 'checkbox',
-				'label'       => __( 'Enable PayPal for WPSubscription', 'subscription' ),
+				'label'       => __( 'Enable PayPal for Ashbi Subscriptions', 'subscription' ),
 				'default'     => 'no',
-				'description' => __( 'Enable or Disable PayPal for WPSubscription payment gateway', 'subscription' ),
+				'description' => __( 'Enable or disable the PayPal subscription payment gateway.', 'subscription' ),
 				'desc_tip'    => true,
 				'class'       => 'wpsubs-toggle',
 			],
@@ -1473,7 +1473,7 @@ class Paypal extends \WC_Payment_Gateway {
 	 * @param string     $paypal_product_id PayPal Product ID.
 	 */
 	public function generate_plan_data( WC_Product $wc_product, string $paypal_product_id ): array {
-		// Get WPSubscription wrapped product.
+		// Get the Ashbi Subscriptions wrapped product.
 		// $wpsubs_product type WC_Product
 		$wpsubs_product = Subscription::get_subs_product( $wc_product );
 

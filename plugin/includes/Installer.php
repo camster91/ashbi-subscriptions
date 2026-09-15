@@ -42,7 +42,9 @@ class Installer {
 		if (
 			get_option( 'subscrpt_db_version' ) === self::DB_VERSION
 			&& get_option( 'subscrpt_renewal_claim_backfill_1' )
+			&& get_option( 'subscrpt_overdue_renewal_quarantine_1_completed_at' )
 		) {
+			( new self() )->persist_migration_block_sources();
 			return;
 		}
 
@@ -94,6 +96,8 @@ class Installer {
 		$this->create_renewal_claim_table();
 		PaypalDB::maybe_create_tables();
 		$this->backfill_open_renewal_claims();
+		$this->backfill_overdue_renewal_quarantine();
+		$this->persist_migration_block_sources();
 
 		update_option( 'subscrpt_db_version', self::DB_VERSION );
 	}
@@ -196,12 +200,140 @@ class Installer {
 			subscrpt_write_log( "Renewal migration blocked for subscription #{$subscription_id}; open orders require reconciliation." );
 		}
 
+		$blocked = $this->normalize_subscription_ids( $blocked );
+		if ( ! $this->persist_migration_block_sources( $blocked, null ) ) {
+			subscrpt_write_log( 'Renewal claim quarantine could not be persisted exactly; migration remains incomplete and will retry.' );
+			return;
+		}
+
+		if ( empty( $blocked ) && ! $this->persist_completion_marker( 'subscrpt_renewal_claim_backfill_1' ) ) {
+			subscrpt_write_log( 'Renewal claim backfill completion marker could not be persisted; migration will retry.' );
+		}
+	}
+
+	/**
+	 * Quarantine historical overdue periods before the hourly worker sees them.
+	 *
+	 * This migration does not change a subscription status or date. It records
+	 * only the affected IDs in a non-autoloaded option, allowing unrelated new
+	 * purchases and on-time renewals to continue. A later operator-approved
+	 * disposition removes IDs after a no-charge staging rehearsal.
+	 *
+	 * @return void
+	 */
+	private function backfill_overdue_renewal_quarantine() {
+		if ( get_option( 'subscrpt_overdue_renewal_quarantine_1_completed_at' ) ) {
+			return;
+		}
+
+		global $wpdb;
+		$overdue = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT DISTINCT p.ID
+				 FROM {$wpdb->posts} p
+				 INNER JOIN {$wpdb->postmeta} next_date
+				   ON next_date.post_id = p.ID AND next_date.meta_key = %s
+				 WHERE p.post_type = %s
+				   AND p.post_status IN ('active','pe_cancelled')
+				   AND CAST(next_date.meta_value AS UNSIGNED) <= %d",
+				'_subscrpt_next_date',
+				'subscrpt_order',
+				time()
+			)
+		);
+		if ( ! is_array( $overdue ) ) {
+			subscrpt_write_log( 'Overdue renewal quarantine could not inspect legacy subscriptions; it will be retried.' );
+			return;
+		}
+
+		$overdue = $this->normalize_subscription_ids( $overdue );
+		if ( ! $this->persist_migration_block_sources( null, $overdue ) ) {
+			subscrpt_write_log( 'Overdue renewal quarantine could not be persisted exactly; migration remains incomplete and will retry.' );
+			return;
+		}
+
+		if ( ! $this->persist_completion_marker( 'subscrpt_overdue_renewal_quarantine_1_completed_at' ) ) {
+			subscrpt_write_log( 'Overdue renewal quarantine completion marker could not be persisted; migration will retry.' );
+		}
+	}
+
+	/**
+	 * Persist source-owned quarantine inventories and rebuild the active union.
+	 *
+	 * Unknown IDs already present in the active list are retained as explicit
+	 * operator holds. A truthy legacy scalar is never narrowed automatically.
+	 * Null source arguments leave that inventory unchanged.
+	 *
+	 * @param int[]|null $claim_ids Claim-migration quarantine IDs.
+	 * @param int[]|null $overdue_ids Overdue-migration quarantine IDs.
+	 * @return bool Whether every write was read back exactly.
+	 */
+	private function persist_migration_block_sources( $claim_ids = null, $overdue_ids = null ) {
+		$active = get_option( 'subscrpt_renewal_migration_blocked', array() );
+		if ( ! is_array( $active ) && ! empty( $active ) ) {
+			subscrpt_write_log( 'Legacy global renewal migration block remains active; refusing to narrow it automatically.' );
+			return false;
+		}
+
+		$active       = $this->normalize_subscription_ids( is_array( $active ) ? $active : array() );
+		$old_claim    = $this->normalize_subscription_ids( get_option( 'subscrpt_renewal_claim_quarantine_1', array() ) );
+		$old_overdue  = $this->normalize_subscription_ids( get_option( 'subscrpt_overdue_renewal_quarantine_1', array() ) );
+		$operator_ids = $this->normalize_subscription_ids( get_option( 'subscrpt_renewal_operator_hold_1', array() ) );
+		$unowned      = array_diff( $active, $old_claim, $old_overdue );
+		$operator_ids = $this->normalize_subscription_ids( array_merge( $operator_ids, $unowned ) );
+		$claim_ids    = null === $claim_ids ? $old_claim : $this->normalize_subscription_ids( $claim_ids );
+		$overdue_ids  = null === $overdue_ids ? $old_overdue : $this->normalize_subscription_ids( $overdue_ids );
+
+		$sources = array(
+			'subscrpt_renewal_claim_quarantine_1'   => $claim_ids,
+			'subscrpt_overdue_renewal_quarantine_1' => $overdue_ids,
+			'subscrpt_renewal_operator_hold_1'      => $operator_ids,
+		);
+		foreach ( $sources as $option => $ids ) {
+			update_option( $option, $ids, false );
+			if ( $ids !== $this->normalize_subscription_ids( get_option( $option, array() ) ) ) {
+				return false;
+			}
+		}
+
+		$blocked = $this->normalize_subscription_ids( array_merge( $claim_ids, $overdue_ids, $operator_ids ) );
 		if ( empty( $blocked ) ) {
 			delete_option( 'subscrpt_renewal_migration_blocked' );
-			update_option( 'subscrpt_renewal_claim_backfill_1', current_time( 'mysql', true ), false );
-		} else {
-			update_option( 'subscrpt_renewal_migration_blocked', array_values( array_unique( $blocked ) ), false );
+			return false === get_option( 'subscrpt_renewal_migration_blocked', false );
 		}
+
+		update_option( 'subscrpt_renewal_migration_blocked', $blocked, false );
+		return $blocked === $this->normalize_subscription_ids( get_option( 'subscrpt_renewal_migration_blocked', array() ) );
+	}
+
+	/**
+	 * Normalize a list of subscription IDs for exact comparisons.
+	 *
+	 * @param mixed $ids Candidate IDs.
+	 * @return int[]
+	 */
+	private function normalize_subscription_ids( $ids ) {
+		if ( ! is_array( $ids ) ) {
+			return array();
+		}
+
+		$ids = array_values( array_unique( array_filter( array_map( 'intval', $ids ) ) ) );
+		sort( $ids, SORT_NUMERIC );
+		return $ids;
+	}
+
+	/**
+	 * Write and verify a migration completion marker.
+	 *
+	 * @param string $option Completion option name.
+	 * @return bool
+	 */
+	private function persist_completion_marker( $option ) {
+		$completed_at = current_time( 'mysql', true );
+		update_option( $option, $completed_at, false );
+		$persisted = get_option( $option, '' );
+
+		return is_string( $persisted ) && hash_equals( $completed_at, $persisted );
 	}
 
 	/**

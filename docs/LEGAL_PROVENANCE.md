@@ -14,6 +14,10 @@ record is:
 - SHA-256: `232e0eb4bfb5535d1ddcb4de19aba2d60f2461b14f5af1c1354919faa9842a90`
 - Unmodified import commit: `5508935`
 
+The public package was published under the WPSubscription name by Convers Lab.
+Those names remain here solely to identify the origin of the GPL-covered work;
+they are not used as Ashbi product branding and do not imply endorsement.
+
 Run `bash scripts/verify-upstream.sh` to download that exact package, verify
 its digest, and compare it byte-for-byte with the imported tree.
 
@@ -32,7 +36,9 @@ redistribute premium code.
 - Give each client the corresponding source code for the version supplied.
 - Preserve license notices for Composer, JavaScript, fonts, and other assets.
 - Document every imported upstream release and every local modification.
-- Use independent Ashbi branding and a distinct plugin slug/text domain.
+- Use independent Ashbi branding while retaining the legacy plugin directory,
+  main filename, text domain, hooks, slugs, option keys, and database identifiers
+  required for in-place upgrades and existing-store data compatibility.
 - Do not imply endorsement by Convers Lab, WPSubscription, WordPress, or WooCommerce.
 
 ## Commercial model
@@ -46,3 +52,12 @@ access to the source and GPL rights must not depend on an active support plan.
 Before any client distribution, obtain a human legal review of trademark use,
 copyright notices, bundled dependency licenses, privacy disclosures, and the
 client agreement. This file is project guidance, not legal advice.
+
+## Rebranding record
+
+The Ashbi-maintained distribution is named **Ashbi Subscriptions**. Customer-facing
+vendor sales, account, support, upgrade, and license-activation calls to action
+are removed from the maintained branding surfaces. Original GPL, copyright, and
+dependency notices remain intact. Technical identifiers inherited from the public
+package are retained only where changing them could break installations, stored
+data, integrations, translations, or extension compatibility.

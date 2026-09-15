@@ -147,7 +147,7 @@ $subscrpt_status_labels = [
 
 $subscrpt_tag_labels = [
 	'free' => __( 'Free', 'subscription' ),
-	'pro'  => __( 'Pro', 'subscription' ),
+	'pro'  => __( 'Optional', 'subscription' ),
 	'beta' => __( 'Beta', 'subscription' ),
 ];
 ?>
@@ -339,7 +339,7 @@ $subscrpt_tag_labels = [
 								</div>
 								<div style="display:flex;flex-wrap:wrap;gap:4px;">
 									<?php if ( $is_pro ) : ?>
-										<span style="display:inline-flex;align-items:center;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:var(--wpsubs-brand-light,#fff1eb);color:var(--wpsubs-brand-dark,#d93f00);line-height:1.6;"><?php esc_html_e( 'Pro', 'subscription' ); ?></span>
+										<span style="display:inline-flex;align-items:center;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:var(--wpsubs-brand-light,#fff1eb);color:var(--wpsubs-brand-dark,#d93f00);line-height:1.6;"><?php esc_html_e( 'Optional', 'subscription' ); ?></span>
 									<?php endif; ?>
 									<?php if ( $is_beta ) : ?>
 										<span style="display:inline-flex;align-items:center;font-size:10px;font-weight:500;padding:2px 7px;border-radius:10px;background:#fff7ed;color:#c2410c;line-height:1.6;"><?php esc_html_e( 'Beta', 'subscription' ); ?></span>
@@ -367,7 +367,7 @@ $subscrpt_tag_labels = [
 							<?php if ( $is_pro && ! defined( 'SUBSCRIPT_PRO_VERSION' ) ) : ?>
 								<div style="width:100%;display:flex;align-items:center;gap:6px;background:var(--wpsubs-brand-light,#fff1eb);border-radius:6px;padding:7px 10px;font-size:12px;font-weight:500;color:var(--wpsubs-brand-dark,#d93f00);line-height:1.4;">
 									<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-									<?php esc_html_e( 'WPSubscription Pro required', 'subscription' ); ?>
+									<?php esc_html_e( 'Not included in this build', 'subscription' ); ?>
 								</div>
 							<?php else : ?>
 								<?php
@@ -461,7 +461,7 @@ $subscrpt_tag_labels = [
 								<?php if ( $cat['label'] || $is_pro ) : ?>
 									<div style="display:flex;flex-wrap:wrap;gap:4px;">
 										<?php if ( $is_pro ) : ?>
-											<span style="display:inline-flex;align-items:center;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:var(--wpsubs-brand-light,#fff1eb);color:var(--wpsubs-brand-dark,#d93f00);line-height:1.6;"><?php esc_html_e( 'Pro', 'subscription' ); ?></span>
+											<span style="display:inline-flex;align-items:center;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:var(--wpsubs-brand-light,#fff1eb);color:var(--wpsubs-brand-dark,#d93f00);line-height:1.6;"><?php esc_html_e( 'Optional', 'subscription' ); ?></span>
 										<?php endif; ?>
 										<?php if ( $cat['label'] ) : ?>
 											<span style="display:inline-flex;align-items:center;font-size:10px;font-weight:500;padding:2px 7px;border-radius:10px;background:<?php echo esc_attr( $cat['bg'] ); ?>;color:<?php echo esc_attr( $cat['color'] ); ?>;line-height:1.6;"><?php echo esc_html( $cat['label'] ); ?></span>
@@ -482,7 +482,7 @@ $subscrpt_tag_labels = [
 							<?php if ( $is_pro && ! defined( 'SUBSCRIPT_PRO_VERSION' ) ) : ?>
 								<div style="width:100%;display:flex;align-items:center;gap:6px;background:var(--wpsubs-brand-light,#fff1eb);border-radius:6px;padding:7px 10px;font-size:12px;font-weight:500;color:var(--wpsubs-brand-dark,#d93f00);line-height:1.4;">
 									<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-									<?php esc_html_e( 'WPSubscription Pro required', 'subscription' ); ?>
+									<?php esc_html_e( 'Not included in this build', 'subscription' ); ?>
 								</div>
 							<?php else : ?>
 								<?php

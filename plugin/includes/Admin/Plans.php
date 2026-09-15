@@ -39,7 +39,7 @@ class Plans {
 	}
 
 	/**
-	 * Register the Plans submenu under the WPSubscription top menu.
+	 * Register the Plans submenu under the Ashbi Subscriptions top menu.
 	 *
 	 * @return void
 	 */
@@ -55,7 +55,7 @@ class Plans {
 	}
 
 	/**
-	 * Position the Plans item within the WPSubscription submenu order.
+	 * Position the Plans item within the Ashbi Subscriptions submenu order.
 	 *
 	 * @param array $order Ordered slug => position map.
 	 * @return array

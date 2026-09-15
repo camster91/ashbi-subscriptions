@@ -89,14 +89,24 @@ class Illuminate {
 	 */
 	public function stripe_initialization() {
 		if ( function_exists( 'woocommerce_gateway_stripe' ) ) {
+			$stripe_directory = dirname( WC_STRIPE_MAIN_FILE );
+			$exception_file   = $stripe_directory . '/includes/class-wc-stripe-exception.php';
+			if ( ! class_exists( 'WC_Stripe_Exception' ) ) {
+				if ( ! is_readable( $exception_file ) ) {
+					subscrpt_write_log( 'Stripe integration skipped because its exception compatibility class is unavailable.' );
+					return;
+				}
+				include_once $exception_file;
+			}
+
 			if ( ! class_exists( 'WC_Payment_Gateway_CC' ) ) {
 				include_once dirname( WC_PLUGIN_FILE ) . '/includes/gateways/class-wc-payment-gateway-cc.php';
 			}
 
-			include_once dirname( WC_STRIPE_MAIN_FILE ) . '/includes/compat/trait-wc-stripe-subscriptions-utilities.php';
-			include_once dirname( WC_STRIPE_MAIN_FILE ) . '/includes/compat/trait-wc-stripe-pre-orders.php';
-			include_once dirname( WC_STRIPE_MAIN_FILE ) . '/includes/compat/trait-wc-stripe-subscriptions.php';
-			include_once dirname( WC_STRIPE_MAIN_FILE ) . '/includes/abstracts/abstract-wc-stripe-payment-gateway.php';
+			include_once $stripe_directory . '/includes/compat/trait-wc-stripe-subscriptions-utilities.php';
+			include_once $stripe_directory . '/includes/compat/trait-wc-stripe-pre-orders.php';
+			include_once $stripe_directory . '/includes/compat/trait-wc-stripe-subscriptions.php';
+			include_once $stripe_directory . '/includes/abstracts/abstract-wc-stripe-payment-gateway.php';
 
 			if ( class_exists( '\WC_Stripe_Payment_Gateway' ) ) {
 				new Stripe();

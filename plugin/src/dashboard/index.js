@@ -1,5 +1,5 @@
 /**
- * WPSubscription dashboard.
+ * Ashbi Subscriptions dashboard.
  *
  * A small React screen built on @wordpress/components, so it looks like
  * WordPress rather than like a second design system bolted into wp-admin.

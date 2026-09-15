@@ -21,15 +21,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 ?>
 <div class="notice notice-error sdevs-install-plugin">
 	<div class="sdevs-notice-icon">
-		<img src="<?php echo esc_url( SUBSCRPT_ASSETS . '/images/logo.png' ); ?>" alt="woocommerce-logo" />
+		<span class="dashicons dashicons-update-alt" aria-hidden="true" style="font-size:32px;width:32px;height:32px;"></span>
 	</div>
 	<div class="sdevs-notice-content">
-		<h2><?php esc_html_e( 'Thanks for installing WPSubscription.', 'subscription' ); ?></h2>
+		<h2><?php esc_html_e( 'Thanks for installing Ashbi Subscriptions.', 'subscription' ); ?></h2>
 		<p>
 			<?php
 			printf(
 				/* translators: %s: WooCommerce, linked to its wordpress.org page. */
-				esc_html__( '%s must be installed and activated before WPSubscription can be used.', 'subscription' ),
+				esc_html__( '%s must be installed and activated before Ashbi Subscriptions can be used.', 'subscription' ),
 				'<a href="https://wordpress.org/plugins/woocommerce/" target="_blank" rel="noopener">' . esc_html__( 'WooCommerce', 'subscription' ) . '</a>'
 			);
 			?>

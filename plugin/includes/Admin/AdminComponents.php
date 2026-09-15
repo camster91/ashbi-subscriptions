@@ -139,7 +139,7 @@ function wpsubs_pager_page_range( int $current, int $total ): array {
 }
 
 /**
- * Render a WPSubscription paginator footer (info text + prev / next / numbered
+ * Render an Ashbi Subscriptions paginator footer (info text + prev / next / numbered
  * buttons + ellipsis). Single source of truth used by the subscriptions list
  * (server-side) and the subscription details cards (hydrated by JS).
  *
@@ -503,17 +503,17 @@ function subscrpt_multiselect_field( $field ) {
 }
 
 /**
- * Render a preview for pages that require WPSubscription Pro, with a blurred background image and a call-to-action overlay.
+ * Render a preview for pages that are unavailable in this build.
  *
  * @param array $args Preview arguments.
  */
 function subscrpt_render_page_preview( array $args = [] ) {
 	$defaults = [
 		'preview_image_url' => SUBSCRPT_ASSETS . '/images/previews/subscrpt-health-preview.png',
-		'cta_title'         => __( 'Upgrade to WPSubscription Pro', 'subscription' ),
-		'cta_description'   => __( 'This page requires WPSubscription Pro. Unlock advanced features, priority support, and more with WPSubscription Pro.', 'subscription' ),
-		'cta_button_text'   => __( '⚡ Upgrade to Pro', 'subscription' ),
-		'cta_button_url'    => 'https://wpsubscription.co/?utm_source=plugin&utm_medium=admin&utm_campaign=upgrade_pro',
+		'cta_title'         => __( 'Feature unavailable', 'subscription' ),
+		'cta_description'   => __( 'This optional feature is not included in the current build.', 'subscription' ),
+		'cta_button_text'   => __( 'Open support', 'subscription' ),
+		'cta_button_url'    => admin_url( 'admin.php?page=wp-subscription-support' ),
 	];
 
 	$args = wp_parse_args( $args, $defaults );
@@ -555,7 +555,7 @@ function subscrpt_render_page_preview( array $args = [] ) {
 					</div>
 
 					<!-- CTA button -->
-					<a href="<?php echo esc_url( $args['cta_button_url'] ); ?>" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--wpsubs-brand);color:#fff;font-size:15px;font-weight:600;padding:14px 28px;border-radius:8px;text-decoration:none;">
+					<a href="<?php echo esc_url( $args['cta_button_url'] ); ?>" style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--wpsubs-brand);color:#fff;font-size:15px;font-weight:600;padding:14px 28px;border-radius:8px;text-decoration:none;">
 						<?php echo esc_html( $args['cta_button_text'] ); ?>
 					</a>
 				</div>

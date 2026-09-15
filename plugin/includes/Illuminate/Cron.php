@@ -100,6 +100,9 @@ class Cron {
 			// Initialize WooCommerce mailer before processing
 			if ( function_exists( 'WC' ) && WC()->mailer() ) {
 				foreach ( $expired_subscriptions as $subscription ) {
+					if ( function_exists( 'subscrpt_renewal_is_migration_blocked' ) && subscrpt_renewal_is_migration_blocked( (int) $subscription ) ) {
+						continue;
+					}
 					Action::status( 'expired', $subscription );
 				}
 			}

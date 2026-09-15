@@ -16,9 +16,10 @@ open order becomes canonical only when its creation time is consistent with
 the current due-date anchor. Multiple open orders or a stale/undated order are
 ambiguous: every affected order is retained with its original status, marked
 as migration-quarantined, and made non-payable until a human reconciles it.
-Renewal creation is paused site-wide while any ambiguity remains. Completed
-orders are excluded because their subscription should already point at the
-next billing period.
+Renewal creation is paused only for the affected subscription IDs while any
+ambiguity remains; unrelated purchases and renewals continue. Completed orders
+are excluded because their subscription should already point at the next
+billing period.
 
 Open Stripe renewals are intentionally stricter: they become automatically
 recoverable only when the canonical order already contains both its historical
@@ -42,6 +43,21 @@ customer and renewal identity before any remote request; stale Stripe order
 locks and interrupted workers leave a pending claim row that is retried after
 the persisted backoff and independently swept by the hourly job.
 
+Before the first hourly worker runs, the upgrade also records every already
+overdue active or pending-cancellation subscription in
+`subscrpt_overdue_renewal_quarantine_1`. Those IDs are merged into the scoped
+`subscrpt_renewal_migration_blocked` option. The cron does not expire them and
+renewal entry points reject only those IDs, so unrelated purchases and on-time
+renewals continue. The migration does not alter their status, next date, order
+history, customer, or payment-token references.
+
+Claim ambiguity, historical overdue records, and explicit operator holds have
+separate source-owned inventories. The active block is rebuilt as their union
+on every installer check, so a repeated upgrade cannot discard an existing
+hold. Any unexplained IDs in an older array become explicit operator holds. A
+truthy legacy scalar remains a global fail-closed block and must be reconciled
+manually; the migration will not narrow it or write a completion marker.
+
 ## Staging verification
 
 Before production activation:
@@ -54,14 +70,17 @@ Before production activation:
 5. Verify every unambiguous open legacy renewal maps to one claim, no completed
    renewal claimed the current or future period, and every ambiguity is listed
    for human reconciliation before the migration block is cleared.
-6. Trigger the same due renewal concurrently and across a simulated crash after
+6. Verify every pre-existing overdue active/pending-cancellation record is in
+   the scoped quarantine, remains at its original status and date, and cannot
+   create an order while an unrelated test subscription can still renew.
+7. Trigger the same due renewal concurrently and across a simulated crash after
    remote PaymentIntent creation; confirm one order, one relation, one stable
    renewal identity, and at most one sandbox charge even after replay.
-7. Exercise classic and Blocks checkout manual renewal, Stripe retry, PayPal
+8. Exercise classic and Blocks checkout manual renewal, Stripe retry, PayPal
    return, valid and invalid PayPal webhooks, cancellation, and refund paths.
-8. Reconcile the original counts and verify that only expected additive claim
+9. Reconcile the original counts and verify that only expected additive claim
    rows and test transactions changed.
-9. Force a next-date or marker write failure and verify the subscription remains
+10. Force a next-date or marker write failure and verify the subscription remains
    non-active until the exact renewal order's Action Scheduler repair succeeds.
 
 ## Rollback

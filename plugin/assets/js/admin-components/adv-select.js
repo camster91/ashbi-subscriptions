@@ -1,5 +1,5 @@
 /**
- * WPSubscription admin UI components.
+ * Ashbi Subscriptions admin UI components.
  *
  * WPSubsAdvSelect — styled dropdown replacing native <select>.
  *

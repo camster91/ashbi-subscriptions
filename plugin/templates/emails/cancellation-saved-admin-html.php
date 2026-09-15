@@ -2,8 +2,7 @@
 /**
  * Admin notice: a subscription was saved (free).
  *
- * Reports the reason they had picked and nothing identifying - no customer, no
- * subscription link. Those live in Pro, which the closing block points at.
+ * Reports the recorded reason and timestamp without customer-identifying details.
  *
  * This template can be overridden by copying it to:
  * <your_theme>/subscription/emails/cancellation-saved-admin-html.php
@@ -13,7 +12,6 @@
  * @var string $reason        Reason the customer gave, may be empty.
  * @var string $reported_at   When this was reported, site-formatted.
  * @var string $reports_url   Admin Reports page.
- * @var string $upgrade_url   Pro product page.
  * @var object $email         The WC_Email instance.
  *
  * @package SpringDevs\Subscription
@@ -41,22 +39,7 @@ do_action( 'woocommerce_email_header', $email_heading, $email );
 	</tbody>
 </table>
 
-<p style="margin:20px 0 0;font-size:13px;color:#50575e;">
-	<?php esc_html_e( 'Which customer this was, and your full retention history, are shown in WPSubscription Pro.', 'subscription' ); ?>
-</p>
-
-<table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin:16px 0;">
-	<tr>
-		<td align="center">
-			<a href="<?php echo esc_url( $upgrade_url ); ?>"
-				style="display:inline-block;padding:12px 24px;background-color:#7f54b3;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;border-radius:4px;">
-				<?php esc_html_e( 'See it in Pro', 'subscription' ); ?>
-			</a>
-		</td>
-	</tr>
-</table>
-
-<p style="margin:0;font-size:13px;color:#787c82;">
+<p style="margin:20px 0 0;font-size:13px;color:#787c82;">
 	<a href="<?php echo esc_url( $reports_url ); ?>" style="color:#2271b1;"><?php esc_html_e( 'Open the Reports page', 'subscription' ); ?></a>
 </p>
 

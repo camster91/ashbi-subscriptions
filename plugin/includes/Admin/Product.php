@@ -167,14 +167,14 @@ class Product {
 						</span>
 						<h3 style="margin:14px 0 6px;font-size:15px;color:var(--wpsubs-text,#1d2327);display:flex;align-items:center;justify-content:center;gap:8px;">
 							<?php esc_html_e( 'Variable product subscriptions', 'subscription' ); ?>
-							<span class="wpsubs-badge wpsubs-badge--pro"><?php esc_html_e( 'Pro', 'subscription' ); ?></span>
+							<span class="wpsubs-badge wpsubs-badge--pro"><?php esc_html_e( 'Unavailable', 'subscription' ); ?></span>
 						</h3>
 						<p style="margin:0 auto;max-width:380px;font-size:13px;line-height:1.6;color:var(--wpsubs-text-muted,#646970);">
 							<?php esc_html_e( 'Sell each variation as its own subscription, with per-variation billing, trials and sign-up fees.', 'subscription' ); ?>
 						</p>
-						<a href="https://wpsubscription.co/?utm_source=plugin&utm_medium=admin&utm_campaign=upgrade_pro" target="_blank" rel="noopener noreferrer" class="wpsubs-btn wpsubs-btn--primary" style="margin-top:16px;">
-							<?php esc_html_e( 'Upgrade to Pro', 'subscription' ); ?>
-						</a>
+						<p style="margin:16px 0 0;font-size:12px;color:var(--wpsubs-text-muted,#646970);">
+							<?php esc_html_e( 'Variable-product subscriptions are not included in this build.', 'subscription' ); ?>
+						</p>
 					</div>
 					<?php
 				}

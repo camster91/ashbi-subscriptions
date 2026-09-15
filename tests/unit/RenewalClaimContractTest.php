@@ -59,8 +59,11 @@ final class RenewalClaimContractTest extends TestCase {
 		$this->assertStringContainsString( '_subscrpt_stripe_renewal_customer', $this->installer );
 		$this->assertStringContainsString( "0 !== strpos( \$stripe_intent, 'pi_' )", $this->installer );
 		$this->assertStringContainsString( "get_meta( '_subscrpt_renewal_quarantined' )", $this->order );
-		$this->assertStringContainsString( 'subscrpt_renewal_migration_blocked', $this->helper );
 		$this->assertStringContainsString( 'woocommerce_order_needs_payment', $this->order );
+		$this->assertStringContainsString( 'backfill_overdue_renewal_quarantine', $this->installer );
+		$this->assertStringContainsString( 'subscrpt_overdue_renewal_quarantine_1', $this->installer );
+		$this->assertStringContainsString( 'subscrpt_renewal_is_migration_blocked', $this->helper );
+		$this->assertStringContainsString( 'function subscrpt_renewal_is_migration_blocked', $this->functions );
 	}
 
 	public function test_stripe_rejects_an_order_outside_the_period_claim(): void {

@@ -167,6 +167,150 @@ function ashbi_audit_meta_coverage() {
 	return $out;
 }
 
+/**
+ * Return a coarse age bucket without exposing dates or record identifiers.
+ *
+ * @param int $seconds Non-negative age in seconds.
+ * @return string
+ */
+function ashbi_audit_age_bucket( $seconds ) {
+	$days = max( 0, (int) floor( $seconds / DAY_IN_SECONDS ) );
+	if ( $days <= 7 ) {
+		return '0_7_days';
+	}
+	if ( $days <= 30 ) {
+		return '8_30_days';
+	}
+	if ( $days <= 90 ) {
+		return '31_90_days';
+	}
+	if ( $days <= 365 ) {
+		return '91_365_days';
+	}
+
+	return 'over_365_days';
+}
+
+/**
+ * Increment an aggregate report bucket.
+ *
+ * @param array  $buckets Aggregate map, passed by reference.
+ * @param string $key Bucket key.
+ * @return void
+ */
+function ashbi_audit_increment( &$buckets, $key ) {
+	$key             = '' !== (string) $key ? (string) $key : 'unknown';
+	$buckets[ $key ] = isset( $buckets[ $key ] ) ? $buckets[ $key ] + 1 : 1;
+}
+
+/**
+ * Reconcile overdue subscriptions against their aggregate payment history.
+ *
+ * Only category counts leave the server. Subscription/order IDs, dates,
+ * customer details, token values, and raw metadata remain local.
+ *
+ * @param int    $now Current Unix timestamp.
+ * @param string $relation_table Fully-prefixed relation table name.
+ * @param bool   $has_relations Whether the relation table exists.
+ * @return array
+ */
+function ashbi_audit_overdue_reconciliation( $now, $relation_table, $has_relations ) {
+	global $wpdb;
+
+	$rows = $wpdb->get_results(
+		$wpdb->prepare(
+			"SELECT p.ID, CAST(next_date.meta_value AS UNSIGNED) AS next_date
+			FROM {$wpdb->posts} p
+			INNER JOIN {$wpdb->postmeta} next_date
+				ON next_date.post_id = p.ID AND next_date.meta_key = %s
+			WHERE p.post_type = %s
+				AND p.post_status IN ('active','pe_cancelled')
+				AND CAST(next_date.meta_value AS UNSIGNED) <= %d",
+			'_subscrpt_next_date',
+			'subscrpt_order',
+			$now
+		),
+		ARRAY_A
+	);
+
+	$report = array(
+		'total'                       => count( (array) $rows ),
+		'due_age_buckets'             => array(),
+		'auto_renew'                  => array(),
+		'payment_failure_history'     => array(),
+		'latest_paid_gateway'         => array(),
+		'last_paid_age_buckets'       => array(),
+		'open_renewal_order_statuses' => array(),
+	);
+
+	foreach ( (array) $rows as $row ) {
+		$subscription_id = (int) $row['ID'];
+		$next_date       = (int) $row['next_date'];
+		ashbi_audit_increment( $report['due_age_buckets'], ashbi_audit_age_bucket( $now - $next_date ) );
+
+		$auto_renew = get_post_meta( $subscription_id, '_subscrpt_auto_renew', true );
+		$auto_group = '' === (string) $auto_renew ? 'unset' : ( in_array( $auto_renew, array( 1, '1', 'yes', true ), true ) ? 'enabled' : 'disabled' );
+		ashbi_audit_increment( $report['auto_renew'], $auto_group );
+		ashbi_audit_increment(
+			$report['payment_failure_history'],
+			(int) get_post_meta( $subscription_id, '_subscrpt_payment_failure_count', true ) > 0 ? 'recorded' : 'none_recorded'
+		);
+
+		$order_ids = array();
+		if ( $has_relations ) {
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Fixed, prefixed table name.
+			$relations = $wpdb->get_results( $wpdb->prepare( "SELECT order_id, type FROM {$relation_table} WHERE subscription_id = %d ORDER BY id DESC", $subscription_id ), ARRAY_A );
+			foreach ( (array) $relations as $relation_row ) {
+				$order_id = (int) $relation_row['order_id'];
+				if ( $order_id > 0 ) {
+					$order_ids[ $order_id ] = (string) $relation_row['type'];
+				}
+			}
+		}
+		$parent_order_id = (int) get_post_meta( $subscription_id, '_subscrpt_order_id', true );
+		if ( $parent_order_id > 0 && ! isset( $order_ids[ $parent_order_id ] ) ) {
+			$order_ids[ $parent_order_id ] = 'new';
+		}
+
+		$latest_paid_timestamp = 0;
+		$latest_paid_gateway   = 'none';
+		foreach ( $order_ids as $order_id => $relation_type ) {
+			$order = wc_get_order( $order_id );
+			if ( ! $order ) {
+				continue;
+			}
+
+			if ( in_array( $relation_type, array( 'renew', 'early-renew' ), true ) && ! $order->is_paid() ) {
+				ashbi_audit_increment( $report['open_renewal_order_statuses'], (string) $order->get_status() );
+			}
+
+			if ( ! $order->is_paid() ) {
+				continue;
+			}
+			$date_paid = $order->get_date_paid();
+			$paid_at   = $date_paid ? (int) $date_paid->getTimestamp() : 0;
+			if ( $paid_at >= $latest_paid_timestamp ) {
+				$latest_paid_timestamp = $paid_at;
+				$latest_paid_gateway   = (string) $order->get_payment_method();
+			}
+		}
+
+		ashbi_audit_increment( $report['latest_paid_gateway'], $latest_paid_timestamp > 0 ? $latest_paid_gateway : 'no_paid_order' );
+		ashbi_audit_increment(
+			$report['last_paid_age_buckets'],
+			$latest_paid_timestamp > 0 ? ashbi_audit_age_bucket( $now - $latest_paid_timestamp ) : 'no_paid_order'
+		);
+	}
+
+	foreach ( $report as $key => $value ) {
+		if ( is_array( $value ) ) {
+			ksort( $report[ $key ] );
+		}
+	}
+
+	return $report;
+}
+
 $now            = time();
 $relation_table = $wpdb->prefix . 'subscrpt_order_relation';
 $token_table    = $wpdb->prefix . 'woocommerce_payment_tokens';
@@ -207,7 +351,7 @@ if ( ashbi_audit_table_exists( $token_table ) ) {
 }
 
 $report = array(
-	'schema_version' => 1,
+	'schema_version' => 2,
 	'generated_at'   => gmdate( 'c' ),
 	'site'           => array(
 		'url'         => site_url(),
@@ -242,6 +386,7 @@ $report = array(
 		),
 		'next_date_min'        => (int) $wpdb->get_var( $wpdb->prepare( "SELECT MIN(CAST(pm.meta_value AS UNSIGNED)) FROM {$wpdb->postmeta} pm INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id WHERE p.post_type = %s AND pm.meta_key = %s AND pm.meta_value <> ''", 'subscrpt_order', '_subscrpt_next_date' ) ),
 		'next_date_max'        => (int) $wpdb->get_var( $wpdb->prepare( "SELECT MAX(CAST(pm.meta_value AS UNSIGNED)) FROM {$wpdb->postmeta} pm INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id WHERE p.post_type = %s AND pm.meta_key = %s AND pm.meta_value <> ''", 'subscrpt_order', '_subscrpt_next_date' ) ),
+		'overdue_reconciliation' => ashbi_audit_overdue_reconciliation( $now, $relation_table, ! empty( $relation['exists'] ) ),
 	),
 	'relations'      => $relation,
 	'payment_tokens' => $tokens,

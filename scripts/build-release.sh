@@ -19,6 +19,10 @@ mkdir -p "$(dirname "$output_path")" "$staging_root/subscription"
 rsync -a \
   --exclude '.DS_Store' \
   --exclude 'tests/' \
+	--exclude 'assets/images/logo.png' \
+	--exclude 'assets/images/logo-title.svg' \
+	--exclude 'assets/images/icons/subscription-20.png' \
+	--exclude 'assets/images/icons/subscription-20-gray.png' \
   "$plugin_root/" "$staging_root/subscription/"
 
 if find "$staging_root/subscription" -path '*/tests/*' -print -quit | grep -q .; then

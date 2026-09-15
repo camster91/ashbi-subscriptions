@@ -471,7 +471,7 @@ class Helper {
 		global $wpdb;
 		$history_table = $wpdb->prefix . 'subscrpt_order_relation';
 		$period_anchor = (int) get_post_meta( $subscription_id, '_subscrpt_next_date', true );
-		if ( get_option( 'subscrpt_renewal_migration_blocked' ) ) {
+		if ( subscrpt_renewal_is_migration_blocked( (int) $subscription_id ) ) {
 			subscrpt_write_log( 'Renewal checkout blocked until legacy open orders are reconciled.' );
 			return false;
 		}
@@ -1167,7 +1167,7 @@ class Helper {
 	 * @throws \Throwable Order construction or extension failure.
 	 */
 	public static function create_renewal_order( $subscription_id ) {
-		if ( get_option( 'subscrpt_renewal_migration_blocked' ) ) {
+		if ( subscrpt_renewal_is_migration_blocked( (int) $subscription_id ) ) {
 			subscrpt_write_log( 'Automatic renewal blocked until legacy open orders are reconciled.' );
 			return false;
 		}

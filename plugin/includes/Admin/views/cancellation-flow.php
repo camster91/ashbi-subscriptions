@@ -40,13 +40,9 @@ use SpringDevs\Subscription\Illuminate\Cancellation;
 			<li><?php esc_html_e( 'Choose the reasons they pick from, and when a cancellation takes effect', 'subscription' ); ?></li>
 		</ul>
 		<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
-			<a href="https://docs.wpsubscription.co/en/category/wpsubscription" target="_blank" rel="noopener" class="wpsubs-btn wpsubs-btn--muted wpsubs-btn--sm">
-				<span class="dashicons dashicons-external" aria-hidden="true"></span>
-				<?php esc_html_e( 'View All Documentation', 'subscription' ); ?>
-			</a>
-			<a href="https://wpsubscription.co/contact/" target="_blank" rel="noopener" class="wpsubs-btn wpsubs-btn--muted wpsubs-btn--sm">
+			<a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-subscription-support' ) ); ?>" class="wpsubs-btn wpsubs-btn--muted wpsubs-btn--sm">
 				<span class="dashicons dashicons-editor-help" aria-hidden="true"></span>
-				<?php esc_html_e( 'Get Support', 'subscription' ); ?>
+				<?php esc_html_e( 'Open Local Help', 'subscription' ); ?>
 			</a>
 		</div>
 	</div>

@@ -38,7 +38,8 @@ $check( $subscription_type && ! $subscription_type->show_in_rest, 'Subscription 
 $check( $item_type && ! $item_type->show_in_rest, 'Subscription item records are exposed through core REST.' );
 
 $ajax          = new Ajax();
-$subscriber_id = wp_insert_user(
+$subscriber    = get_user_by( 'login', 'ashbi-boundary-subscriber' );
+$subscriber_id = $subscriber ? $subscriber->ID : wp_insert_user(
 	array(
 		'user_login' => 'ashbi-boundary-subscriber',
 		'user_email' => 'ashbi-boundary-subscriber@example.test',
@@ -58,7 +59,8 @@ $check( $ajax->can_manage_dependency( 'install_plugins', 'subscrpt_install_wooco
 $check( $ajax->can_manage_dependency( 'activate_plugins', 'subscrpt_activate_woocommerce_plugin', $activate_nonce ), 'Administrator failed valid activation authorization.' );
 $check( ! $ajax->can_manage_dependency( 'install_plugins', 'subscrpt_install_woocommerce_plugin', 'invalid' ), 'Invalid dependency nonce was accepted.' );
 
-$customer_id = wp_insert_user(
+$customer    = get_user_by( 'login', 'ashbi-existing-customer' );
+$customer_id = $customer ? $customer->ID : wp_insert_user(
 	array(
 		'user_login' => 'ashbi-existing-customer',
 		'user_email' => 'ashbi-existing-customer@example.test',
@@ -137,6 +139,24 @@ $check( subscrpt_finalize_split_payment_completion( $subscription_id ), 'Final i
 $check( 'completed' === get_post_status( $subscription_id ), 'Final installment did not persist completed status.' );
 $check( ! get_post_meta( $subscription_id, '_subscrpt_next_date', true ), 'Final installment retained a next-payment date.' );
 $check( (bool) get_post_meta( $subscription_id, '_subscrpt_split_payment_completed_fired', true ), 'Final installment callback marker was not persisted.' );
+
+$unaffected_subscription_id = wp_insert_post(
+	array(
+		'post_type'   => 'subscrpt_order',
+		'post_status' => 'active',
+		'post_author' => (int) $customer_id,
+		'post_title'  => 'Ashbi unaffected migration subscription',
+	)
+);
+$previous_migration_block = get_option( 'subscrpt_renewal_migration_blocked', false );
+update_option( 'subscrpt_renewal_migration_blocked', array( $subscription_id ), false );
+$check( subscrpt_renewal_is_migration_blocked( $subscription_id ), 'Quarantined overdue subscription was not blocked.' );
+$check( ! subscrpt_renewal_is_migration_blocked( $unaffected_subscription_id ), 'Unrelated subscription was blocked by a scoped migration quarantine.' );
+if ( false === $previous_migration_block ) {
+	delete_option( 'subscrpt_renewal_migration_blocked' );
+} else {
+	update_option( 'subscrpt_renewal_migration_blocked', $previous_migration_block, false );
+}
 
 if ( $failures ) {
 	wp_send_json_error( array( 'failures' => $failures ), 500 );

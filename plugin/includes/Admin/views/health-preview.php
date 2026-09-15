@@ -1,13 +1,12 @@
 <?php
 /**
- * Subscription Health page — interactive preview with sample data (shown when Pro is not active).
+ * Subscription Health page — interactive preview when monitoring is unavailable.
  *
  * @package SpringDevs\Subscription\Admin
  */
 
 defined( 'ABSPATH' ) || exit;
 
-$upgrade_url = 'https://wpsubscription.co/?utm_source=plugin&utm_medium=admin&utm_campaign=upgrade_pro';
 $currency    = function_exists( 'get_woocommerce_currency_symbol' ) ? get_woocommerce_currency_symbol() : '$';
 
 $dummy_subs = array(
@@ -46,7 +45,7 @@ $dummy_subs = array(
 	),
 	array(
 		'id'         => 1124,
-		'product'    => 'Pro Content Access',
+		'product'    => 'Premium Content Access',
 		'customer'   => 'David Park',
 		'email'      => 'd.park@example.com',
 		'amount'     => 59.99,
@@ -115,9 +114,7 @@ $issue_badge_map = array(
 		<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#d97706" style="flex-shrink:0;margin-top:1px;" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
 		<p style="margin:0;font-size:13px;color:#92400e;line-height:1.5;">
 			<strong><?php esc_html_e( 'Preview with sample data.', 'subscription' ); ?></strong>
-			<?php esc_html_e( 'This page shows example data to illustrate the feature.', 'subscription' ); ?>
-			<a href="<?php echo esc_url( $upgrade_url ); ?>" target="_blank" rel="noreferrer noopener" style="color:#b45309;font-weight:600;text-decoration:underline;"><?php esc_html_e( 'Upgrade to Pro', 'subscription' ); ?></a>
-			<?php esc_html_e( 'to monitor and recover real subscriptions.', 'subscription' ); ?>
+			<?php esc_html_e( 'Subscription Health is not included in the current build; the values below are illustrative only.', 'subscription' ); ?>
 		</p>
 	</div>
 
@@ -356,8 +353,3 @@ $issue_badge_map = array(
 	</div>
 
 </div>
-
-<?php
-$modal_title = __( 'Unlock Subscription Health', 'subscription' );
-$modal_desc  = __( 'Subscription Health requires WPSubscription Pro. Unlock advanced features, priority support, and more with WPSubscription Pro.', 'subscription' );
-require __DIR__ . '/pro-upgrade-modal.php';

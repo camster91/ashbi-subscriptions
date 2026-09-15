@@ -124,7 +124,6 @@ abstract class AdminCancellationEmail extends WC_Email {
 			'reason'        => $reason,
 			'reported_at'   => date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ) ),
 			'reports_url'   => admin_url( 'admin.php?page=wp-subscription-stats' ),
-			'upgrade_url'   => 'https://wpsubscription.co/?utm_source=plugin&utm_medium=admin&utm_campaign=upgrade_pro',
 			'email'         => $this,
 		);
 	}

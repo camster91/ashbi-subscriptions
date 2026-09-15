@@ -3,7 +3,7 @@
  * Standalone subscription details page view.
  *
  * Rendered by Menu::render_subscription_details_page(). Matches the
- * WPSubscription admin design system (wpsubs-* components + :root tokens).
+ * Ashbi Subscriptions admin design system (wpsubs-* compatibility classes + :root tokens).
  *
  * @package SpringDevs\Subscription\Admin
  *
@@ -601,7 +601,7 @@ $subscrpt_details_ctx = array(
 						/**
 						 * Fires inside the subscription details activities card.
 						 *
-						 * The Pro plugin renders the activity table here.
+						 * An optional extension may render the activity table here.
 						 *
 						 * @param int $subscription_id Subscription post ID.
 						 */
@@ -609,7 +609,7 @@ $subscrpt_details_ctx = array(
 						?>
 					</div>
 					<?php
-					// Activities pager. Total pages are unknown at render time (Pro
+					// Activities pager. Total pages are unknown at render time (an extension
 					// injects the rows); WPSubsPager recomputes on init via render().
 					wpsubs_render_pager(
 						array(
@@ -630,12 +630,9 @@ $subscrpt_details_ctx = array(
 					<div class="subscrpt-card__body">
 						<div class="subscrpt-upgrade-banner">
 							<div>
-								<strong><?php esc_html_e( 'Upgrade to WPSubscription Pro', 'subscription' ); ?></strong>
-								<p><?php esc_html_e( 'Track subscription activity history, automation, and more.', 'subscription' ); ?></p>
+								<strong><?php esc_html_e( 'Activity history is unavailable', 'subscription' ); ?></strong>
+								<p><?php esc_html_e( 'This optional feature is not included in the current build.', 'subscription' ); ?></p>
 							</div>
-							<a href="https://wpsubscription.co/?utm_source=plugin&utm_medium=admin&utm_campaign=upgrade_pro" target="_blank" class="wpsubs-btn wpsubs-btn--primary wpsubs-btn--sm" rel="noreferrer noopener">
-								<?php esc_html_e( 'Upgrade to Pro', 'subscription' ); ?>
-							</a>
 						</div>
 					</div>
 				<?php endif; ?>

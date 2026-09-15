@@ -9,7 +9,7 @@ import ProBadge from "./ProBadge";
 export default function BuildCards({ cards }) {
   return (
     <section className="subscrpt-build">
-      <h2 className="subscrpt-heading">{__("Build with WPSubscription", "subscription")}</h2>
+      <h2 className="subscrpt-heading">{__("Build with Ashbi Subscriptions", "subscription")}</h2>
       <p className="subscrpt-sub">{__("Everything you need to grow recurring revenue.", "subscription")}</p>
 
       <div className="subscrpt-build__grid">
@@ -26,7 +26,7 @@ export default function BuildCards({ cards }) {
             </span>
             <span className="subscrpt-build__eyebrow">
               {card.eyebrow}
-              {/* A real space, so the card's name reads "Insight Pro" and not "InsightPro". */}
+              {/* Keep the availability marker visually separated from the label. */}
               {card.pro && " "}
               {card.pro && <ProBadge />}
             </span>

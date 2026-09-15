@@ -14,9 +14,13 @@ export default function FooterLinks({ links }) {
               ·
             </span>
           )}
-          <a href={link.url} target="_blank" rel="noreferrer noopener">
+          <a
+            href={link.url}
+            target={link.external ? "_blank" : undefined}
+            rel={link.external ? "noreferrer noopener" : undefined}
+          >
             {link.label}
-            <Icon name="external" size={11} />
+            {link.external ? <Icon name="external" size={11} /> : null}
           </a>
         </span>
       ))}

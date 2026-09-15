@@ -1,6 +1,7 @@
 <?php
 
 use PHPUnit\Framework\TestCase;
+use SpringDevs\Subscription\Illuminate\Gateways\Stripe\RenewalPaymentTerminalException;
 use SpringDevs\Subscription\Illuminate\Gateways\Stripe\Stripe;
 
 if ( ! class_exists( 'WC_Stripe_Payment_Gateway' ) ) {
@@ -78,6 +79,34 @@ final class StripeRenewalIdempotencyTest extends TestCase {
 		$this->assertSame(
 			'gateway-key',
 			$this->gateway->renewal_idempotency_key( 'gateway-key', array( 'amount' => 2500 ) )
+		);
+	}
+
+	public function test_uncertain_pending_exception_is_retried_without_becoming_terminal(): void {
+		$this->assertSame(
+			Stripe::RENEWAL_EXCEPTION_RETRY,
+			Stripe::classify_renewal_exception( new WC_Stripe_Exception( 'transport timeout' ), true, false )
+		);
+	}
+
+	public function test_local_reconciliation_exception_is_terminal(): void {
+		$this->assertSame(
+			Stripe::RENEWAL_EXCEPTION_TERMINAL,
+			Stripe::classify_renewal_exception( new RenewalPaymentTerminalException( 'identity mismatch' ), true, false )
+		);
+	}
+
+	public function test_explicit_gateway_decline_is_terminal(): void {
+		$this->assertSame(
+			Stripe::RENEWAL_EXCEPTION_TERMINAL,
+			Stripe::classify_renewal_exception( new WC_Stripe_Exception( 'card declined' ), true, true )
+		);
+	}
+
+	public function test_pre_dispatch_exception_uses_the_ordinary_order_failure_path(): void {
+		$this->assertSame(
+			Stripe::RENEWAL_EXCEPTION_ORDER_FAILURE,
+			Stripe::classify_renewal_exception( new WC_Stripe_Exception( 'minimum amount' ), false, false )
 		);
 	}
 }

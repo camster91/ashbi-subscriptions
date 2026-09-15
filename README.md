@@ -1,7 +1,7 @@
 # Ashbi Subscriptions
 
-A client-run WooCommerce subscriptions plugin based only on the GPL-licensed
-WordPress.org release of `subscription` (WPSubscription free). The initial
+A free, open-source WooCommerce subscriptions plugin based only on the pinned,
+GPL-licensed WordPress.org source identified in the legal provenance record. The initial
 commercial policy is a $0 plugin license for everyone. Installation,
 migration, support, monitoring, and managed updates may be offered separately.
 
@@ -18,7 +18,7 @@ release gates.
 ## Non-negotiable boundaries
 
 - Import only the public WordPress.org GPL package and its compatible dependencies.
-- Do not import, decompile, copy, or depend on WPSubscription Pro code or license keys.
+- Do not import, decompile, copy, or depend on proprietary add-on code or license keys.
 - Preserve upstream copyright and license notices.
 - Replace upstream trademarks, logos, screenshots, upgrade links, and vendor-specific copy.
 - Keep distributed derivative code GPL-2.0-or-later.

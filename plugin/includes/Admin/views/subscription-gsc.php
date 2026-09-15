@@ -188,7 +188,7 @@ if ( 'none' !== $has_subscrpt_product && ! empty( $has_subscrpt_product ) ) {
 <div class="subscrpt-gsc" id="subscrpt-gsc-card">
 	<button type="button" class="subscrpt-gsc__dismiss" aria-label="<?php esc_attr_e( 'Dismiss', 'subscription' ); ?>" onclick="document.getElementById('subscrpt-gsc-card').style.display='none';">&times;</button>
 
-	<h2 class="subscrpt-gsc__heading"><?php esc_html_e( 'Welcome to WPSubscription', 'subscription' ); ?></h2>
+	<h2 class="subscrpt-gsc__heading"><?php esc_html_e( 'Welcome to Ashbi Subscriptions', 'subscription' ); ?></h2>
 	<p class="subscrpt-gsc__desc"><?php esc_html_e( "You're three short steps from your first recurring product. We'll walk you through creating it, setting the billing cadence, and going live.", 'subscription' ); ?></p>
 
 	<div class="subscrpt-gsc__steps">

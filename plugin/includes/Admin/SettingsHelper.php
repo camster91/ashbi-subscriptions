@@ -308,12 +308,12 @@ class SettingsHelper {
 	}
 
 	/**
-	 * Pro badge markup, shown beside settings that require WPSubscription Pro.
+	 * Unavailable-feature badge markup.
 	 *
 	 * @return string Pre-escaped badge HTML.
 	 */
 	public static function pro_badge_html() {
-		return '<span class="subscrpt-pro-badge" title="' . esc_attr__( 'WPSubscription Pro required', 'subscription' ) . '">' . esc_html__( 'Pro', 'subscription' ) . '</span>';
+		return '<span class="subscrpt-pro-badge" title="' . esc_attr__( 'Not included in this build', 'subscription' ) . '">' . esc_html__( 'Unavailable', 'subscription' ) . '</span>';
 	}
 
 

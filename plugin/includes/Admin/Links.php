@@ -1,4 +1,9 @@
 <?php
+/**
+ * Plugin action links.
+ *
+ * @package SpringDevs\Subscription\Admin
+ */
 
 namespace SpringDevs\Subscription\Admin;
 
@@ -26,11 +31,7 @@ class Links {
 	public function plugin_action_links( $links ) {
 		$getting_started_url = admin_url( 'admin.php?page=wp-subscription-onboarding' );
 		array_unshift( $links, '<a href="' . esc_url( $getting_started_url ) . '">' . __( 'Getting Started', 'subscription' ) . '</a>' );
-		if ( ! subscrpt_pro_activated() ) {
-			$links[] = '<a href="https://wpsubscription.co/?utm_source=plugin&utm_medium=admin&utm_campaign=upgrade_pro" target="_blank" style="color:#3db634;">' . __( 'Upgrade to premium', 'subscription' ) . '</a>';
-		}
-		$links[] = '<a href="https://wordpress.org/support/plugin/subscription" target="_blank">' . __( 'Support', 'subscription' ) . '</a>';
-		$links[] = '<a href="https://wordpress.org/support/plugin/subscription/reviews/" target="_blank">' . __( 'Review', 'subscription' ) . '</a>';
+		$links[] = '<a href="' . esc_url( admin_url( 'admin.php?page=wp-subscription-support' ) ) . '">' . __( 'Help', 'subscription' ) . '</a>';
 		return $links;
 	}
 }

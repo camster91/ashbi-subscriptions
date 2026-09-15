@@ -30,7 +30,7 @@ class Integrations {
 		// Admin menu (sidebar).
 		add_action( 'admin_menu', array( $this, 'register_admin_menu' ), 20 );
 
-		// WPSubscription navbar.
+		// Ashbi Subscriptions navbar.
 		add_filter( 'subscrpt_admin_header_menu_items', [ $this, 'add_integrations_menu_item' ], 10, 2 );
 
 		// Enqueue integrations scripts.
@@ -67,7 +67,7 @@ class Integrations {
 	}
 
 	/**
-	 * Add Integrations link to the WPSubscription admin header menu.
+	 * Add Integrations link to the Ashbi Subscriptions admin header menu.
 	 *
 	 * @param array  $menu_items Array of menu items.
 	 * @param string $current Current active menu item slug.
@@ -324,8 +324,8 @@ class Integrations {
 					],
 					[
 						'label' => 'More Details',
-						'type'  => 'external_link',
-						'url'   => 'https://docs.wpsubscription.co/en/wpsubscription-payment-with-mollie?utm_source=plugin&utm_medium=admin&utm_campaign=docs',
+						'type'  => 'link',
+						'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
 					],
 				],
 			],
@@ -354,8 +354,8 @@ class Integrations {
 					],
 					[
 						'label' => 'More Details',
-						'type'  => 'external_link',
-						'url'   => 'https://docs.wpsubscription.co/en/wpsubscription-payment-with-razorpay?utm_source=plugin&utm_medium=admin&utm_campaign=docs',
+						'type'  => 'link',
+						'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
 					],
 				],
 			],
@@ -384,8 +384,8 @@ class Integrations {
 					],
 					[
 						'label' => 'More Details',
-						'type'  => 'external_link',
-						'url'   => 'https://docs.wpsubscription.co/en/wpsubscription-payment-with-xendit?utm_source=plugin&utm_medium=admin&utm_campaign=docs',
+						'type'  => 'link',
+						'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
 					],
 				],
 			],
@@ -412,8 +412,8 @@ class Integrations {
 					],
 					[
 						'label' => __( 'Learn More', 'subscription' ),
-						'type'  => 'external_link',
-						'url'   => 'https://docs.wpsubscription.co/en/wpsubscription-tutor-lms?utm_source=plugin&utm_medium=admin&utm_campaign=docs',
+						'type'  => 'link',
+						'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
 					],
 				],
 			],
@@ -435,8 +435,8 @@ class Integrations {
 					],
 					[
 						'label' => __( 'Learn More', 'subscription' ),
-						'type'  => 'external_link',
-						'url'   => 'https://docs.wpsubscription.co/en/wpsubscription-learnpress-lms?utm_source=plugin&utm_medium=admin&utm_campaign=docs',
+						'type'  => 'link',
+						'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
 					],
 				],
 			],
@@ -458,8 +458,8 @@ class Integrations {
 					],
 					[
 						'label' => __( 'Learn More', 'subscription' ),
-						'type'  => 'external_link',
-						'url'   => 'https://docs.wpsubscription.co/en/wpsubscription-learndash-lms?utm_source=plugin&utm_medium=admin&utm_campaign=docs',
+						'type'  => 'link',
+						'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
 					],
 				],
 			],
@@ -482,8 +482,8 @@ class Integrations {
 					],
 					[
 						'label' => __( 'Learn More', 'subscription' ),
-						'type'  => 'external_link',
-						'url'   => 'https://docs.wpsubscription.co/en/wpsubscription-fluent-crm?utm_source=plugin&utm_medium=admin&utm_campaign=docs',
+						'type'  => 'link',
+						'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
 					],
 				],
 			],
@@ -507,7 +507,7 @@ class Integrations {
 					// [
 					// 'label' => __( 'Learn More', 'subscription' ),
 					// 'type'  => 'external_link',
-					// 'url'   => 'https://docs.wpsubscription.co/en/',
+					// 'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
 					// ],
 				],
 			],
@@ -530,7 +530,7 @@ class Integrations {
 					// [
 					// 'label' => __( 'Learn More', 'subscription' ),
 					// 'type'  => 'external_link',
-					// 'url'   => 'https://docs.wpsubscription.co/en/',
+					// 'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
 					// ],
 				],
 			],
@@ -553,8 +553,8 @@ class Integrations {
 					],
 					[
 						'label' => __( 'Learn More', 'subscription' ),
-						'type'  => 'external_link',
-						'url'   => 'https://docs.wpsubscription.co/en/wpsubscription-mailpoet?utm_source=plugin&utm_medium=admin&utm_campaign=docs',
+						'type'  => 'link',
+						'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
 					],
 				],
 			],
@@ -578,7 +578,7 @@ class Integrations {
 					// [
 					// 'label' => __( 'Learn More', 'subscription' ),
 					// 'type'  => 'external_link',
-					// 'url'   => 'https://docs.wpsubscription.co/en/',
+					// 'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
 					// ],
 				],
 			],
@@ -601,7 +601,7 @@ class Integrations {
 					// [
 					// 'label' => __( 'Learn More', 'subscription' ),
 					// 'type'  => 'external_link',
-					// 'url'   => 'https://docs.wpsubscription.co/en/',
+					// 'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
 					// ],
 				],
 			],

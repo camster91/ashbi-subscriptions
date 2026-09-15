@@ -1,13 +1,11 @@
 {
-  "name": "converswp/subscription",
-  "description": "WooCommerce Subscription Management Plugin",
+  "name": "ashbi/subscriptions",
+  "description": "Ashbi Subscriptions for WooCommerce.",
   "type": "wordpress-plugin",
   "license": "GPL-2.0-or-later",
   "authors": [
     {
-      "name": "Convers Labs",
-      "email": "contact@converslabs.com",
-      "homepage": "https://wpsubscription.co"
+      "name": "Ashbi"
     }
   ],
   "minimum-stability": "dev",

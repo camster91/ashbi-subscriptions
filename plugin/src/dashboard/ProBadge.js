@@ -1,8 +1,8 @@
 /**
- * The Pro marker, for a link whose destination needs WPSubscription Pro.
+ * Availability marker for functionality not included in this distribution.
  *
  * The admin's own pill (assets/css/admin-components/badges.css), with the same
- * text and title as on the product screen and in the Plans modals.
+ * Existing CSS classes remain unchanged for compatibility.
  */
 
 import { __ } from "@wordpress/i18n";
@@ -11,9 +11,9 @@ export default function ProBadge() {
   return (
     <span
       className="wpsubs-badge wpsubs-badge--pro subscrpt-pro-badge"
-      title={__("WPSubscription Pro required", "subscription")}
+      title={__("Not included in this build", "subscription")}
     >
-      {__("Pro", "subscription")}
+      {__("Unavailable", "subscription")}
     </span>
   );
 }

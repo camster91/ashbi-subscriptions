@@ -30,7 +30,7 @@ class Menu {
 
 	/**
 	 * Send a first-time user to the onboarding wizard when they open the
-	 * WPSubscription dashboard with no plan created yet.
+	 * Ashbi Subscriptions dashboard with no plan created yet.
 	 *
 	 * This runs on the dashboard visit rather than on activation, so it works
 	 * regardless of when WooCommerce gets installed (the plugin only loads its
@@ -40,7 +40,7 @@ class Menu {
 	 * @return void
 	 */
 	public function maybe_onboarding_redirect() {
-		// Only on the WPSubscription dashboard page.
+		// Only on the Ashbi Subscriptions dashboard page.
 		if ( ! isset( $_GET['page'] ) || 'wp-subscription' !== $_GET['page'] ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- menu navigation, no state change.
 			return;
 		}
@@ -142,23 +142,17 @@ class Menu {
 	 */
 	public function create_admin_menu() {
 		$parent_slug = 'wp-subscription';
-		// Determine if the menu is active
-		$is_active = isset( $_GET['page'] ) && strpos( sanitize_text_field( wp_unslash( $_GET['page'] ) ), 'wp-subscription' ) === 0;
-		$icon_url  = $is_active
-			? SUBSCRPT_ASSETS . '/images/icons/subscription-20.png'
-			: SUBSCRPT_ASSETS . '/images/icons/subscription-20-gray.png';
-
-		$pro_text  = __( 'WPSubscription Pro required', 'subscription' );
+		$pro_text  = __( 'Not included in this build', 'subscription' );
 		$pro_badge = subscrpt_pro_activated() ? '' : ' <span title="' . $pro_text . '"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" style="fill:var(--wpsubs-brand);vertical-align:middle;margin-bottom:2.2px;flex-shrink:0;" aria-hidden="true"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M19 19h-14c-.5 0 -.9 -.3 -1 -.8l-2 -10c0 -.4 .1 -.8 .5 -1.1c.4 -.2 .8 -.2 1.1 0l4.1 3.3l3.4 -5.1c.4 -.6 1.3 -.6 1.7 0l3.4 5.1l4.1 -3.3c.3 -.3 .8 -.3 1.1 0c.4 .2 .5 .6 .5 1.1l-2 10c0 .5 -.5 .8 -1 .8z"/></svg></span>';
 
 		// Main menu
 		add_menu_page(
-			__( 'WPSubscription', 'subscription' ),
-			__( 'WPSubscription', 'subscription' ),
+			__( 'Ashbi Subscriptions', 'subscription' ),
+			__( 'Ashbi Subscriptions', 'subscription' ),
 			'manage_options',
 			$parent_slug,
 			array( $this, 'render_dashboard_page' ),
-			$icon_url,
+			'dashicons-update-alt',
 			40
 		);
 
@@ -267,10 +261,10 @@ class Menu {
 	}
 
 	/**
-	 * Reorder the WPSubscription submenu after all items are registered.
+	 * Reorder the Ashbi Subscriptions submenu after all items are registered.
 	 *
 	 * Runs at admin_menu priority 999 so every plugin has already inserted
-	 * its items. A filter lets the Pro plugin (or any extension) adjust the
+	 * its items. A filter lets an optional extension adjust the
 	 * slug order before sorting is applied.
 	 *
 	 * @do_action subscrpt_submenu_order {string[]} $order Ordered list of submenu page slugs.
@@ -303,7 +297,7 @@ class Menu {
 		];
 
 		/**
-		 * Filter the WPSubscription submenu slug order.
+		 * Filter the Ashbi Subscriptions submenu slug order.
 		 *
 		 * Each entry is a slug => integer position pair. Lower positions appear
 		 * first. Use gaps of 10 between built-in positions so extensions can
@@ -351,12 +345,7 @@ class Menu {
 	public function render_admin_footer() {
 		?>
 		<div style="text-align:center;margin:38px 0 0 0;font-size:14px;color:#888;">
-			Made with <span style="color:#e25555;font-size:1.1em;">♥</span> by the WPSubscription Team
-			<div style="margin-top:6px;">
-				<a href="https://wpsubscription.co/contact?utm_source=plugin&utm_medium=admin&utm_campaign=support" target="_blank" style="color:#2563eb;text-decoration:none;">Support</a>
-				&nbsp;/&nbsp;
-				<a href="https://docs.wpsubscription.co/en?utm_source=plugin&utm_medium=admin&utm_campaign=docs" target="_blank" style="color:#2563eb;text-decoration:none;">Docs</a>
-			</div>
+			<?php esc_html_e( 'Ashbi Subscriptions', 'subscription' ); ?>
 		</div>
 		<?php
 	}
@@ -413,7 +402,7 @@ class Menu {
 			<div class="wp-subscription-admin-header-inner">
 			<div class="wp-subscription-admin-header-left">
 				<nav class="wp-subscription-breadcrumb" aria-label="<?php esc_attr_e( 'Breadcrumb', 'subscription' ); ?>">
-					<a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-subscription' ) ); ?>" class="wp-subscription-breadcrumb-home" aria-label="<?php esc_attr_e( 'WPSubscription Home', 'subscription' ); ?>">
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-subscription' ) ); ?>" class="wp-subscription-breadcrumb-home" aria-label="<?php esc_attr_e( 'Ashbi Subscriptions Home', 'subscription' ); ?>">
 						<span class="dashicons dashicons-admin-home"></span>
 					</a>
 					<?php foreach ( $trail as $index => $crumb ) : ?>
@@ -429,45 +418,11 @@ class Menu {
 			</div>
 			<div class="wp-subscription-admin-header-right">
 				<?php
-				/**
-				 * Filters the pro licence state shown in the admin header.
-				 *
-				 * This plugin cannot ask the pro plugin directly — it runs alone
-				 * on nearly every install, so naming a symbol pro declares would
-				 * fatal there. Pro answers this filter when it is present; when
-				 * it is not, the value stays null and no badge is rendered.
-				 *
-				 * @since 1.11.3
-				 *
-				 * @param array|null $license {
-				 *     Licence state, or null when pro is not installed.
-				 *
-				 *     @type bool   $active Whether the licence is valid.
-				 *     @type string $url    Admin URL of the licence page.
-				 * }
-				 */
-				$license = apply_filters( 'subscrpt_admin_header_license', null );
-
-				// Only the "Activate license" badge is shown; the "License active"
-				// badge is intentionally hidden from the header.
-				if ( is_array( $license ) && isset( $license['active'] ) && ! $license['active'] ) :
-					$license_url = isset( $license['url'] ) ? (string) $license['url'] : '';
-					?>
-					<a href="<?php echo esc_url( $license_url ); ?>" class="wpsubs-badge wpsubs-badge--warning wp-subscription-license-badge">
-						<span class="wpsubs-badge__dot"></span>
-						<?php esc_html_e( 'Activate license', 'subscription' ); ?>
-					</a>
-					<?php
-				endif;
+				// Preserve the extension hook while intentionally suppressing its
+				// upstream license/account call to action in this distribution.
+				apply_filters( 'subscrpt_admin_header_license', null );
 				?>
-
-				<?php if ( ! class_exists( 'Sdevs_Wc_Subscription_Pro' ) ) : ?>
-					<a target="_blank" href="https://wpsubscription.co/?utm_source=plugin&utm_medium=admin&utm_campaign=upgrade_pro" class="wpsubs-btn wpsubs-btn--primary wpsubs-btn--sm" rel="noreferrer noopener">
-						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex-shrink:0;"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M19 19h-14c-.5 0 -.9 -.3 -1 -.8l-2 -10c0 -.4 .1 -.8 .5 -1.1c.4 -.2 .8 -.2 1.1 0l4.1 3.3l3.4 -5.1c.4 -.6 1.3 -.6 1.7 0l3.4 5.1l4.1 -3.3c.3 -.3 .8 -.3 1.1 0c.4 .2 .5 .6 .5 1.1l-2 10c0 .5 -.5 .8 -1 .8z"/></svg>
-						<?php esc_html_e( 'Upgrade to Pro', 'subscription' ); ?>
-					</a>
-				<?php endif; ?>
-<img src="<?php echo esc_url( SUBSCRPT_ASSETS . '/images/logo-title.svg' ); ?>" alt="WPSubscription" class="wp-subscription-logo">
+				<span class="wp-subscription-logo" style="font-weight:600;line-height:22px;white-space:nowrap;"><?php esc_html_e( 'Ashbi Subscriptions', 'subscription' ); ?></span>
 			</div>
 			</div>
 		</div>
@@ -723,12 +678,7 @@ class Menu {
 		include __DIR__ . '/views/subscription-list.php';
 		?>
 		<div style="text-align:center;margin:38px 0 0 0;font-size:14px;color:#888;">
-			Made with <span style="color:#e25555;font-size:1.1em;">♥</span> by the WPSubscription Team
-			<div style="margin-top:6px;">
-				<a href="https://wpsubscription.co/contact?utm_source=plugin&utm_medium=admin&utm_campaign=support" target="_blank" style="color:#2563eb;text-decoration:none;">Support</a>
-				&nbsp;/&nbsp;
-				<a href="https://docs.wpsubscription.co/en?utm_source=plugin&utm_medium=admin&utm_campaign=docs" target="_blank" style="color:#2563eb;text-decoration:none;">Docs</a>
-			</div>
+			<?php esc_html_e( 'Ashbi Subscriptions', 'subscription' ); ?>
 		</div>
 		<?php
 	}
@@ -894,7 +844,7 @@ class Menu {
 	 * Render Support page
 	 */
 	public function render_support_page() {
-		$this->render_admin_header( __( 'Help & Resources', 'subscription' ), __( 'Documentation, community links, and ways to get help with WPSubscription.', 'subscription' ) );
+		$this->render_admin_header( __( 'Help & Resources', 'subscription' ), __( 'Local guidance for operating Ashbi Subscriptions.', 'subscription' ) );
 		include 'views/support.php';
 		$this->render_admin_footer();
 	}

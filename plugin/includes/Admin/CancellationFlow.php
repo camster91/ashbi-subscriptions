@@ -61,7 +61,7 @@ class CancellationFlow {
 	}
 
 	/**
-	 * Register the Cancellation Flow submenu under the WPSubscription top menu.
+	 * Register the Cancellation Flow submenu under the Ashbi Subscriptions top menu.
 	 *
 	 * @return void
 	 */
@@ -77,7 +77,7 @@ class CancellationFlow {
 	}
 
 	/**
-	 * Position the item within the WPSubscription submenu order.
+	 * Position the item within the Ashbi Subscriptions submenu order.
 	 *
 	 * @param array $order Ordered slug => position map.
 	 * @return array

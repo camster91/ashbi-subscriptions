@@ -657,7 +657,7 @@ class Order {
 	 * @param string $reason Safe operational reason.
 	 * @return void
 	 */
-	private function defer_renewal_activation( int $subscription_id, int $order_id, string $reason ): void {
+	protected function defer_renewal_activation( int $subscription_id, int $order_id, string $reason ): void {
 		subscrpt_write_log( "Could not complete renewal activation for subscription #{$subscription_id}, order #{$order_id}: {$reason}" );
 		RenewalClaim::mark_schedule_pending( $subscription_id, $order_id, $reason );
 		$this->schedule_renewal_retry( $subscription_id, $order_id );
@@ -847,10 +847,31 @@ class Order {
 			return;
 		}
 
-		foreach ( (array) Helper::get_subscriptions_from_order( $order_id ) as $history ) {
-			if ( 'renew' === ( $history->type ?? '' ) && RenewalClaim::is_claimed_order( (int) $history->subscription_id, (int) $order_id ) ) {
+		foreach ( $this->renewal_histories_for_order( (int) $order_id ) as $history ) {
+			if ( 'renew' === ( $history->type ?? '' ) && $this->is_claimed_renewal_order( (int) $history->subscription_id, (int) $order_id ) ) {
 				$this->defer_renewal_activation( (int) $history->subscription_id, (int) $order_id, 'Queued trial-order completion did not persist.' );
 			}
 		}
+	}
+
+	/**
+	 * Load renewal relations for trial-worker reconciliation.
+	 *
+	 * @param int $order_id WooCommerce order ID.
+	 * @return array
+	 */
+	protected function renewal_histories_for_order( int $order_id ): array {
+		return (array) Helper::get_subscriptions_from_order( $order_id );
+	}
+
+	/**
+	 * Check whether the renewal relation owns the canonical period claim.
+	 *
+	 * @param int $subscription_id Subscription ID.
+	 * @param int $order_id WooCommerce order ID.
+	 * @return bool
+	 */
+	protected function is_claimed_renewal_order( int $subscription_id, int $order_id ): bool {
+		return RenewalClaim::is_claimed_order( $subscription_id, $order_id );
 	}
 }

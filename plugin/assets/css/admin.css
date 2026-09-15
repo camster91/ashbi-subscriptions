@@ -340,7 +340,7 @@ a.wp-subscription-license-badge:focus {
   }
 }
 
-/* Remove left padding on WPSubscription admin pages only */
+/* Remove left padding on Ashbi Subscriptions admin pages only */
 body.toplevel_page_wp-subscription #wpcontent,
 body[class*="wpsubscription_page_wp-subscription"] #wpcontent {
   padding-left: 0 !important;

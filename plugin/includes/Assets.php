@@ -239,7 +239,7 @@ class Assets {
 	}
 
 	/**
-	 * Enqueue admin component styles on all WPSubscription admin pages.
+	 * Enqueue admin component styles on all Ashbi Subscriptions admin pages.
 	 *
 	 * @param string $hook The current admin page hook.
 	 */

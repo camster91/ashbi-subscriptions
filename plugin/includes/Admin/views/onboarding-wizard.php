@@ -29,7 +29,7 @@ $has_products = (bool) wc_get_products(
 );
 
 // Plan types. Only "recurring" is available on the free plugin; the others are
-// shown Pro-locked so the choice is visible but not selectable without Pro.
+// shown as unavailable so the choice is visible but cannot be selected here.
 $plan_types = array(
 	array(
 		'key'   => 'recurring',
@@ -144,8 +144,7 @@ $subscrpt_icon_plan = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 			<div class="wpsubs-wizard-section active" data-page="0" id="subscrpt-section-0">
 				<div class="wpsubs-welcome-bg" aria-hidden="true"></div>
 				<div class="wpsubs-wizard-card wpsubs-welcome">
-					<img class="wpsubs-welcome__logo" src="<?php echo esc_url( SUBSCRPT_ASSETS . '/images/logo.png' ); ?>" width="64" height="64" alt="<?php esc_attr_e( 'WPSubscription', 'subscription' ); ?>">
-					<h1 class="wpsubs-welcome__title"><?php esc_html_e( 'Thank you for installing WPSubscription!', 'subscription' ); ?></h1>
+					<h1 class="wpsubs-welcome__title"><?php esc_html_e( 'Thank you for installing Ashbi Subscriptions!', 'subscription' ); ?></h1>
 					<p class="wpsubs-welcome__lead"><?php esc_html_e( "Let's set up your first subscription plan. A plan decides how customers are billed and connects to a product they can subscribe to.", 'subscription' ); ?></p>
 					<ul class="wpsubs-welcome__steps">
 						<li><span class="wpsubs-welcome__num">1</span><?php esc_html_e( 'Create a plan and choose how customers are billed', 'subscription' ); ?></li>
@@ -185,7 +184,7 @@ $subscrpt_icon_plan = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 										<p class="wpsubs-p2-option-card__title">
 											<?php echo esc_html( $subscrpt_type['label'] ); ?>
 											<?php if ( $subscrpt_locked ) : ?>
-												<span class="wpsubs-p2-pro-badge" title="<?php esc_attr_e( 'WPSubscription Pro required', 'subscription' ); ?>"><?php esc_html_e( 'Pro', 'subscription' ); ?></span>
+												<span class="wpsubs-p2-pro-badge" title="<?php esc_attr_e( 'Not included in this build', 'subscription' ); ?>"><?php esc_html_e( 'Unavailable', 'subscription' ); ?></span>
 											<?php endif; ?>
 										</p>
 										<p class="wpsubs-p2-option-card__desc"><?php echo esc_html( $subscrpt_type['desc'] ); ?></p>
@@ -230,7 +229,7 @@ $subscrpt_icon_plan = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 									<label><?php esc_html_e( 'Billing every', 'subscription' ); ?></label>
 									<div class="wpsubs-p2-billing-group">
 										<input type="number" class="wpsubs-input wpsubs-p2-billing-per-input" autocomplete="off" min="1" value="1" data-dur-freq
-											<?php echo $is_pro ? '' : 'readonly max="1" title="' . esc_attr__( 'Upgrade to Pro to bill every few periods.', 'subscription' ) . '"'; ?>>
+											<?php echo $is_pro ? '' : 'readonly max="1" title="' . esc_attr__( 'This billing option is not included in the current build.', 'subscription' ) . '"'; ?>>
 <?php
 								wpsubs_render_adv_select(
 									array(
@@ -456,10 +455,8 @@ $subscrpt_icon_plan = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 						</div>
 
 						<p class="wpsubs-p3-help-text">
-							<?php esc_html_e( 'Need help? Check the', 'subscription' ); ?>
-							<a href="https://docs.wpsubscription.co/en?utm_source=plugin&utm_medium=admin&utm_campaign=docs" target="_blank" rel="noopener" class="wpsubs-p3-help-link"><?php esc_html_e( 'setup guide', 'subscription' ); ?></a>
-							<?php esc_html_e( 'or', 'subscription' ); ?>
-							<a href="https://wordpress.org/support/plugin/subscription/" target="_blank" rel="noopener" class="wpsubs-p3-help-link"><?php esc_html_e( 'contact support', 'subscription' ); ?></a>.
+							<?php esc_html_e( 'Need help?', 'subscription' ); ?>
+							<a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-subscription-support' ) ); ?>" class="wpsubs-p3-help-link"><?php esc_html_e( 'Open the local help page', 'subscription' ); ?></a>.
 						</p>
 					</div>
 				</div>

@@ -216,7 +216,7 @@ class Dashboard {
 				: number_format_i18n( $total, 2 ),
 			'empty'   => $total <= 0,
 			'url'     => admin_url( 'admin.php?page=wp-subscription-stats' ),
-			// Without pro, Reports is a preview of the Pro screen; the link says so.
+			// Mark preview-only reporting as unavailable in this distribution.
 			'pro'     => ! subscrpt_pro_activated(),
 		);
 	}
@@ -417,12 +417,11 @@ class Dashboard {
 					'tone'    => 'extend',
 					'icon'    => 'shield',
 					'eyebrow' => __( 'Extend', 'subscription' ),
-					'title'   => __( 'WPSubscription Pro', 'subscription' ),
-					'text'    => __( 'Payment retries, a health queue and revenue reporting.', 'subscription' ),
+					'title'   => __( 'Additional operations tools', 'subscription' ),
+					'text'    => __( 'This optional feature set is not included in the current build.', 'subscription' ),
 					'link'    => array(
-						'label'    => __( 'See what Pro adds', 'subscription' ),
-						'url'      => 'https://wpsubscription.co/?utm_source=plugin&utm_medium=admin&utm_campaign=dashboard',
-						'external' => true,
+						'label' => __( 'Read local guidance', 'subscription' ),
+						'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
 					),
 				),
 		);
@@ -436,16 +435,8 @@ class Dashboard {
 	private function get_footer_links(): array {
 		return array(
 			array(
-				'label' => __( 'Documentation', 'subscription' ),
-				'url'   => 'https://docs.wpsubscription.co/en?utm_source=plugin&utm_medium=admin&utm_campaign=dashboard',
-			),
-			array(
-				'label' => __( 'Get support', 'subscription' ),
-				'url'   => 'https://wpsubscription.co/contact?utm_source=plugin&utm_medium=admin&utm_campaign=dashboard',
-			),
-			array(
-				'label' => __( 'My account', 'subscription' ),
-				'url'   => 'https://my.wpsubscription.co/?utm_source=plugin&utm_medium=admin&utm_campaign=dashboard',
+				'label' => __( 'Help', 'subscription' ),
+				'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
 			),
 		);
 	}

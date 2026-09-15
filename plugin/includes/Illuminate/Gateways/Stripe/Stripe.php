@@ -24,6 +24,9 @@ class RenewalPaymentTerminalException extends \WC_Stripe_Exception {}
  * @package SpringDevs\SubscriptionPro\Illuminate
  */
 class Stripe extends \WC_Stripe_Payment_Gateway {
+	public const RENEWAL_EXCEPTION_TERMINAL = 'terminal';
+	public const RENEWAL_EXCEPTION_RETRY = 'retry';
+	public const RENEWAL_EXCEPTION_ORDER_FAILURE = 'order_failure';
 
 	/**
 	 * Subscriptions supported Stripe payment methods.
@@ -39,7 +42,7 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 	 * Initialize the class
 	 */
 	public function __construct() {
-		// Hook into WPSubscription renewal events
+		// Hook into Ashbi Subscriptions renewal events.
 		add_action( 'subscrpt_after_create_renew_order', array( $this, 'after_create_renew_order' ), 10, 3 );
 		add_filter( 'subscrpt_before_saving_renewal_order', array( $this, 'copy_stripe_metadata' ), 10, 3 );
 
@@ -267,9 +270,7 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 			$order_locked = false;
 
 		} catch ( \WC_Stripe_Exception $e ) {
-			if ( $e instanceof RenewalPaymentTerminalException ) {
-				$deterministic_failure = true;
-			}
+			$disposition = self::classify_renewal_exception( $e, $payment_pending, $deterministic_failure );
 			\WC_Stripe_Logger::error( 'Error: ' . $e->getMessage() );
 
 			$log_message = "Error processing renewal order #{$renewal_order->get_id()}: " . $e->getMessage();
@@ -280,22 +281,44 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 				$stripe_order_helper->unlock_order_payment( $renewal_order );
 			}
 
-			if ( $payment_pending ) {
-				if ( $deterministic_failure ) {
+			if ( self::RENEWAL_EXCEPTION_TERMINAL === $disposition ) {
 					RenewalClaim::mark_payment_failed( $subscription_id, (int) $renewal_order->get_id(), $e->getMessage() );
 					do_action( 'wc_gateway_stripe_process_payment_error', $e, $renewal_order );
 					$this->trigger_renewal_payment_failed( $renewal_order );
-				} else {
+			} elseif ( self::RENEWAL_EXCEPTION_RETRY === $disposition ) {
 					// Transport/retrieval exceptions have an uncertain remote outcome. Keep
 					// the durable phase pending and reconcile the frozen identity before a
 					// retry. The stable idempotency key prevents a second intent.
 					$this->schedule_renewal_payment_retry( $subscription_id, (int) $renewal_order->get_id() );
-				}
 			} else {
 				do_action( 'wc_gateway_stripe_process_payment_error', $e, $renewal_order );
 				$this->trigger_renewal_payment_failed( $renewal_order );
 			}
 		}
+	}
+
+	/**
+	 * Classify a caught Stripe renewal exception without producing side effects.
+	 *
+	 * A pending dispatch with an uncertain remote outcome must remain replayable.
+	 * Deterministic reconciliation failures stop automated retries, while errors
+	 * raised before durable dispatch use the gateway's ordinary failure path.
+	 *
+	 * @param \WC_Stripe_Exception $exception Caught gateway exception.
+	 * @param bool                 $payment_pending Whether durable dispatch began.
+	 * @param bool                 $deterministic_failure Explicit terminal result.
+	 * @return string One of the RENEWAL_EXCEPTION_* constants.
+	 */
+	public static function classify_renewal_exception( $exception, bool $payment_pending, bool $deterministic_failure ): string {
+		if ( ! $payment_pending ) {
+			return self::RENEWAL_EXCEPTION_ORDER_FAILURE;
+		}
+
+		if ( $deterministic_failure || $exception instanceof RenewalPaymentTerminalException ) {
+			return self::RENEWAL_EXCEPTION_TERMINAL;
+		}
+
+		return self::RENEWAL_EXCEPTION_RETRY;
 	}
 
 	/**

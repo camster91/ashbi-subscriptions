@@ -30,6 +30,12 @@ if ( ! function_exists( 'as_has_scheduled_action' ) ) {
 	}
 }
 
+if ( ! function_exists( '__' ) ) {
+	function __( $text, $domain = 'default' ) {
+		return $text;
+	}
+}
+
 require_once dirname( __DIR__, 2 ) . '/plugin/includes/Illuminate/Action.php';
 require_once dirname( __DIR__, 2 ) . '/plugin/includes/Illuminate/Order.php';
 
@@ -46,6 +52,44 @@ final class ActivationDurabilityOrderFake {
 
 	public function get_items(): array {
 		return array( new ActivationDurabilityItemFake() );
+	}
+}
+
+final class ActivationDurabilityTrialWorkerOrderFake {
+	private bool $persists;
+	private string $status = 'processing';
+
+	public function __construct( bool $persists ) {
+		$this->persists = $persists;
+	}
+
+	public function update_status( $status, $note ): void {
+		if ( $this->persists ) {
+			$this->status = $status;
+		}
+	}
+
+	public function has_status( $status ): bool {
+		return $this->status === $status;
+	}
+}
+
+final class ActivationDurabilityOrderServiceFake extends SubscriptionOrder {
+	public array $deferred = array();
+
+	public function __construct() {
+	}
+
+	protected function renewal_histories_for_order( int $order_id ): array {
+		return array( (object) array( 'subscription_id' => 7, 'type' => 'renew' ) );
+	}
+
+	protected function is_claimed_renewal_order( int $subscription_id, int $order_id ): bool {
+		return true;
+	}
+
+	protected function defer_renewal_activation( int $subscription_id, int $order_id, string $reason ): void {
+		$this->deferred[] = array( $subscription_id, $order_id, $reason );
 	}
 }
 
@@ -80,5 +124,25 @@ final class ActivationDurabilityTest extends TestCase {
 		$reflection = new ReflectionClass( SubscriptionOrder::class );
 		$order      = $reflection->newInstanceWithoutConstructor();
 		$this->assertNull( $order->maybe_trigger_auto_complete_trial_order( 42, 7 ) );
+	}
+
+	public function test_failed_trial_worker_persistence_defers_the_canonical_claim(): void {
+		$GLOBALS['ashbi_orders'][42] = new ActivationDurabilityTrialWorkerOrderFake( false );
+		$service                      = new ActivationDurabilityOrderServiceFake();
+
+		$service->auto_complete_subscription_trial_order( 42 );
+
+		$this->assertSame( 7, $service->deferred[0][0] );
+		$this->assertSame( 42, $service->deferred[0][1] );
+		$this->assertStringContainsString( 'did not persist', $service->deferred[0][2] );
+	}
+
+	public function test_successful_trial_worker_persistence_does_not_defer(): void {
+		$GLOBALS['ashbi_orders'][42] = new ActivationDurabilityTrialWorkerOrderFake( true );
+		$service                      = new ActivationDurabilityOrderServiceFake();
+
+		$service->auto_complete_subscription_trial_order( 42 );
+
+		$this->assertSame( array(), $service->deferred );
 	}
 }

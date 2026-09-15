@@ -89,7 +89,7 @@ $is_installments = 'installments' === $group_type;
 // the label, disabled native inputs, and a non-interactive look on adv-selects.
 $pro_locked = ! $pro_active;
 $pro_badge  = $pro_locked
-	? ' <span class="wpsubs-badge wpsubs-badge--pro" style="margin-left:6px;" title="' . esc_attr__( 'WPSubscription Pro required', 'subscription' ) . '">' . esc_html__( 'Pro', 'subscription' ) . '</span>'
+	? ' <span class="wpsubs-badge wpsubs-badge--pro" style="margin-left:6px;" title="' . esc_attr__( 'Not included in this build', 'subscription' ) . '">' . esc_html__( 'Unavailable', 'subscription' ) . '</span>'
 	: '';
 $adv_lock   = $pro_locked ? 'opacity:0.55;pointer-events:none;' : '';
 ?>
@@ -115,7 +115,7 @@ $adv_lock   = $pro_locked ? 'opacity:0.55;pointer-events:none;' : '';
 			?>
 			<label style="<?php echo esc_attr( $label_style ); ?>"><?php esc_html_e( 'Billing every', 'subscription' ); ?><?php echo wp_kses_post( $hint( __( 'How often the customer is charged, for example every 1 month.', 'subscription' ) ) ); ?></label>
 			<div style="<?php echo esc_attr( $pair_style ); ?>">
-				<input type="number" class="wpsubs-input" value="1" min="1" max="<?php echo $pro_active ? '' : '1'; ?>" style="flex:1 1 auto;min-width:0;" data-subscrpt-field="billing_frequency" aria-label="<?php esc_attr_e( 'Frequency', 'subscription' ); ?>"<?php echo $pro_active ? '' : ' title="' . esc_attr__( 'Upgrade to Pro to bill every few periods.', 'subscription' ) . '"'; ?> <?php disabled( ! $pro_active ); ?> />
+				<input type="number" class="wpsubs-input" value="1" min="1" max="<?php echo $pro_active ? '' : '1'; ?>" style="flex:1 1 auto;min-width:0;" data-subscrpt-field="billing_frequency" aria-label="<?php esc_attr_e( 'Frequency', 'subscription' ); ?>"<?php echo $pro_active ? '' : ' title="' . esc_attr__( 'Multiple-period billing is not included in this build.', 'subscription' ) . '"'; ?> <?php disabled( ! $pro_active ); ?> />
 				<?php
 				wpsubs_render_adv_select(
 					array(
@@ -178,7 +178,7 @@ $adv_lock   = $pro_locked ? 'opacity:0.55;pointer-events:none;' : '';
 					<label style="<?php echo esc_attr( $label_style ); ?>" for="subscrpt-term-signup-fee">
 						<?php esc_html_e( 'Signup fee', 'subscription' ); ?> <span style="color:var(--wpsubs-text-subtle);font-weight:400;">(<?php esc_html_e( 'optional', 'subscription' ); ?>)</span>
 						<?php if ( ! $pro_active ) : ?>
-							<span class="wpsubs-badge wpsubs-badge--pro" style="margin-left:6px;" title="<?php esc_attr_e( 'WPSubscription Pro required', 'subscription' ); ?>"><?php esc_html_e( 'Pro', 'subscription' ); ?></span>
+							<span class="wpsubs-badge wpsubs-badge--pro" style="margin-left:6px;" title="<?php esc_attr_e( 'Not included in this build', 'subscription' ); ?>"><?php esc_html_e( 'Unavailable', 'subscription' ); ?></span>
 						<?php endif; ?>
 						<?php echo wp_kses_post( $hint( __( 'One-time fee on the first payment.', 'subscription' ) ) ); ?>
 					</label>
