@@ -53,6 +53,7 @@ the disposable integration endpoint under `plugin/tests/`.
 - [Feature matrix](docs/FEATURE_MATRIX.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Security and payments](docs/SECURITY.md)
+- [Per-site staging rehearsal and rollback](docs/SITE_REHEARSAL_RUNBOOK.md)
 - [Legal provenance](docs/LEGAL_PROVENANCE.md)
 
 ## License

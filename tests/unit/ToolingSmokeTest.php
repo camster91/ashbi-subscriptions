@@ -20,4 +20,13 @@ final class ToolingSmokeTest extends TestCase {
 		$this->assertStringContainsString( 'array_diff( $active, $claim, $overdue )', $tool );
 		$this->assertStringContainsString( 'array_diff( $advanced_ids, $preexisting_operator, $unowned )', $tool );
 	}
+
+	public function test_fingerprint_report_never_emits_source_rows_or_key(): void {
+		$tool = file_get_contents( dirname( __DIR__, 2 ) . '/tools/site-state-fingerprint.php' );
+		$this->assertIsString( $tool );
+		$this->assertStringContainsString( 'SiteFingerprint::digest_rows', $tool );
+		$this->assertStringContainsString( 'SiteFingerprint::seal_report', $tool );
+		$this->assertStringNotContainsString( "'rows' =>", $tool );
+		$this->assertStringNotContainsString( "'key' =>", $tool );
+	}
 }
