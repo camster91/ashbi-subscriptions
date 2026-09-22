@@ -23,6 +23,7 @@
  *
  * @package Subscription
  */
+// phpcs:ignoreFile WordPress.Files.FileName.InvalidClassFileName, Universal.Files.SeparateFunctionsFromOO.Mixed
 
 // don't call the file directly.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -34,9 +35,9 @@ use SpringDevs\Subscription\Illuminate\Gateways\Paypal\Paypal_Blocks_Integration
 
 require_once __DIR__ . '/vendor/autoload.php';
 
-// Disposable integration endpoint. Its callback is local-environment/admin-only,
+// Disposable integration endpoint. Its callback is local-environment/admin-only,.
 // and the tests directory is excluded from release packages.
-if ( file_exists( __DIR__ . '/tests/integration/security-boundaries.php' ) ) {
+if ( ! function_exists( 'ashbi_run_security_boundary_integration_checks' ) && file_exists( __DIR__ . '/tests/integration/security-boundaries.php' ) ) {
 	require_once __DIR__ . '/tests/integration/security-boundaries.php';
 }
 
@@ -63,6 +64,13 @@ final class Sdevs_Subscription {
 	private $container = array();
 
 	/**
+	 * Whether WooCommerce accepted the HPOS compatibility declaration.
+	 *
+	 * @var bool
+	 */
+	private $hpos_compatibility_declared = false;
+
+	/**
 	 * Constructor for the Sdevs_Wc_Subscription class
 	 *
 	 * Sets up all the appropriate hooks and actions
@@ -70,11 +78,17 @@ final class Sdevs_Subscription {
 	 */
 	private function __construct() {
 		$this->define_constants();
+		// Register before WooCommerce's plugins_loaded callbacks can load Blocks.
+		$this->container['block'] = new SpringDevs\Subscription\Illuminate\Block();
 
 		register_activation_hook( __FILE__, array( $this, 'activate' ) );
 		register_deactivation_hook( __FILE__, array( $this, 'deactivate' ) );
+		add_action( 'before_woocommerce_init', array( $this, 'declare_hpos_compatibility' ), 5 );
 
-		add_action( 'plugins_loaded', array( $this, 'init_plugin' ) );
+		// WooCommerce loads its core helper functions during its plugin bootstrap.
+		// Initialize after the other plugins_loaded callbacks so activation and.
+		// disposable integration requests can rely on those helpers being ready.
+		add_action( 'plugins_loaded', array( $this, 'init_plugin' ), 20 );
 	}
 
 	/**
@@ -135,7 +149,7 @@ final class Sdevs_Subscription {
 		define( 'SUBSCRPT_URL', plugins_url( '', SUBSCRPT_FILE ) );
 		define( 'SUBSCRPT_ASSETS', SUBSCRPT_URL . '/assets' );
 
-		// Load legacy constant aliases (WP_SUBSCRIPTION_* → SUBSCRPT_*) for
+		// Load legacy constant aliases (WP_SUBSCRIPTION_* → SUBSCRPT_*) for.
 		// backwards compatibility with subscription-pro and third-party code.
 		require_once SUBSCRPT_INCLUDES . '/LegacyCompat.php';
 	}
@@ -151,21 +165,61 @@ final class Sdevs_Subscription {
 	}
 
 	/**
-	 * Placeholder for activation function
+	 * Declare compatibility with WooCommerce High-Performance Order Storage.
+	 *
+	 * @return void
+	 */
+	public function declare_hpos_compatibility() {
+		if ( class_exists( \Automattic\WooCommerce\Utilities\FeaturesUtil::class ) ) {
+			\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility( 'custom_order_tables', __FILE__, true );
+			$this->hpos_compatibility_declared = true;
+		}
+	}
+
+	/**
+	 * Install database tables and schedule the deferred rewrite flush.
 	 */
 	public function activate() {
 		$installer = new SpringDevs\Subscription\Installer();
 		$installer->run();
+		update_option( 'subscrpt_rewrite_flush_pending', 1 );
 	}
 
 	/**
-	 * Placeholder for deactivation function
+	 * Stop plugin-owned recurring and queued work when the plugin is disabled.
 	 *
-	 * Nothing being called here yet.
+	 * Business records and payment references are intentionally left intact. The
+	 * next activation can rebuild durable work from the subscription/order state.
+	 *
+	 * @return void
 	 */
 	public function deactivate() {
-		wp_clear_scheduled_hook( 'subscrpt_hourly_cron' );
-		wp_clear_scheduled_hook( 'subscrpt_daily_cron' ); // legacy cleanup for sites migrating from old hook name
+		$cron_hooks = array(
+			'subscrpt_hourly_cron',
+			'subscrpt_daily_cron',
+			'subscrpt_scheduled_grace_end',
+			'subscrpt_retry_renewal_payment',
+			'subscrpt_retry_subscription_schedule',
+			'subscrpt_queue_trial_order_autocomplete',
+			'subscrpt_send_delayed_expired_email',
+		);
+
+		foreach ( $cron_hooks as $hook ) {
+			wp_clear_scheduled_hook( $hook );
+		}
+
+		$action_hooks = array(
+			'subscrpt_scheduled_grace_end',
+			'subscrpt_retry_renewal_payment',
+			'subscrpt_retry_subscription_schedule',
+			'subscrpt_queue_trial_order_autocomplete',
+		);
+
+		if ( function_exists( 'as_unschedule_all_actions' ) ) {
+			foreach ( $action_hooks as $hook ) {
+				as_unschedule_all_actions( $hook, array(), 'ashbi-subscriptions' );
+			}
+		}
 	}
 
 	/**
@@ -174,7 +228,7 @@ final class Sdevs_Subscription {
 	 * @return void
 	 */
 	public function includes() {
-		// Include functions file first to ensure global functions are available
+		// Include functions file first to ensure global functions are available.
 		require_once SUBSCRPT_INCLUDES . '/functions.php';
 		require_once SUBSCRPT_INCLUDES . '/Admin/AdminComponents.php';
 
@@ -199,24 +253,13 @@ final class Sdevs_Subscription {
 		add_action( 'init', array( $this, 'localization_setup' ) );
 		add_action( 'init', array( $this, 'run_update' ) );
 
-		// HPOS Compatibility: Declare support for custom order tables
-		add_action(
-			'before_woocommerce_init',
-			function () {
-				if ( class_exists( \Automattic\WooCommerce\Utilities\FeaturesUtil::class ) ) {
-					\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility( 'custom_order_tables', __FILE__, true );
-				}
-			}
-		);
-
-		// HPOS Compatibility: Register subscription post type with HPOS support
+		// Register the subscription record type before lifecycle services run.
 		add_action(
 			'init',
 			function () {
 				register_post_type(
 					'subscrpt_order',
 					array(
-						'hpos'            => true,
 						'public'          => false,
 						'show_ui'         => true,
 						'show_in_menu'    => false,
@@ -295,7 +338,7 @@ final class Sdevs_Subscription {
 
 		return false;
 	}
-} // Sdevs_Wc_Subscription
+} // Sdevs_Wc_Subscription.
 
 // Add Paypal Gateway Blocks.
 if ( ! function_exists( 'subscrpt_register_paypal_block' ) ) {
@@ -317,7 +360,7 @@ if ( ! function_exists( 'subscrpt_register_paypal_block' ) ) {
 		);
 	}
 
-	// Register PayPal integration only if WordPress functions are available
+	// Register PayPal integration only if WordPress functions are available.
 	if ( function_exists( 'get_option' ) ) {
 		// Is PayPal integration enabled?
 		$is_paypal_integration_enabled = 'on' === get_option( 'wp_subs_paypal_integration_enabled', 'off' );

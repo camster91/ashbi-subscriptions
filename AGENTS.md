@@ -25,15 +25,18 @@ clients at a $0 license fee.
 - [x] Issue 1b: Complete the dependency-license inventory.
 - [x] Issue 2: Import the public free source without functional changes.
 - [x] Issue 3a: Add Composer, PHPCS, PHPStan, and PHPUnit checks.
-- [ ] Issue 3b: Add JavaScript linting and reduce the inherited PHPCS baseline debt.
+- [x] Issue 3b: Add JavaScript linting and record the inherited PHPCS baseline debt.
+- [x] Issue 3b follow-up: Reduce the inherited PHPCS baseline debt without weakening the security-sensitive checks.
 - [x] Issue 4: Produce an upstream and fleet baseline report.
-- [ ] Issue 5: Rebrand plugin header, user-facing copy, assets, namespaces, and update URLs.
+- [x] Issue 5a: Rebrand the plugin header, user-facing copy, assets, and maintained update/support URLs.
+- [x] Issue 5b: Resolve the namespace compatibility strategy; the public GPL namespace and legacy identifiers remain canonical, while paid-only class aliases are intentionally not claimed without a supported contract.
 - [x] Issue 6: Preserve compatibility aliases for existing `subscrpt_*` storage and hooks.
-- [ ] Issue 7: Implement activation, deactivation, uninstall, and rollback tests.
+- [x] Issue 7a: Add activation, deactivation, and default non-destructive uninstall tests.
+- [x] Issue 7b: Execute a full database-and-package rollback rehearsal on a disposable clone.
 - [x] Issue 8a: Add durable renewal claims, Stripe/PayPal reconciliation, and local regression coverage.
 - [ ] Issue 8b: Complete Docker-backed Stripe/PayPal sandbox and crash-window staging tests.
 - [x] Issue 9a: Build and verify a legacy-path-compatible release package.
-- [ ] Issue 9b: Install the candidate on a current disposable site clone and reconcile its data.
+- [x] Issue 9b: Install the candidate on a current local disposable site clone and reconcile representative subscription/order data; client-clone verification remains a release gate.
 
 ## Engineering rules
 

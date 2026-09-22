@@ -30,9 +30,9 @@ Core capabilities include:
 * WooCommerce HPOS compatibility.
 
 No commercial upgrade, vendor account, or license activation is required by this
-Ashbi-maintained build. Features shown as unavailable are not included in the
-current distribution. For help, use the local Help page in WordPress or contact
-the administrator responsible for your managed site.
+Ashbi-maintained build. Third-party services remain optional adapters and must be
+configured independently. For help, use the local Help page in WordPress or
+contact the administrator responsible for your managed site.
 
 == Installation ==
 

@@ -20,6 +20,9 @@
  * @package SpringDevs\Subscription\Admin
  */
 
+// This filename is part of the imported public compatibility surface.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
+
 namespace SpringDevs\Subscription\Admin;
 
 use SpringDevs\Subscription\Illuminate\Cancellation;
@@ -92,21 +95,28 @@ class CancellationFlow {
 	/**
 	 * Register the free options this page owns.
 	 *
-	 * Same option keys as before the move, new group. Pro registers
-	 * `subscrpt_cancellation_delay` into this same group from its own
-	 * Cancellation class. The reason list used to be Pro's too; it is free's now,
-	 * and Pro only registers it against a free version without sanitize_reasons().
+	 * The Ashbi build owns the complete flow: timing, feedback, reasons, and the
+	 * retention-offer controls all persist in this page's isolated settings group.
 	 *
 	 * @return void
 	 */
 	public function register_settings() {
 		register_setting(
 			self::OPTION_GROUP,
+			'subscrpt_cancellation_delay',
+			array(
+				'type'              => 'string',
+				'default'           => '24h',
+				'sanitize_callback' => array( __CLASS__, 'sanitize_delay' ),
+			)
+		);
+		register_setting(
+			self::OPTION_GROUP,
 			'subscrpt_cancellation_feedback_enabled',
 			array(
 				'type'              => 'string',
 				'default'           => '1',
-				'sanitize_callback' => 'sanitize_text_field',
+				'sanitize_callback' => array( __CLASS__, 'sanitize_checkbox' ),
 			)
 		);
 		register_setting(
@@ -115,7 +125,43 @@ class CancellationFlow {
 			array(
 				'type'              => 'string',
 				'default'           => '1',
-				'sanitize_callback' => 'sanitize_text_field',
+				'sanitize_callback' => array( __CLASS__, 'sanitize_checkbox' ),
+			)
+		);
+		register_setting(
+			self::OPTION_GROUP,
+			'subscrpt_cancellation_offer_enabled',
+			array(
+				'type'              => 'string',
+				'default'           => '0',
+				'sanitize_callback' => array( __CLASS__, 'sanitize_checkbox' ),
+			)
+		);
+		register_setting(
+			self::OPTION_GROUP,
+			'subscrpt_cancellation_offer_percent',
+			array(
+				'type'              => 'integer',
+				'default'           => 20,
+				'sanitize_callback' => array( __CLASS__, 'sanitize_range' ),
+			)
+		);
+		register_setting(
+			self::OPTION_GROUP,
+			'subscrpt_cancellation_offer_days',
+			array(
+				'type'              => 'integer',
+				'default'           => 7,
+				'sanitize_callback' => array( __CLASS__, 'sanitize_range' ),
+			)
+		);
+		register_setting(
+			self::OPTION_GROUP,
+			'subscrpt_recovery_event_retention_days',
+			array(
+				'type'              => 'integer',
+				'default'           => 365,
+				'sanitize_callback' => array( __CLASS__, 'sanitize_range' ),
 			)
 		);
 		register_setting(
@@ -154,8 +200,6 @@ class CancellationFlow {
 	 * posts to the same settings group without rendering this field — and
 	 * options.php would save that null as an empty list. The stored list is kept.
 	 *
-	 * Pro checks for this method to know free owns the option.
-	 *
 	 * @param mixed $value JSON string, array, or null when not posted.
 	 * @return array<int,array{key:string,label:string}>
 	 */
@@ -165,7 +209,7 @@ class CancellationFlow {
 			return is_array( $stored ) ? $stored : array();
 		}
 
-		// options.php has already unslashed the POST; unslashing again would
+		// options.php has already unslashed the POST; unslashing again would.
 		// strip the backslashes JSON uses to escape a quote in a label.
 		$decoded = is_string( $value ) ? json_decode( $value, true ) : $value;
 		if ( ! is_array( $decoded ) ) {
@@ -206,6 +250,45 @@ class CancellationFlow {
 	}
 
 	/**
+	 * Sanitize a cancellation-flow checkbox.
+	 *
+	 * @param mixed $value Posted value.
+	 * @return string
+	 */
+	public static function sanitize_checkbox( $value ) {
+		return in_array( $value, array( 1, '1', true, 'on', 'yes' ), true ) ? '1' : '0';
+	}
+
+	/**
+	 * Sanitize the cancellation timing mode.
+	 *
+	 * @param mixed $value Posted value.
+	 * @return string
+	 */
+	public static function sanitize_delay( $value ) {
+		$value = sanitize_key( $value );
+		return in_array( $value, array( '24h', 'instant', 'period' ), true ) ? $value : '24h';
+	}
+
+	/**
+	 * Sanitize one of the bounded flow values.
+	 *
+	 * @param mixed  $value Posted value.
+	 * @param string $option Option name when WordPress invokes this callback.
+	 * @return int
+	 */
+	public static function sanitize_range( $value, $option = '' ) {
+		$ranges = array(
+			'subscrpt_cancellation_offer_percent'    => array( 1, 100 ),
+			'subscrpt_cancellation_offer_days'       => array( 1, 365 ),
+			'subscrpt_recovery_event_retention_days' => array( 30, 3650 ),
+		);
+		$range  = $ranges[ $option ] ?? array( 1, 365 );
+
+		return max( $range[0], min( $range[1], absint( $value ) ) );
+	}
+
+	/**
 	 * Enqueue assets only on this page.
 	 *
 	 * Reuses the shared component bundle plus the settings stylesheet, which
@@ -242,7 +325,7 @@ class CancellationFlow {
 	/**
 	 * The tabs this page shows.
 	 *
-	 * One for now. Kept as a list so adding the next one is a data change.
+	 * Kept as a list so adding or reordering a tab is a data change.
 	 *
 	 * @return array<string,array{label:string}>
 	 */
@@ -280,14 +363,12 @@ class CancellationFlow {
 	/**
 	 * The Offers tab fields: one retention discount.
 	 *
-	 * Pro-locked like the rest of this page's write settings - Pro registers and
-	 * sanitizes them, and only Pro turns an accepted offer into a coupon.
+	 * These are standalone Ashbi settings. Accepted offers are issued by the
+	 * built-in WooCommerce coupon adapter in Illuminate\Cancellation.
 	 *
 	 * @return array<int,array{type:string,field_data:array}>
 	 */
 	public static function offer_fields() {
-		$pro_locked = ! subscrpt_pro_activated();
-
 		return array(
 			array(
 				'type'       => 'toggle',
@@ -298,7 +379,6 @@ class CancellationFlow {
 					'description' => __( 'Show the customer a one-off discount code when they start cancelling. Accepting it keeps the subscription.', 'subscription' ),
 					'value'       => '1',
 					'checked'     => self::offer_enabled(),
-					'pro_locked'  => $pro_locked,
 				),
 			),
 			array(
@@ -314,7 +394,6 @@ class CancellationFlow {
 						'max'  => '100',
 						'step' => '1',
 					),
-					'pro_locked'  => $pro_locked,
 				),
 			),
 			array(
@@ -330,7 +409,21 @@ class CancellationFlow {
 						'max'  => '365',
 						'step' => '1',
 					),
-					'pro_locked'  => $pro_locked,
+				),
+			),
+			array(
+				'type'       => 'input',
+				'field_data' => array(
+					'id'          => 'subscrpt_recovery_event_retention_days',
+					'title'       => __( 'Campaign data retention', 'subscription' ),
+					'type'        => 'number',
+					'description' => __( 'Days to retain local recovery campaign events. Reports use aggregate counts only.', 'subscription' ),
+					'value'       => self::recovery_event_retention_days(),
+					'attrs'       => array(
+						'min'  => '30',
+						'max'  => '3650',
+						'step' => '1',
+					),
 				),
 			),
 		);
@@ -339,17 +432,11 @@ class CancellationFlow {
 	/**
 	 * Whether a retention offer should be shown.
 	 *
-	 * Free stores and reads the settings so the UI round-trips, but only ever
-	 * answers false without Pro - Pro is what turns an accepted offer into a
-	 * coupon, so offering one free would be a promise nothing keeps.
+	 * A retention offer is available when enabled and a valid discount is set.
 	 *
 	 * @return bool
 	 */
 	public static function offer_enabled() {
-		if ( ! subscrpt_pro_activated() ) {
-			return false;
-		}
-
 		return '1' === get_option( 'subscrpt_cancellation_offer_enabled', '' ) && self::offer_percent() > 0;
 	}
 
@@ -372,13 +459,20 @@ class CancellationFlow {
 	}
 
 	/**
+	 * Configured recovery-event retention window.
+	 *
+	 * @return int
+	 */
+	public static function recovery_event_retention_days() {
+		return max( 30, min( 3650, (int) get_option( 'subscrpt_recovery_event_retention_days', 365 ) ) );
+	}
+
+	/**
 	 * The flow-wide options shown in the sidebar, in render order.
 	 *
 	 * @return array<int,array{type:string,field_data:array}>
 	 */
 	public static function sidebar_fields() {
-		$pro_locked = ! subscrpt_pro_activated();
-
 		return array(
 			array(
 				'type'       => 'select',
@@ -392,7 +486,6 @@ class CancellationFlow {
 						'period'  => __( 'At end of billing period (before next renewal)', 'subscription' ),
 					),
 					'selected'    => esc_attr( Cancellation::get_settings( 'subscrpt_cancellation_delay' ) ),
-					'pro_locked'  => $pro_locked,
 				),
 			),
 			array(

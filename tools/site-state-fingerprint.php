@@ -29,7 +29,12 @@ if ( strlen( $key ) < 32 ) {
 
 global $wpdb;
 
-/** @param array<int,mixed> $rows Sensitive source rows. @return array{count:int,digest:string,row_digests:string[]} */
+/**
+ * Digest sensitive source rows without emitting their values.
+ *
+ * @param array<int,mixed> $rows Sensitive source rows.
+ * @return array{count:int,digest:string,row_digests:string[]}
+ */
 function ashbi_fingerprint_rows( array $rows ): array {
 	return SiteFingerprint::digest_rows( $rows, (string) getenv( 'ASHBI_FINGERPRINT_KEY' ) );
 }
@@ -57,14 +62,24 @@ function ashbi_fingerprint_stable_order_meta( array $meta_data ): array {
 	);
 }
 
-/** @param string $table Exact database table name. @return array<int,mixed> */
+/**
+ * Read all rows from one verified site table.
+ *
+ * @param string $table Exact database table name.
+ * @return array<int,mixed>
+ */
 function ashbi_fingerprint_table_rows( string $table ): array {
 	global $wpdb;
 	// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name comes from SHOW TABLES under the fixed site prefix.
 	return (array) $wpdb->get_results( "SELECT * FROM `{$table}`", ARRAY_A );
 }
 
-/** @param string $table Exact database table name. @return array<int,string> */
+/**
+ * Read the creation schema from one verified site table.
+ *
+ * @param string $table Exact database table name.
+ * @return array<int,string>
+ */
 function ashbi_fingerprint_table_schema( string $table ): array {
 	global $wpdb;
 	// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name comes from SHOW TABLES under the fixed site prefix.
@@ -72,14 +87,14 @@ function ashbi_fingerprint_table_schema( string $table ): array {
 	if ( ! is_array( $schema ) || ! isset( $schema[1] ) ) {
 		WP_CLI::error( "Could not read the schema for {$table}." );
 	}
-	return array( (string) $schema[1] );
+	return array( SiteFingerprint::canonicalize_schema( (string) $schema[1] ) );
 }
 
 $subscription_posts = (array) $wpdb->get_results(
 	$wpdb->prepare( "SELECT * FROM {$wpdb->posts} WHERE post_type = %s ORDER BY ID", 'subscrpt_order' ),
 	ARRAY_A
 );
-$subscription_meta = (array) $wpdb->get_results(
+$subscription_meta  = (array) $wpdb->get_results(
 	$wpdb->prepare(
 		"SELECT pm.* FROM {$wpdb->postmeta} pm INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id WHERE p.post_type = %s ORDER BY pm.meta_id",
 		'subscrpt_order'
@@ -87,9 +102,9 @@ $subscription_meta = (array) $wpdb->get_results(
 	ARRAY_A
 );
 
-$relation_table = $wpdb->prefix . 'subscrpt_order_relation';
+$relation_table  = $wpdb->prefix . 'subscrpt_order_relation';
 $relation_exists = $relation_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $relation_table ) );
-$order_ids = array();
+$order_ids       = array();
 foreach ( $subscription_meta as $meta ) {
 	if ( '_subscrpt_order_id' === $meta['meta_key'] && (int) $meta['meta_value'] > 0 ) {
 		$order_ids[] = (int) $meta['meta_value'];
@@ -104,14 +119,20 @@ sort( $order_ids, SORT_NUMERIC );
 $orders      = array();
 $full_orders = array();
 foreach ( $order_ids as $order_id ) {
-	$order = wc_get_order( $order_id );
-	if ( ! $order ) {
-		$orders[] = array( 'id' => $order_id, 'exists' => false );
-		$full_orders[] = array( 'id' => $order_id, 'exists' => false );
+	$fingerprint_order = wc_get_order( $order_id );
+	if ( ! $fingerprint_order ) {
+		$orders[]      = array(
+			'id'     => $order_id,
+			'exists' => false,
+		);
+		$full_orders[] = array(
+			'id'     => $order_id,
+			'exists' => false,
+		);
 		continue;
 	}
 	$items = array();
-	foreach ( $order->get_items( array( 'line_item', 'fee', 'shipping', 'coupon', 'tax' ) ) as $item ) {
+	foreach ( $fingerprint_order->get_items( array( 'line_item', 'fee', 'shipping', 'coupon', 'tax' ) ) as $item ) {
 		$items[] = array(
 			'id'        => $item->get_id(),
 			'type'      => $item->get_type(),
@@ -125,17 +146,17 @@ foreach ( $order_ids as $order_id ) {
 			return array( $left['type'], $left['id'] ) <=> array( $right['type'], $right['id'] );
 		}
 	);
-	$full_order = array(
+	$full_order    = array(
 		'id'        => $order_id,
 		'exists'    => true,
-		'data'      => $order->get_data(),
-		'meta_data' => $order->get_meta_data(),
+		'data'      => $fingerprint_order->get_data(),
+		'meta_data' => $fingerprint_order->get_meta_data(),
 		'items'     => $items,
 	);
 	$full_orders[] = $full_order;
 	$stable_order  = $full_order;
-	unset( $stable_order['data']['date_modified'] );
-	$stable_order['meta_data'] = ashbi_fingerprint_stable_order_meta( $order->get_meta_data() );
+	unset( $stable_order['data']['date_modified'], $stable_order['data']['version'], $stable_order['data']['meta_data'] );
+	$stable_order['meta_data'] = ashbi_fingerprint_stable_order_meta( $fingerprint_order->get_meta_data() );
 	$orders[]                  = $stable_order;
 }
 
@@ -147,8 +168,8 @@ foreach ( (array) $wpdb->get_col( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_
 	if ( 0 !== strpos( $table, $wpdb->prefix . 'subscrpt_' ) ) {
 		continue;
 	}
-	$name = substr( $table, strlen( $wpdb->prefix ) );
-	$custom_tables[ $name ] = ashbi_fingerprint_rows( ashbi_fingerprint_table_rows( $table ) );
+	$name                          = substr( $table, strlen( $wpdb->prefix ) );
+	$custom_tables[ $name ]        = ashbi_fingerprint_rows( ashbi_fingerprint_table_rows( $table ) );
 	$custom_table_schemas[ $name ] = ashbi_fingerprint_rows( ashbi_fingerprint_table_schema( $table ) );
 }
 ksort( $custom_tables );
@@ -159,7 +180,7 @@ $token_meta_table = $wpdb->prefix . 'woocommerce_payment_tokenmeta';
 $token_rows       = $token_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $token_table ) ) ? ashbi_fingerprint_table_rows( $token_table ) : array();
 $token_meta_rows  = $token_meta_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $token_meta_table ) ) ? ashbi_fingerprint_table_rows( $token_meta_table ) : array();
 
-$ignored_options = array(
+$ignored_options         = array(
 	'subscrpt_version',
 	'subscrpt_db_version',
 	'subscrpt_renewal_claim_backfill_1',
@@ -179,7 +200,7 @@ $option_rows             = (array) $wpdb->get_results(
 	),
 	ARRAY_A
 );
-$stable_options = array_values(
+$stable_options          = array_values(
 	array_filter(
 		$option_rows,
 		static function ( array $row ) use ( $ignored_options ): bool {
@@ -188,7 +209,7 @@ $stable_options = array_values(
 	)
 );
 
-$report = array(
+$report               = array(
 	'schema_version' => SiteFingerprint::SCHEMA_VERSION,
 	'generated_at'   => gmdate( 'c' ),
 	'site_url'       => site_url(),
@@ -200,14 +221,14 @@ $report = array(
 		'hpos'        => class_exists( '\Automattic\WooCommerce\Utilities\OrderUtil' ) ? \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled() : null,
 	),
 	'state'          => array(
-		'subscription_posts' => ashbi_fingerprint_rows( $subscription_posts ),
-		'subscription_meta'  => ashbi_fingerprint_rows( $subscription_meta ),
-		'related_orders'     => ashbi_fingerprint_rows( $orders ),
-		'related_orders_full' => ashbi_fingerprint_rows( $full_orders ),
-		'payment_tokens'     => ashbi_fingerprint_rows( $token_rows ),
-		'payment_token_meta' => ashbi_fingerprint_rows( $token_meta_rows ),
-		'stable_options'     => ashbi_fingerprint_rows( $stable_options ),
-		'custom_tables'      => $custom_tables,
+		'subscription_posts'   => ashbi_fingerprint_rows( $subscription_posts ),
+		'subscription_meta'    => ashbi_fingerprint_rows( $subscription_meta ),
+		'related_orders'       => ashbi_fingerprint_rows( $orders ),
+		'related_orders_full'  => ashbi_fingerprint_rows( $full_orders ),
+		'payment_tokens'       => ashbi_fingerprint_rows( $token_rows ),
+		'payment_token_meta'   => ashbi_fingerprint_rows( $token_meta_rows ),
+		'stable_options'       => ashbi_fingerprint_rows( $stable_options ),
+		'custom_tables'        => $custom_tables,
 		'custom_table_schemas' => $custom_table_schemas,
 	),
 );

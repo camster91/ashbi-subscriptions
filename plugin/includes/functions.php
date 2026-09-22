@@ -45,13 +45,13 @@ function subscrpt_get_action_url( $action, $nonce, $subscription_id ) {
  * @return string
  */
 function subscrpt_get_typos( $number, $typo ) {
-	if ( $number == 1 && $typo == 'days' ) {
+	if ( 1 === (int) $number && 'days' === $typo ) {
 		return ucfirst( __( 'day', 'subscription' ) );
-	} elseif ( $number == 1 && $typo == 'weeks' ) {
+	} elseif ( 1 === (int) $number && 'weeks' === $typo ) {
 		return ucfirst( __( 'week', 'subscription' ) );
-	} elseif ( $number == 1 && $typo == 'months' ) {
+	} elseif ( 1 === (int) $number && 'months' === $typo ) {
 		return ucfirst( __( 'month', 'subscription' ) );
-	} elseif ( $number == 1 && $typo == 'years' ) {
+	} elseif ( 1 === (int) $number && 'years' === $typo ) {
 		return ucfirst( __( 'year', 'subscription' ) );
 	} else {
 		return ucfirst( $typo );
@@ -77,7 +77,10 @@ function subscrpt_next_date( $time, $trial = null ) {
 }
 
 /**
- * Check if subscription-pro activated.
+ * Backwards-compatible check for the removed upstream add-on.
+ *
+ * Ashbi does not use this marker to gate any feature. It remains available so
+ * older extensions can safely detect whether their separate add-on is active.
  *
  * @return bool
  */
@@ -124,9 +127,26 @@ function subscrpt_renewal_is_migration_blocked( $subscription_id = 0 ): bool {
  * @return bool
  */
 function subscrpt_product_has_plan( $product_id, $variation_id = 0 ): bool {
-	return ! empty(
-		\SpringDevs\Subscription\Illuminate\Plans\PlanRepository::resolve_for_product( $product_id, $variation_id )
-	);
+	$rows = \SpringDevs\Subscription\Illuminate\Plans\PlanRepository::resolve_for_product( $product_id, $variation_id );
+	if ( ! empty( $rows ) ) {
+		return true;
+	}
+
+	// A variable parent is a summary context. If it has no inherited seed,.
+	// inspect its children so admin/storefront gates still know that at least.
+	// one variation is purchasable as a subscription.
+	if ( ! $variation_id && function_exists( 'wc_get_product' ) ) {
+		$product = wc_get_product( $product_id );
+		if ( $product && $product->is_type( 'variable' ) ) {
+			foreach ( $product->get_children() as $child_id ) {
+				if ( ! empty( \SpringDevs\Subscription\Illuminate\Plans\PlanRepository::resolve_for_product( $product_id, $child_id ) ) ) {
+					return true;
+				}
+			}
+		}
+	}
+
+	return false;
 }
 
 /**
@@ -343,26 +363,90 @@ function subscrpt_is_auto_renew_enabled() {
 }
 
 /**
- * Split-payment amounts for a given total and installment count.
+ * Return the store's configured currency precision.
  *
- * Single source of truth for split math so the product page, cart, checkout and
- * subscription always agree:
- *   - per_installment = total / count, rounded UP to 2 decimals (ceil)
- *   - total           = the price exactly as entered (never per × count)
- *
- * @param float|string $total Total price as entered on the plan/product.
- * @param int          $count Number of installments (minimum 1).
- * @return array{total:float,count:int,per_installment:float}
+ * @return int Number of decimal places used by WooCommerce prices.
  */
-function subscrpt_split_amounts( $total, $count ) {
-	$total = (float) $total;
-	$count = max( 1, (int) $count );
+function subscrpt_get_currency_decimals() {
+	$decimals = function_exists( 'wc_get_price_decimals' ) ? wc_get_price_decimals() : 2;
+
+	return max( 0, (int) $decimals );
+}
+
+/**
+ * Resolve a plan's finite payment limit.
+ *
+ * @param string $payment_type     recurring or split_payment.
+ * @param int    $billing_length   Finite recurring billing cycles.
+ * @param int    $installment_count Fixed installment count.
+ * @return int Zero for an unlimited plan.
+ */
+function subscrpt_plan_payment_limit( $payment_type, $billing_length = 0, $installment_count = 0 ) {
+	if ( 'split_payment' === (string) $payment_type ) {
+		return max( 0, (int) $installment_count );
+	}
+
+	if ( 'recurring' === (string) $payment_type ) {
+		return max( 0, (int) $billing_length );
+	}
+
+	return 0;
+}
+
+/**
+ * Split a total into currency-rounded installments without overcharging.
+ *
+ * The first installments use the lower minor-unit amount and the final
+ * installment receives the residual. This preserves the rounded total for
+ * two-decimal and zero-decimal currencies alike.
+ *
+ * @param float|string $total    Total price as entered on the plan/product.
+ * @param int          $count    Number of installments (minimum 1).
+ * @param int|null     $decimals Currency precision, or null for WooCommerce's setting.
+ * @return array{total:float,count:int,per_installment:float,final_installment:float,installments:array}
+ */
+function subscrpt_split_amounts( $total, $count, $decimals = null ) {
+	$total    = max( 0, (float) $total );
+	$count    = max( 1, (int) $count );
+	$decimals = null === $decimals ? subscrpt_get_currency_decimals() : max( 0, (int) $decimals );
+	$factor   = 10 ** $decimals;
+	$minor    = (int) round( $total * $factor, 0, PHP_ROUND_HALF_UP );
+	$base     = intdiv( $minor, $count );
+	$final    = $minor - ( $base * ( $count - 1 ) );
+	$unit     = array();
+
+	for ( $index = 0; $index < $count - 1; $index++ ) {
+		$unit[] = round( $base / $factor, $decimals );
+	}
+	$unit[] = round( $final / $factor, $decimals );
 
 	return array(
-		'total'           => $total,
-		'count'           => $count,
-		'per_installment' => ceil( $total / $count * 100 ) / 100,
+		'total'             => round( $minor / $factor, $decimals ),
+		'count'             => $count,
+		'per_installment'   => round( $base / $factor, $decimals ),
+		'final_installment' => round( $final / $factor, $decimals ),
+		'installments'      => $unit,
 	);
+}
+
+/**
+ * Return the next unpaid installment for a subscription.
+ *
+ * @param float|string $total       Plan total.
+ * @param int          $count       Total installments.
+ * @param int          $paid_count  Number of already-paid orders.
+ * @param int|null     $decimals    Currency precision, or null for WooCommerce's setting.
+ * @return float Zero when all installments are paid.
+ */
+function subscrpt_split_installment_amount( $total, $count, $paid_count, $decimals = null ) {
+	$amounts    = subscrpt_split_amounts( $total, $count, $decimals );
+	$paid_count = max( 0, (int) $paid_count );
+
+	if ( $paid_count >= $amounts['count'] ) {
+		return 0.0;
+	}
+
+	return (float) $amounts['installments'][ $paid_count ];
 }
 
 /**
@@ -372,6 +456,21 @@ function subscrpt_split_amounts( $total, $count ) {
  * @return string|int Maximum payments or empty string if not set.
  */
 function subscrpt_get_max_payments( $subscription_id ) {
+	// The subscription snapshot is authoritative. Product settings can change.
+	// after purchase, but an existing customer must keep the payment contract.
+	// they accepted at checkout.
+	$subscription_max_payments = get_post_meta( $subscription_id, '_subscrpt_max_no_payment', true );
+	if ( (int) $subscription_max_payments > 0 ) {
+		return $subscription_max_payments;
+	}
+
+	// Finite plan terms also carry their billing length. Keep this fallback for
+	// snapshots written before the normalized max-payment field was introduced.
+	$billing_length = (int) get_post_meta( $subscription_id, '_subscrpt_billing_length', true );
+	if ( $billing_length > 0 && 'split_payment' !== subscrpt_get_payment_type( $subscription_id ) ) {
+		return $billing_length;
+	}
+
 	$product_id = get_post_meta( $subscription_id, '_subscrpt_product_id', true );
 	if ( ! $product_id ) {
 		return '';
@@ -379,18 +478,18 @@ function subscrpt_get_max_payments( $subscription_id ) {
 
 	$max_payments = null;
 
-	// Check for variation first
+	// Check for variation first.
 	$variation_id = get_post_meta( $subscription_id, '_subscrpt_variation_id', true );
 	if ( $variation_id ) {
 		$max_payments = get_post_meta( $variation_id, '_subscrpt_max_no_payment', true );
 	}
 
-	// Fallback to product if variation doesn't have max payments or no variation
+	// Fallback to product if variation doesn't have max payments or no variation.
 	if ( ! $max_payments ) {
 		$max_payments = get_post_meta( $product_id, '_subscrpt_max_no_payment', true );
 	}
 
-	// Also check subscription's own meta data as final fallback
+	// Also check subscription's own meta data as final fallback.
 	if ( ! $max_payments ) {
 		$max_payments = get_post_meta( $subscription_id, '_subscrpt_max_no_payment', true );
 	}
@@ -409,7 +508,7 @@ function subscrpt_count_payments_made( $subscription_id ) {
 
 	$table_name = $wpdb->prefix . 'subscrpt_order_relation';
 
-	// Query the relation table only. Joining wp_posts would drop every row under
+	// Query the relation table only. Joining wp_posts would drop every row under.
 	// HPOS (orders are not stored there); wc_get_order() below is HPOS-safe.
 	// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 	$relations = $wpdb->get_results(
@@ -420,7 +519,7 @@ function subscrpt_count_payments_made( $subscription_id ) {
 	);
 	// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
-	// Define all payment-related order types (allow filtering for extensibility)
+	// Define all payment-related order types (allow filtering for extensibility).
 	$payment_types = apply_filters( 'subscrpt_payment_order_types', array( 'new', 'renew', 'early-renew' ) );
 
 	return subscrpt_count_paid_relation_orders( $relations, $payment_types );
@@ -446,7 +545,7 @@ function subscrpt_count_paid_relation_orders( array $relations, array $payment_t
 		}
 
 		$seen_order_ids[ $order_id ] = true;
-		$order                        = wc_get_order( $order_id );
+		$order                       = wc_get_order( $order_id );
 		if ( $order && $order->is_paid() ) {
 			++$successful_count;
 		}
@@ -462,27 +561,27 @@ function subscrpt_count_paid_relation_orders( array $relations, array $payment_t
  * @return bool True if limit reached, false otherwise.
  */
 function subscrpt_is_max_payments_reached( $subscription_id ) {
-	// Get the product ID from subscription
+	// Get the product ID from subscription.
 	$product_id = get_post_meta( $subscription_id, '_subscrpt_product_id', true );
 	if ( ! $product_id ) {
 		return false;
 	}
 
-	// Get maximum payments using helper function
+	// Get maximum payments using helper function.
 	$max_payments = subscrpt_get_max_payments( $subscription_id );
 
-	// Allow override of total installments
+	// Allow override of total installments.
 	$max_payments = apply_filters( 'subscrpt_split_payment_total_override', $max_payments, $subscription_id, $product_id );
 
-	// If no limit set or unlimited, more payments are allowed
+	// If no limit set or unlimited, more payments are allowed.
 	if ( ! $max_payments || intval( $max_payments ) <= 0 ) {
 		return false;
 	}
 
-	// Count payments made
+	// Count payments made.
 	$payments_made = subscrpt_count_payments_made( $subscription_id );
 
-	// Enhanced completion logic considering failed payments
+	// Enhanced completion logic considering failed payments.
 	$is_reached = subscrpt_check_enhanced_completion( $subscription_id, $payments_made, $max_payments );
 
 	return $is_reached;
@@ -524,9 +623,11 @@ function subscrpt_finalize_split_payment_completion( $subscription_id ) {
 		return false;
 	}
 
-	if ( ! get_post_meta( $subscription_id, '_subscrpt_split_payment_completed_fired', true ) ) {
-		// Mark done only after callbacks return. A crash can replay an extension
-		// callback, but it cannot authorize another installment because the paid,
+	$stored_payment_type = (string) get_post_meta( $subscription_id, '_subscrpt_payment_type', true );
+	$split_completion    = '' === $stored_payment_type || 'split_payment' === $stored_payment_type;
+	if ( $split_completion && ! get_post_meta( $subscription_id, '_subscrpt_split_payment_completed_fired', true ) ) {
+		// Mark done only after callbacks return. A crash can replay an extension.
+		// callback, but it cannot authorize another installment because the paid,.
 		// unique-order count is already terminal and checked before order creation.
 		do_action( 'subscrpt_split_payment_completed', $subscription_id, $payments_made, $max_payments );
 		update_post_meta( $subscription_id, '_subscrpt_split_payment_completed_fired', true );
@@ -546,18 +647,18 @@ function subscrpt_finalize_split_payment_completion( $subscription_id ) {
  * @return int|string Number of remaining payments or 'unlimited'.
  */
 function subscrpt_get_remaining_payments( $subscription_id ) {
-	// Get maximum payments using helper function
+	// Get maximum payments using helper function.
 	$max_payments = subscrpt_get_max_payments( $subscription_id );
 
-	// If no limit set or unlimited
+	// If no limit set or unlimited.
 	if ( ! $max_payments || intval( $max_payments ) <= 0 ) {
 		return 'unlimited';
 	}
 
-	// Count payments made
+	// Count payments made.
 	$payments_made = subscrpt_count_payments_made( $subscription_id );
 
-	// Calculate remaining
+	// Calculate remaining.
 	$remaining = intval( $max_payments ) - intval( $payments_made );
 
 	return max( 0, $remaining );
@@ -570,12 +671,20 @@ function subscrpt_get_remaining_payments( $subscription_id ) {
  * @return string Payment type ('split_payment' or 'recurring').
  */
 function subscrpt_get_payment_type( $subscription_id ) {
+	// Use the immutable checkout snapshot before current product configuration.
+	// This keeps renewals and installment completion deterministic after a plan.
+	// is edited or a variation is reassigned.
+	$subscription_payment_type = get_post_meta( $subscription_id, '_subscrpt_payment_type', true );
+	if ( $subscription_payment_type ) {
+		return (string) $subscription_payment_type;
+	}
+
 	$product_id   = get_post_meta( $subscription_id, '_subscrpt_product_id', true );
 	$variation_id = get_post_meta( $subscription_id, '_subscrpt_variation_id', true );
 
-	$payment_type = 'recurring'; // Default
+	$payment_type = 'recurring'; // Default.
 
-	// Check variation first if it exists
+	// Check variation first if it exists.
 	if ( $variation_id ) {
 		$variation_payment_type = get_post_meta( $variation_id, '_subscrpt_payment_type', true );
 		if ( $variation_payment_type ) {
@@ -583,19 +692,11 @@ function subscrpt_get_payment_type( $subscription_id ) {
 		}
 	}
 
-	// Fallback to product if no variation payment type
-	if ( $payment_type === 'recurring' && $product_id ) {
+	// Fallback to product if no variation payment type.
+	if ( 'recurring' === $payment_type && $product_id ) {
 		$product_payment_type = get_post_meta( $product_id, '_subscrpt_payment_type', true );
 		if ( $product_payment_type ) {
 			$payment_type = $product_payment_type;
-		}
-	}
-
-	// Final fallback: check subscription's own meta data
-	if ( $payment_type === 'recurring' ) {
-		$subscription_payment_type = get_post_meta( $subscription_id, '_subscrpt_payment_type', true );
-		if ( $subscription_payment_type ) {
-			$payment_type = $subscription_payment_type;
 		}
 	}
 
@@ -647,33 +748,21 @@ function subscrpt_get_subscription_plan_label( $subscription_id ) {
  * @return bool True if subscription should be considered complete.
  */
 function subscrpt_check_enhanced_completion( $subscription_id, $payments_made, $max_payments ) {
-	// Standard completion check
+	// Standard completion check.
 	if ( $payments_made >= $max_payments ) {
 		return true;
 	}
 
-	// Check for access suspension due to payment failures
-	if ( function_exists( '\SpringDevs\SubscriptionPro\Illuminate\PaymentFailureHandler::is_access_suspended' ) ) {
-		$is_suspended = \SpringDevs\SubscriptionPro\Illuminate\PaymentFailureHandler::is_access_suspended( $subscription_id );
-		if ( $is_suspended ) {
-			// If access is suspended, check if we should force completion
-			$force_completion_on_suspension = apply_filters( 'subscrpt_force_completion_on_suspension', false, $subscription_id );
-			if ( $force_completion_on_suspension ) {
-				return true;
-			}
-		}
-	}
-
-	// Check for maximum failure threshold
+	// Check for maximum failure threshold.
 	$failure_count                  = (int) get_post_meta( $subscription_id, '_subscrpt_payment_failure_count', true );
 	$max_failures_before_completion = apply_filters( 'subscrpt_max_failures_before_completion', 0, $subscription_id );
 
 	if ( $max_failures_before_completion > 0 && $failure_count >= $max_failures_before_completion ) {
-		// Force completion after too many failures
+		// Force completion after too many failures.
 		return true;
 	}
 
-	// Check for time-based completion (e.g., if too much time has passed)
+	// Check for time-based completion (e.g., if too much time has passed).
 	$completion_timeout_days = apply_filters( 'subscrpt_completion_timeout_days', 0, $subscription_id );
 	if ( $completion_timeout_days > 0 ) {
 		$start_date = get_post_meta( $subscription_id, '_subscrpt_start_date', true );
@@ -699,7 +788,7 @@ function subscrpt_count_all_payment_attempts( $subscription_id ) {
 
 	$table_name = $wpdb->prefix . 'subscrpt_order_relation';
 
-	// Query the relation table only. Joining wp_posts would drop every row under
+	// Query the relation table only. Joining wp_posts would drop every row under.
 	// HPOS (orders are not stored there); wc_get_order() below is HPOS-safe.
 	// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 	$relations = $wpdb->get_results(
@@ -710,7 +799,7 @@ function subscrpt_count_all_payment_attempts( $subscription_id ) {
 	);
 	// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
-	// Define all payment-related order types
+	// Define all payment-related order types.
 	$payment_types = apply_filters( 'subscrpt_payment_order_types', array( 'new', 'renew', 'early-renew' ) );
 
 	$successful_count = 0;
@@ -745,7 +834,7 @@ if ( ! function_exists( 'wps_subscription_order_relation_type_cast' ) ) {
 	 * @return string
 	 */
 	function order_relation_type_cast( string $key ) {
-		// add Deprecated notice
+		// add Deprecated notice.
 		_deprecated_function( 'order_relation_type_cast', '1.5.3', 'wps_subscription_order_relation_type_cast' );
 		return wps_subscription_order_relation_type_cast( $key );
 	}
@@ -774,7 +863,7 @@ if ( ! function_exists( 'wps_subscription_is_wc_order_hpos_enabled' ) ) {
 	 * Check if HPOS enabled.
 	 */
 	function is_wc_order_hpos_enabled() {
-		// add Deprecated notice
+		// add Deprecated notice.
 		_deprecated_function( 'is_wc_order_hpos_enabled', '1.5.3', 'wps_subscription_is_wc_order_hpos_enabled' );
 		return wps_subscription_is_wc_order_hpos_enabled();
 	}
@@ -854,7 +943,7 @@ if ( ! function_exists( 'wps_subscription_get_timing_types' ) ) {
 	 * @return array
 	 */
 	function get_timing_types( $key_value = false ): array {
-		// add Deprecated notice
+		// add Deprecated notice.
 		_deprecated_function( 'get_timing_types', '1.5.3', 'wps_subscription_get_timing_types' );
 		return wps_subscription_get_timing_types( $key_value );
 	}
@@ -908,15 +997,54 @@ function sdevs_get_subscription_product( $product ) {
 }
 
 /**
+ * Redact sensitive values before a message reaches a WordPress or PHP log.
+ *
+ * Logs are operational diagnostics, not a storage location for gateway
+ * credentials, customer contact data, or remote payment identifiers. Keep the
+ * output bounded as well so an unexpected provider response cannot fill a log.
+ *
+ * @param mixed $message Message or structured data.
+ * @return string
+ */
+function subscrpt_redact_log_message( $message ): string {
+	if ( is_array( $message ) || is_object( $message ) ) {
+		$message = wp_json_encode( $message );
+	}
+
+	$message  = (string) $message;
+	$patterns = array(
+		'/\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]+\b/i' => '[redacted-gateway-key]',
+		'/\b(?:pm|pi|cus|tok|src|seti|ch|in|sub)_[A-Za-z0-9]+\b/i' => '[redacted-gateway-id]',
+		'/\b(?:PAYID|TXN|BA|I)-[A-Za-z0-9_-]+\b/i'       => '[redacted-paypal-id]',
+		'/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i'   => '[redacted-email]',
+		'/((?:client_secret|access_token|api_key|webhook_id|webhook_secret|authorization)\s*[:=]\s*)[^\s,;]+/i' => '$1[redacted]',
+	);
+
+	$message = (string) preg_replace( array_keys( $patterns ), array_values( $patterns ), $message );
+
+	return substr( $message, 0, 2000 );
+}
+
+/**
  * Logger
  *
  * @param mixed $message      Message.
  * @param bool  $should_print Print the output.
  */
 function subscrpt_write_log( $message, bool $should_print = false ): void {
-	$logger = wc_get_logger();
-
 	$message = is_array( $message ) || is_object( $message ) ? wp_json_encode( $message ) : $message;
+	$message = subscrpt_redact_log_message( $message );
+
+	// Activation can run before WooCommerce has loaded its core logger helper.
+	// Keep the diagnostic visible to a local/server log without making setup.
+	// fail; normal requests continue through WooCommerce's structured logger.
+	if ( ! function_exists( 'wc_get_logger' ) ) {
+		error_log( 'wp_subscription: ' . $message ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log
+		echo esc_html( $should_print ? $message : '' );
+		return;
+	}
+
+	$logger = wc_get_logger();
 	$logger->add( 'wp_subscription', $message );
 
 	echo esc_html( $should_print ? $message : '' );
@@ -929,10 +1057,6 @@ function subscrpt_write_log( $message, bool $should_print = false ): void {
  */
 function subscrpt_write_debug_log( $log ): void {
 	if ( defined( 'WP_DEBUG' ) && WP_DEBUG === true ) {
-		if ( is_array( $log ) || is_object( $log ) ) {
-			error_log( print_r( $log, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
-		} else {
-			error_log( 'wp_subscription: ' . $log ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
-		}
+		error_log( 'wp_subscription: ' . subscrpt_redact_log_message( $log ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log
 	}
 }

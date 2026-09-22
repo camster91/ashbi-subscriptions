@@ -1,4 +1,4 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- This filename is part of the imported public compatibility surface.
 /**
  * Plans - admin class.
  *

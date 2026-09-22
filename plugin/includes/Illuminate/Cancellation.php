@@ -7,13 +7,16 @@
  * hourly *expiry* check in {@see Cron} so cancellation-related behaviour can grow
  * here independently.
  *
- * Default flow (free): when a subscription enters `pe_cancelled` it is scheduled
+ * Default flow: when a subscription enters `pe_cancelled` it is scheduled
  * to be cancelled 24 hours later. The exact moment is filterable via
- * `subscrpt_cancellation_time`, which the Pro plugin uses to offer "immediately",
- * "after 24 hours", or "at the end of the billing period".
+ * `subscrpt_cancellation_time`, with the selected Ashbi timing mode applied by
+ * the built-in filter.
  *
  * @package SpringDevs\Subscription\Illuminate
  */
+
+// Legacy class path is part of the public compatibility contract.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
 
 namespace SpringDevs\Subscription\Illuminate;
 
@@ -44,18 +47,35 @@ class Cancellation {
 	const OTHER_KEY = 'other';
 
 	/**
+	 * Subscription meta storing the idempotent retention coupon code.
+	 *
+	 * @var string
+	 */
+	const OFFER_CODE_META = '_subscrpt_cancellation_offer_code';
+
+	/**
+	 * Built-in campaign key for the cancellation retention offer.
+	 *
+	 * @var string
+	 */
+	const RECOVERY_CAMPAIGN = 'cancellation-retention';
+
+	/**
 	 * Initialize the class.
 	 */
 	public function __construct() {
-		add_action( 'subscrpt_subscription_pending_cancellation', [ $this, 'schedule_cancellation' ] );
-		add_action( 'subscrpt_hourly_cron', [ $this, 'process_due_cancellations' ] );
-		add_action( 'subscrpt_subscription_resumed', [ $this, 'clear_scheduled_cancellation' ] );
-		add_action( 'before_single_subscrpt_content', [ $this, 'display_pending_cancellation_notice' ] );
-		add_action( 'before_single_subscrpt_content', [ $this, 'maybe_render_feedback_modal' ] );
-		add_action( 'wp_ajax_subscrpt_record_cancellation_feedback', [ $this, 'record_feedback' ] );
-		add_action( 'wp_ajax_subscrpt_record_cancellation_save', [ $this, 'record_save' ] );
-		add_action( 'wp_ajax_subscrpt_claim_cancellation_offer', [ $this, 'claim_offer' ] );
-		add_action( 'subscrpt_details_side_bottom', [ $this, 'render_admin_feedback_card' ] );
+		add_action( 'subscrpt_subscription_pending_cancellation', array( $this, 'schedule_cancellation' ) );
+		add_action( 'subscrpt_hourly_cron', array( $this, 'process_due_cancellations' ) );
+		add_action( 'subscrpt_subscription_resumed', array( $this, 'clear_scheduled_cancellation' ) );
+		add_action( 'before_single_subscrpt_content', array( $this, 'display_pending_cancellation_notice' ) );
+		add_action( 'before_single_subscrpt_content', array( $this, 'maybe_render_feedback_modal' ) );
+		add_action( 'wp_ajax_subscrpt_record_cancellation_feedback', array( $this, 'record_feedback' ) );
+		add_action( 'wp_ajax_subscrpt_record_cancellation_save', array( $this, 'record_save' ) );
+		add_action( 'wp_ajax_subscrpt_claim_cancellation_offer', array( $this, 'claim_offer' ) );
+		add_action( 'subscrpt_details_side_bottom', array( $this, 'render_admin_feedback_card' ) );
+		add_action( 'subscrpt_hourly_cron', array( $this, 'purge_recovery_events' ), 30 );
+		add_filter( 'subscrpt_cancellation_time', array( $this, 'resolve_cancellation_time' ), 10, 2 );
+		add_filter( 'subscrpt_cancellation_offer', array( $this, 'create_retention_offer' ), 10, 3 );
 	}
 
 	/**
@@ -79,6 +99,110 @@ class Cancellation {
 	}
 
 	/**
+	 * Record an idempotent local recovery-campaign event.
+	 *
+	 * The event key is a digest rather than a concatenation of identifiers, so
+	 * logs and unique indexes never expose customer data. Duplicate callbacks
+	 * are successful no-ops and do not inflate campaign totals.
+	 *
+	 * @param int    $subscription_id Subscription post ID.
+	 * @param string $event_type      Event name: offer_issued, offer_accepted, save, win_back.
+	 * @param string $campaign_key    Campaign identifier.
+	 * @param string $offer_code      Optional coupon code.
+	 * @param int    $order_id        Optional attributed WooCommerce order ID.
+	 * @param int    $customer_id     Optional internal customer ID.
+	 * @return bool
+	 */
+	public static function record_recovery_event( int $subscription_id, string $event_type, string $campaign_key = self::RECOVERY_CAMPAIGN, string $offer_code = '', int $order_id = 0, int $customer_id = 0 ): bool {
+		global $wpdb;
+
+		$event_type   = sanitize_key( $event_type );
+		$campaign_key = sanitize_key( $campaign_key );
+		$offer_code   = sanitize_text_field( $offer_code );
+		$key_parts    = array( $subscription_id, $event_type, $campaign_key, $offer_code, $order_id );
+		if ( 'save' === $event_type ) {
+			// record_save is throttled once per day; keep one event per day while.
+			// still absorbing duplicate requests for that same day.
+			$key_parts[] = gmdate( 'Y-m-d' );
+		}
+		$event_key = hash( 'sha256', implode( '|', $key_parts ) );
+		$table     = $wpdb->prefix . 'subscrpt_recovery_event';
+		$inserted  = $wpdb->query(
+			$wpdb->prepare(
+				'INSERT IGNORE INTO %i (event_key, subscription_id, customer_id, order_id, campaign_key, event_type, offer_code, created_at)
+				 VALUES (%s, %d, %d, %d, %s, %s, %s, %s)',
+				array(
+					$table,
+					$event_key,
+					$subscription_id,
+					$customer_id,
+					$order_id,
+					$campaign_key,
+					$event_type,
+					$offer_code,
+					current_time( 'mysql', true ),
+				)
+			)
+		);
+
+		return false !== $inserted;
+	}
+
+	/**
+	 * Check whether an idempotent recovery event exists for a subscription.
+	 *
+	 * @param int    $subscription_id Subscription post ID.
+	 * @param string $event_type      Event name.
+	 * @return bool
+	 */
+	public static function has_recovery_event( int $subscription_id, string $event_type ): bool {
+		global $wpdb;
+
+		$table = $wpdb->prefix . 'subscrpt_recovery_event';
+		$count = $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT COUNT(1) FROM %i WHERE subscription_id = %d AND event_type = %s',
+				array( $table, $subscription_id, sanitize_key( $event_type ) )
+			)
+		);
+
+		return (int) $count > 0;
+	}
+
+	/**
+	 * Remove recovery events outside the configured privacy retention window.
+	 *
+	 * The hourly hook is guarded to run this maintenance at most once per day.
+	 * Only the plugin-owned event ledger is touched; subscription and order data
+	 * remain the canonical business records.
+	 *
+	 * @return void
+	 */
+	public function purge_recovery_events(): void {
+		$last_run = (int) get_option( 'subscrpt_recovery_event_last_purge', 0 );
+		if ( $last_run > time() - DAY_IN_SECONDS ) {
+			return;
+		}
+
+		global $wpdb;
+		$table   = $wpdb->prefix . 'subscrpt_recovery_event';
+		$cutoff  = gmdate( 'Y-m-d H:i:s', time() - ( \SpringDevs\Subscription\Admin\CancellationFlow::recovery_event_retention_days() * DAY_IN_SECONDS ) );
+		$deleted = $wpdb->query(
+			$wpdb->prepare(
+				'DELETE FROM %i WHERE created_at < %s',
+				array( $table, $cutoff )
+			)
+		);
+
+		if ( false === $deleted ) {
+			subscrpt_write_log( 'Recovery-event retention cleanup could not complete; it will retry.' );
+			return;
+		}
+
+		update_option( 'subscrpt_recovery_event_last_purge', time(), false );
+	}
+
+	/**
 	 * Show the customer's cancellation reason on the admin subscription details page
 	 * (bottom of the right-hand column).
 	 *
@@ -92,7 +216,7 @@ class Cancellation {
 		$subscription_id = (int) ( $ctx['subscription_id'] ?? 0 );
 		$status          = $ctx['status'] ?? '';
 
-		if ( ! in_array( $status, [ 'cancelled', 'pe_cancelled' ], true ) ) {
+		if ( ! in_array( $status, array( 'cancelled', 'pe_cancelled' ), true ) ) {
 			return;
 		}
 
@@ -137,7 +261,7 @@ class Cancellation {
 				</div>
 				<?php if ( '' !== $comment ) : ?>
 					<blockquote style="margin:12px 0 0;padding:8px 12px;border-left:3px solid var(--wpsubs-border-strong);background:var(--wpsubs-surface-muted);border-radius:6px;color:var(--wpsubs-text-muted);font-size:13px;line-height:1.5;word-break:break-word;">
-						<?php echo wp_kses( nl2br( esc_html( $comment ) ), [ 'br' => [] ] ); ?>
+						<?php echo wp_kses( nl2br( esc_html( $comment ) ), array( 'br' => array() ) ); ?>
 					</blockquote>
 				<?php endif; ?>
 			</div>
@@ -165,7 +289,7 @@ class Cancellation {
 		$subscription_id = (int) $subscription_id;
 		$status          = get_post_status( $subscription_id );
 
-		if ( ! in_array( $status, [ 'pending', 'active', 'on_hold' ], true ) ) {
+		if ( ! in_array( $status, array( 'pending', 'active', 'on_hold' ), true ) ) {
 			return;
 		}
 
@@ -178,16 +302,16 @@ class Cancellation {
 			return;
 		}
 
-		wp_enqueue_style( 'subscrpt_cancellation_css', SUBSCRPT_ASSETS . '/css/cancellation.css', [], SUBSCRPT_VERSION );
-		wp_enqueue_script( 'subscrpt_cancellation_feedback', SUBSCRPT_ASSETS . '/js/frontend/cancellation-feedback.js', [], SUBSCRPT_VERSION, true );
+		wp_enqueue_style( 'subscrpt_cancellation_css', SUBSCRPT_ASSETS . '/css/cancellation.css', array(), SUBSCRPT_VERSION );
+		wp_enqueue_script( 'subscrpt_cancellation_feedback', SUBSCRPT_ASSETS . '/js/frontend/cancellation-feedback.js', array(), SUBSCRPT_VERSION, true );
 		wp_localize_script(
 			'subscrpt_cancellation_feedback',
 			'subscrptCancellationFeedback',
-			[
+			array(
 				'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
 				'nonce'     => wp_create_nonce( 'subscrpt_cancellation_feedback' ),
 				'doneLabel' => __( 'Done', 'subscription' ),
-			]
+			)
 		);
 		?>
 		<div class="subscrpt-feedback-modal" id="subscrpt-feedback-modal" data-subscription="<?php echo esc_attr( $subscription_id ); ?>" hidden>
@@ -269,17 +393,17 @@ class Cancellation {
 
 		$subscription_id = isset( $_POST['subscription_id'] ) ? absint( wp_unslash( $_POST['subscription_id'] ) ) : 0;
 		if ( $subscription_id <= 0 ) {
-			wp_send_json_error( [ 'message' => 'invalid_subscription' ] );
+			wp_send_json_error( array( 'message' => 'invalid_subscription' ) );
 		}
 
 		$subs_post = get_post( $subscription_id );
 		if ( ! $subs_post || 'subscrpt_order' !== $subs_post->post_type ) {
-			wp_send_json_error( [ 'message' => 'invalid_subscription' ] );
+			wp_send_json_error( array( 'message' => 'invalid_subscription' ) );
 		}
 
 		$author_id = (int) $subs_post->post_author;
-		if ( ! current_user_can( 'manage_options' ) && $author_id !== get_current_user_id() ) {
-			wp_send_json_error( [ 'message' => 'forbidden' ] );
+		if ( ! current_user_can( 'manage_options' ) && get_current_user_id() !== $author_id ) {
+			wp_send_json_error( array( 'message' => 'forbidden' ) );
 		}
 
 		$reason_key = isset( $_POST['reason_key'] ) ? sanitize_key( wp_unslash( $_POST['reason_key'] ) ) : '';
@@ -296,17 +420,17 @@ class Cancellation {
 
 		global $wpdb;
 		$table = $wpdb->prefix . 'subscrpt_cancellation_feedback';
-		$data  = [
+		$data  = array(
 			'subscription_id' => $subscription_id,
 			'customer_id'     => $author_id,
 			'reason_key'      => $reason_key,
 			'reason_label'    => $reason_label,
 			'comment'         => $comment,
 			'created_at'      => current_time( 'mysql', true ),
-		];
+		);
 
-		// One row per subscription: overwrite any previous feedback (e.g. after a
-		// reactivate → cancel-again cycle) rather than accumulating a log, so the
+		// One row per subscription: overwrite any previous feedback (e.g. after a.
+		// reactivate → cancel-again cycle) rather than accumulating a log, so the.
 		// row always reflects the latest cancellation reason.
 		$existing_id = (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			$wpdb->prepare(
@@ -327,16 +451,16 @@ class Cancellation {
 			$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 				$table,
 				$data,
-				[ 'id' => $existing_id ],
-				[ '%d', '%d', '%s', '%s', '%s', '%s' ],
-				[ '%d' ]
+				array( 'id' => $existing_id ),
+				array( '%d', '%d', '%s', '%s', '%s', '%s' ),
+				array( '%d' )
 			);
 			$data['id'] = $existing_id;
 		} else {
 			$wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 				$table,
 				$data,
-				[ '%d', '%d', '%s', '%s', '%s', '%s' ]
+				array( '%d', '%d', '%s', '%s', '%s', '%s' )
 			);
 			$data['id'] = (int) $wpdb->insert_id;
 		}
@@ -349,16 +473,13 @@ class Cancellation {
 		 */
 		do_action( 'subscrpt_cancellation_feedback_recorded', $subscription_id, $data );
 
-		wp_send_json_success( [ 'id' => $data['id'] ] );
+		wp_send_json_success( array( 'id' => $data['id'] ) );
 	}
 
 	/**
 	 * AJAX: the customer accepted the retention offer.
 	 *
-	 * Free owns the request - nonce, ownership, throttle - and asks for an offer
-	 * through `subscrpt_cancellation_offer`. Free itself has nothing to give: the
-	 * coupon is Pro's, so without a listener this reports no offer rather than
-	 * promising a discount that never arrives.
+	 * Ashbi owns the request, coupon creation, nonce, ownership, and throttle.
 	 *
 	 * @return void
 	 */
@@ -367,17 +488,17 @@ class Cancellation {
 
 		$subscription_id = isset( $_POST['subscription_id'] ) ? absint( wp_unslash( $_POST['subscription_id'] ) ) : 0;
 		if ( $subscription_id <= 0 ) {
-			wp_send_json_error( [ 'message' => 'invalid_subscription' ] );
+			wp_send_json_error( array( 'message' => 'invalid_subscription' ) );
 		}
 
 		$subs_post = get_post( $subscription_id );
 		if ( ! $subs_post || 'subscrpt_order' !== $subs_post->post_type ) {
-			wp_send_json_error( [ 'message' => 'invalid_subscription' ] );
+			wp_send_json_error( array( 'message' => 'invalid_subscription' ) );
 		}
 
 		$author_id = (int) $subs_post->post_author;
-		if ( ! current_user_can( 'manage_options' ) && $author_id !== get_current_user_id() ) {
-			wp_send_json_error( [ 'message' => 'forbidden' ] );
+		if ( ! current_user_can( 'manage_options' ) && get_current_user_id() !== $author_id ) {
+			wp_send_json_error( array( 'message' => 'forbidden' ) );
 		}
 
 		/**
@@ -390,13 +511,27 @@ class Cancellation {
 		 * @param int        $subscription_id Subscription ID.
 		 * @param int        $customer_id     Subscription owner.
 		 */
+		$status = get_post_status( $subscription_id );
+		if ( ! in_array( $status, array( 'pending', 'active', 'on_hold' ), true ) ) {
+			wp_send_json_error( array( 'message' => 'invalid_subscription_state' ) );
+		}
+
 		$offer = apply_filters( 'subscrpt_cancellation_offer', null, $subscription_id, $author_id );
 
 		if ( empty( $offer['code'] ) ) {
-			wp_send_json_error( [ 'message' => 'no_offer' ] );
+			wp_send_json_error( array( 'message' => 'no_offer' ) );
 		}
 
-		// Accepting the offer is a save, and the strongest kind - report it even
+		self::record_recovery_event(
+			$subscription_id,
+			'offer_accepted',
+			self::RECOVERY_CAMPAIGN,
+			(string) $offer['code'],
+			0,
+			$author_id
+		);
+
+		// Accepting the offer is a save, and the strongest kind - report it even.
 		// if the customer already dismissed the modal once today.
 		delete_transient( self::save_throttle_key( $subscription_id ) );
 		set_transient( self::save_throttle_key( $subscription_id ), 1, DAY_IN_SECONDS );
@@ -414,21 +549,122 @@ class Cancellation {
 		do_action(
 			'subscrpt_subscription_saved',
 			$subscription_id,
-			[
+			array(
 				'subscription_id' => $subscription_id,
 				'customer_id'     => $author_id,
 				'reason_key'      => $reason_key,
 				'reason_label'    => $reason_label,
 				'offer_accepted'  => true,
 				'offer_code'      => (string) $offer['code'],
-			]
+			)
 		);
 
 		wp_send_json_success(
-			[
+			array(
 				'code'    => (string) $offer['code'],
 				'message' => isset( $offer['message'] ) ? (string) $offer['message'] : '',
-			]
+			)
+		);
+	}
+
+	/**
+	 * Resolve the configured cancellation timing mode into a timestamp.
+	 *
+	 * @param int $cancel_at       Existing default timestamp.
+	 * @param int $subscription_id Subscription ID.
+	 * @return int
+	 */
+	public function resolve_cancellation_time( $cancel_at, $subscription_id ) {
+		$mode = self::get_settings( 'subscrpt_cancellation_delay' );
+
+		if ( 'instant' === $mode ) {
+			return time();
+		}
+
+		if ( 'period' === $mode ) {
+			$next_date = (int) get_post_meta( (int) $subscription_id, '_subscrpt_next_date', true );
+			if ( $next_date > 0 ) {
+				return $next_date;
+			}
+		}
+
+		return (int) $cancel_at;
+	}
+
+	/**
+	 * Issue one customer-specific, single-use WooCommerce retention coupon.
+	 *
+	 * The stored code makes the filter idempotent when the browser retries the
+	 * claim request. A race that loses the unique post-meta write removes its
+	 * unused coupon and returns the winner's code instead.
+	 *
+	 * @param array|null $offer           Existing offer from an integration.
+	 * @param int        $subscription_id Subscription ID.
+	 * @param int        $customer_id     Customer/user ID.
+	 * @return array|null
+	 */
+	public function create_retention_offer( $offer, $subscription_id, $customer_id ) {
+		if ( ! empty( $offer['code'] ) ) {
+			return $offer;
+		}
+
+		if ( ! \SpringDevs\Subscription\Admin\CancellationFlow::offer_enabled() || ! class_exists( '\WC_Coupon' ) || ! function_exists( 'wc_get_coupon_id_by_code' ) ) {
+			return null;
+		}
+
+		$existing_code = (string) get_post_meta( (int) $subscription_id, self::OFFER_CODE_META, true );
+		if ( '' !== $existing_code ) {
+			self::record_recovery_event( (int) $subscription_id, 'offer_issued', self::RECOVERY_CAMPAIGN, $existing_code, 0, (int) $customer_id );
+			return array(
+				'code'    => $existing_code,
+				'message' => __( 'Your retention offer is ready to use.', 'subscription' ),
+			);
+		}
+
+		$user  = get_userdata( (int) $customer_id );
+		$email = $user ? sanitize_email( $user->user_email ) : '';
+		$code  = '';
+		for ( $attempt = 0; $attempt < 5; $attempt++ ) {
+			$candidate = 'ASHBI-' . strtoupper( wp_generate_password( 12, false, false ) );
+			if ( ! wc_get_coupon_id_by_code( $candidate ) ) {
+				$code = $candidate;
+				break;
+			}
+		}
+
+		if ( '' === $code ) {
+			return null;
+		}
+
+		$coupon = new \WC_Coupon();
+		$coupon->set_code( $code );
+		$coupon->set_discount_type( 'percent' );
+		$coupon->set_amount( (string) \SpringDevs\Subscription\Admin\CancellationFlow::offer_percent() );
+		$coupon->set_date_expires( gmdate( 'Y-m-d', time() + ( \SpringDevs\Subscription\Admin\CancellationFlow::offer_days() * DAY_IN_SECONDS ) ) );
+		$coupon->set_usage_limit( 1 );
+		$coupon->set_usage_limit_per_user( 1 );
+		$coupon->set_individual_use( true );
+		$coupon->set_description( __( 'Ashbi Subscriptions retention offer', 'subscription' ) );
+		if ( '' !== $email ) {
+			$coupon->set_email_restrictions( array( $email ) );
+		}
+		$coupon->save();
+
+		if ( ! $coupon->get_id() ) {
+			return null;
+		}
+
+		if ( ! add_post_meta( (int) $subscription_id, self::OFFER_CODE_META, $code, true ) ) {
+			$coupon->delete( true );
+			$winner = (string) get_post_meta( (int) $subscription_id, self::OFFER_CODE_META, true );
+			return '' !== $winner ? array( 'code' => $winner ) : null;
+		}
+
+		self::record_recovery_event( (int) $subscription_id, 'offer_issued', self::RECOVERY_CAMPAIGN, $code, 0, (int) $customer_id );
+
+		return array(
+			'code'    => $code,
+			'message' => __( 'Your retention offer is ready to use.', 'subscription' ),
 		);
 	}
 
@@ -449,9 +685,9 @@ class Cancellation {
 	/**
 	 * AJAX: the customer backed out of cancelling.
 	 *
-	 * Records nothing - the reason list is only meaningful for an actual
-	 * cancellation - but fires `subscrpt_subscription_saved` so the retention can
-	 * be reported. Throttled to once a day per subscription.
+	 * Does not write cancellation feedback because the customer did not complete
+	 * cancellation, but records a deduplicated save event for retention reporting.
+	 * Throttled to once a day per subscription.
 	 *
 	 * @return void
 	 */
@@ -460,22 +696,22 @@ class Cancellation {
 
 		$subscription_id = isset( $_POST['subscription_id'] ) ? absint( wp_unslash( $_POST['subscription_id'] ) ) : 0;
 		if ( $subscription_id <= 0 ) {
-			wp_send_json_error( [ 'message' => 'invalid_subscription' ] );
+			wp_send_json_error( array( 'message' => 'invalid_subscription' ) );
 		}
 
 		$subs_post = get_post( $subscription_id );
 		if ( ! $subs_post || 'subscrpt_order' !== $subs_post->post_type ) {
-			wp_send_json_error( [ 'message' => 'invalid_subscription' ] );
+			wp_send_json_error( array( 'message' => 'invalid_subscription' ) );
 		}
 
 		$author_id = (int) $subs_post->post_author;
-		if ( ! current_user_can( 'manage_options' ) && $author_id !== get_current_user_id() ) {
-			wp_send_json_error( [ 'message' => 'forbidden' ] );
+		if ( ! current_user_can( 'manage_options' ) && get_current_user_id() !== $author_id ) {
+			wp_send_json_error( array( 'message' => 'forbidden' ) );
 		}
 
 		$throttle = self::save_throttle_key( $subscription_id );
 		if ( get_transient( $throttle ) ) {
-			wp_send_json_success( [ 'throttled' => true ] );
+			wp_send_json_success( array( 'throttled' => true ) );
 		}
 		set_transient( $throttle, 1, DAY_IN_SECONDS );
 
@@ -489,13 +725,14 @@ class Cancellation {
 			}
 		}
 
-		$data = [
+		$data = array(
 			'subscription_id' => $subscription_id,
 			'customer_id'     => $author_id,
 			'reason_key'      => $reason_key,
 			'reason_label'    => $reason_label,
 			'offer_accepted'  => false,
-		];
+		);
+		self::record_recovery_event( $subscription_id, 'save', self::RECOVERY_CAMPAIGN, '', 0, $author_id );
 
 		/**
 		 * Fires when a customer opens the cancellation modal and backs out.
@@ -510,7 +747,7 @@ class Cancellation {
 		 */
 		do_action( 'subscrpt_subscription_saved', $subscription_id, $data );
 
-		wp_send_json_success( [ 'saved' => true ] );
+		wp_send_json_success( array( 'saved' => true ) );
 	}
 
 	/**
@@ -519,11 +756,11 @@ class Cancellation {
 	 * @param string $id Setting ID.
 	 */
 	public static function get_settings( $id = '' ) {
-		$settings = [
-			'subscrpt_cancellation_delay'            => subscrpt_pro_activated() ? get_option( 'subscrpt_cancellation_delay', '24h' ) : '24h',
+		$settings = array(
+			'subscrpt_cancellation_delay'            => get_option( 'subscrpt_cancellation_delay', '24h' ),
 			'subscrpt_cancellation_feedback_enabled' => get_option( 'subscrpt_cancellation_feedback_enabled', '1' ),
 			'subscrpt_cancellation_feedback_comment' => get_option( 'subscrpt_cancellation_feedback_comment', '1' ),
-		];
+		);
 		return ! empty( $id ) ? $settings[ $id ] ?? false : $settings;
 	}
 
@@ -558,32 +795,32 @@ class Cancellation {
 	 * @return array<int,array{key:string,label:string}>
 	 */
 	public static function default_reasons() {
-		$reasons = [
-			[
+		$reasons = array(
+			array(
 				'key'   => 'too_expensive',
 				'label' => __( 'Too expensive', 'subscription' ),
-			],
-			[
+			),
+			array(
 				'key'   => 'too_much_product',
 				'label' => __( 'I have more than I need', 'subscription' ),
-			],
-			[
+			),
+			array(
 				'key'   => 'quality_issues',
 				'label' => __( 'Not happy with the quality', 'subscription' ),
-			],
-			[
+			),
+			array(
 				'key'   => 'delivery_issues',
 				'label' => __( 'Delivery took too long', 'subscription' ),
-			],
-			[
+			),
+			array(
 				'key'   => 'found_better_deal',
 				'label' => __( 'Found a better deal elsewhere', 'subscription' ),
-			],
-			[
+			),
+			array(
 				'key'   => 'taking_a_break',
 				'label' => __( 'Just taking a break', 'subscription' ),
-			],
-		];
+			),
+		);
 
 		/**
 		 * Filter the built-in default cancellation reasons.
@@ -603,7 +840,7 @@ class Cancellation {
 	 * @return array<int,array{key:string,label:string}>
 	 */
 	public static function get_configured_reasons() {
-		$reasons = get_option( 'subscrpt_cancellation_reasons', [] );
+		$reasons = get_option( 'subscrpt_cancellation_reasons', array() );
 		if ( empty( $reasons ) || ! is_array( $reasons ) ) {
 			$reasons = self::default_reasons();
 		}
@@ -632,10 +869,10 @@ class Cancellation {
 		$reasons = self::get_configured_reasons();
 
 		if ( self::is_feedback_comment_enabled() ) {
-			$reasons[] = [
+			$reasons[] = array(
 				'key'   => self::OTHER_KEY,
 				'label' => __( 'Other', 'subscription' ),
-			];
+			);
 		}
 
 		return $reasons;
@@ -683,34 +920,34 @@ class Cancellation {
 	 */
 	public function process_due_cancellations() {
 		$subscriptions = get_posts(
-			[
+			array(
 				'post_type'   => 'subscrpt_order',
-				'post_status' => [ 'pe_cancelled' ],
+				'post_status' => array( 'pe_cancelled' ),
 				'fields'      => 'ids',
 				'numberposts' => -1,
-				'meta_query'  => [
+				'meta_query'  => array(
 					'relation' => 'OR',
-					[
+					array(
 						'key'     => self::CANCEL_AT_META,
 						'value'   => time(),
 						'compare' => '<=',
 						'type'    => 'NUMERIC',
-					],
-					[
+					),
+					array(
 						'relation' => 'AND',
-						[
+						array(
 							'key'     => self::CANCEL_AT_META,
 							'compare' => 'NOT EXISTS',
-						],
-						[
+						),
+						array(
 							'key'     => '_subscrpt_next_date',
 							'value'   => time(),
 							'compare' => '<=',
 							'type'    => 'NUMERIC',
-						],
-					],
-				],
-			]
+						),
+					),
+				),
+			)
 		);
 
 		if ( empty( $subscriptions ) ) {
@@ -772,7 +1009,7 @@ class Cancellation {
 			$cancel_at = (int) get_post_meta( $subscription_id, '_subscrpt_next_date', true );
 		}
 
-		wp_enqueue_style( 'subscrpt_cancellation_css', SUBSCRPT_ASSETS . '/css/cancellation.css', [], SUBSCRPT_VERSION );
+		wp_enqueue_style( 'subscrpt_cancellation_css', SUBSCRPT_ASSETS . '/css/cancellation.css', array(), SUBSCRPT_VERSION );
 		?>
 		<div class="subscrpt-pending-cancel-notice" role="status">
 			<span class="subscrpt-pending-cancel-notice__icon" aria-hidden="true">

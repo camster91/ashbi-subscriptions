@@ -1,17 +1,20 @@
 <?php
 /**
- * Subscription Plans REST controller (free base).
+ * Ashbi Subscriptions REST controller.
  *
  * CRUD for plan groups, plan terms, and product relations, plus a product
  * picker for the admin Plans manager. Namespace `wpsubscription/v1`, gated by
- * `manage_woocommerce`. This is the free plugin's first REST surface; Pro adds
- * the extra routes (`/plans/detach`, `/plans/migrate`, plan-side bulk attach).
+ * `manage_woocommerce`. The controller is the complete plan-management
+ * surface used by Ashbi's admin screens.
  *
  * Admin-only: the storefront and checkout never call these routes - they read
  * plan data directly via PlanRepository. A REST fault cannot break checkout.
  *
  * @package SpringDevs\Subscription\Api
  */
+
+// The filename is part of the imported public class path.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
 
 namespace SpringDevs\Subscription\Api;
 
@@ -262,8 +265,7 @@ class PlanController {
 	/**
 	 * POST /plans/groups - create a plan group.
 	 *
-	 * Free is Recurring-only: a non-Recurring type is rejected unless Pro is
-	 * active (Pro unlocks Subscribe & Save / Installments).
+	 * Ashbi supports Recurring, Subscribe & Save, and Installments groups.
 	 *
 	 * @param WP_REST_Request $request Request.
 	 *
@@ -283,9 +285,9 @@ class PlanController {
 			return new WP_Error( 'subscrpt_plan_create_failed', __( 'Could not create the plan.', 'subscription' ), array( 'status' => 500 ) );
 		}
 
-		// Seed a default monthly duration (draft) so a new plan opens with a
-		// starting billing term the merchant can edit and publish. Callers that
-		// create their own first duration (e.g. the product-editor wizard) pass
+		// Seed a default monthly duration (draft) so a new plan opens with a.
+		// starting billing term the merchant can edit and publish. Callers that.
+		// create their own first duration (e.g. the product-editor wizard) pass.
 		// seed_default_term=false to avoid a duplicate.
 		if ( false !== ( $params['seed_default_term'] ?? true ) ) {
 			$this->create_default_monthly_term( $id, $params['type'] ?? 'recurring' );
@@ -410,7 +412,7 @@ class PlanController {
 			return new WP_Error( 'subscrpt_term_create_failed', __( 'Could not create the plan term.', 'subscription' ), array( 'status' => 500 ) );
 		}
 
-		// Link products already in the group to the new duration so it shows
+		// Link products already in the group to the new duration so it shows.
 		// on the Products tab for them (inheriting their existing price).
 		PlanRepository::backfill_term_relations( (int) $params['plan_group_id'], $id );
 
@@ -482,8 +484,7 @@ class PlanController {
 	/**
 	 * POST /plans/relations - attach a product to a plan term.
 	 *
-	 * Free is simple-product only: a variation relation (`vid` != 0) is rejected
-	 * unless Pro is active (Pro unlocks per-variation attach).
+	 * Product relations may target a product-level seed or a concrete variation.
 	 *
 	 * @param WP_REST_Request $request Request.
 	 *
@@ -509,16 +510,38 @@ class PlanController {
 			return $guard;
 		}
 
+		// A variation relation is owned by the submitted variable product. This.
+		// prevents a manager from accidentally (or maliciously) attaching a.
+		// variation belonging to another product while retaining the REST surface's.
+		// capability and nonce boundary.
+		if ( ! empty( $params['vid'] ) ) {
+			$parent_product = function_exists( 'wc_get_product' ) ? wc_get_product( (int) $params['oid'] ) : null;
+			$variation      = function_exists( 'wc_get_product' ) ? wc_get_product( (int) $params['vid'] ) : null;
+			if (
+				! $parent_product
+				|| ! $parent_product->is_type( 'variable' )
+				|| ! $variation
+				|| 'variation' !== $variation->get_type()
+				|| (int) $variation->get_parent_id() !== (int) $params['oid']
+			) {
+				return new WP_Error(
+					'subscrpt_variation_product_mismatch',
+					__( 'The selected variation does not belong to this variable product.', 'subscription' ),
+					array( 'status' => 400 )
+				);
+			}
+		}
+
 		$id = PlanRepository::insert_relation( $params );
 
 		if ( ! $id ) {
 			return new WP_Error( 'subscrpt_relation_create_failed', __( 'Could not attach the product.', 'subscription' ), array( 'status' => 500 ) );
 		}
 
-		// Connecting a plan enables the subscription on the product / variation
-		// (it stays on until a product save explicitly clears the toggle). For a
+		// Connecting a plan enables the subscription on the product / variation.
+		// (it stays on until a product save explicitly clears the toggle). For a.
 		// variation, the parent's "any variation enabled" flag is turned on too.
-		// Marker: product has been plan-connected at least once (keeps the editor
+		// Marker: product has been plan-connected at least once (keeps the editor.
 		// in plan mode after a detach).
 		$oid = (int) $params['oid'];
 		if ( ! empty( $params['vid'] ) ) {
@@ -531,10 +554,10 @@ class PlanController {
 			update_post_meta( $oid, '_subscrpt_plan_connected_before', 'yes' );
 		}
 
-		// Default the purchase limit when the product has never had one set. The
-		// storefront gate (Frontend\Product::check_if_purchasable) only overrides
-		// WooCommerce's empty-price rule when a limit is set, so without this a
-		// plan-connected product with no base price stays un-purchasable — its
+		// Default the purchase limit when the product has never had one set. The.
+		// storefront gate (Frontend\Product::check_if_purchasable) only overrides.
+		// WooCommerce's empty-price rule when a limit is set, so without this a.
+		// plan-connected product with no base price stays un-purchasable — its.
 		// plan selector never renders until a product save writes this meta.
 		if ( '' === get_post_meta( $oid, '_subscrpt_limit', true ) ) {
 			update_post_meta( $oid, '_subscrpt_limit', 'unlimited' );
@@ -613,7 +636,7 @@ class PlanController {
 		$params = $this->read_params( $request );
 
 		if ( $product->is_type( 'variable' ) ) {
-			// Per-variation one-time: each variation carries its own enabled flag
+			// Per-variation one-time: each variation carries its own enabled flag.
 			// + native price. Saves may be partial (one variation at a time).
 			$variations = isset( $params['variations'] ) && is_array( $params['variations'] ) ? $params['variations'] : array();
 			foreach ( $variations as $vid => $vals ) {
@@ -626,7 +649,7 @@ class PlanController {
 				$variation->save();
 			}
 
-			// Parent flag mirrors "any variation enabled" — recomputed from all
+			// Parent flag mirrors "any variation enabled" — recomputed from all.
 			// children so a partial save never clears it for other variations.
 			$any_enabled = false;
 			foreach ( $product->get_children() as $child_id ) {
@@ -681,8 +704,8 @@ class PlanController {
 		$product_id = (int) $request->get_param( 'id' );
 		$product    = function_exists( 'wc_get_product' ) ? wc_get_product( $product_id ) : null;
 
-		// render_plan_view() supports simple products (free) and variable products
-		// (Pro reuses it for the variation plan view), so both can refresh in place.
+		// render_plan_view() supports simple and variable products, so both can.
+		// refresh in place.
 		if ( ! $product || ! ( $product->is_type( 'simple' ) || $product->is_type( 'variable' ) ) ) {
 			return new WP_Error(
 				'rest_invalid_product',
@@ -730,7 +753,8 @@ class PlanController {
 	/**
 	 * GET /plans/products - search WC products for the connect picker.
 	 *
-	 * Free is simple-product only: the picker returns simple products.
+	 * The picker returns simple and variable products; variable children are
+	 * returned as attachable variation rows.
 	 *
 	 * @param WP_REST_Request $request Request.
 	 *
@@ -741,7 +765,7 @@ class PlanController {
 
 		$args = array(
 			'status'  => 'publish',
-			'type'    => 'simple',
+			'type'    => array( 'simple', 'variable' ),
 			'limit'   => 20,
 			'return'  => 'objects',
 			's'       => $search,
@@ -757,8 +781,8 @@ class PlanController {
 		}
 
 		/**
-		 * Filter the product-picker results. Free returns simple products only;
-		 * Pro hooks this to append variable products (with nested variations).
+		 * Filter the product-picker results. Integrations may extend the returned
+		 * rows, but the standalone build already includes variable variations.
 		 *
 		 * @param array  $results Product rows (see product_row()).
 		 * @param string $search  Current search term.
@@ -798,9 +822,9 @@ class PlanController {
 			? ''
 			: html_entity_decode( wp_strip_all_tags( wc_price( $price ) ), ENT_QUOTES, 'UTF-8' );
 
-		// The plan group this product is attached to (0 = none). A product belongs
+		// The plan group this product is attached to (0 = none). A product belongs.
 		// to a single group; the picker disables rows already in another group.
-		// Variations share their parent's connection (relations use the parent oid),
+		// Variations share their parent's connection (relations use the parent oid),.
 		// cached per owner so a product's variations don't each re-query.
 		static $group_cache = array();
 
@@ -818,6 +842,22 @@ class PlanController {
 				);
 		}
 
+		$variations  = array();
+		$is_variable = $product->is_type( 'variable' );
+		if ( $is_variable && function_exists( 'wc_get_product' ) ) {
+			foreach ( $product->get_children() as $variation_id ) {
+				$variation = wc_get_product( $variation_id );
+				if ( ! $variation ) {
+					continue;
+				}
+				$variation_row         = self::product_row( $variation );
+				$variation_row['vid']  = (int) $variation_id;
+				$attributes            = array_filter( array_values( $variation->get_variation_attributes() ) );
+				$variation_row['name'] = $attributes ? implode( ', ', $attributes ) : $variation->get_name();
+				$variations[]          = $variation_row;
+			}
+		}
+
 		return array(
 			'id'              => $product->get_id(),
 			'name'            => '' !== $name_over ? $name_over : $product->get_name(),
@@ -826,59 +866,40 @@ class PlanController {
 			'price'           => $price,
 			'price_html'      => $price_html,
 			'is_virtual'      => $product->is_virtual(),
+			'is_variable'     => $is_variable,
 			'plan_group_id'   => $group_cache[ $owner_id ]['id'],
 			'plan_group_name' => $group_cache[ $owner_id ]['name'],
-			'variations'      => array(),
+			'variations'      => $variations,
 		);
 	}
 
-	/* ---- Free constraint guards ---- */
+	/* ---- Compatibility hooks ---- */
 
 	/**
-	 * Reject a non-Recurring group type on a free-only install.
+	 * Validate a plan group type.
 	 *
 	 * @param array $params Group params.
 	 *
 	 * @return true|WP_Error
 	 */
 	protected function guard_recurring_only( array $params ) {
-		if ( ! isset( $params['type'] ) || subscrpt_pro_activated() ) {
-			return true;
-		}
-
-		$type_int = is_numeric( $params['type'] ) ? (int) $params['type'] : PlanRepository::type_to_int( $params['type'] );
-
-		if ( PlanRepository::TYPE_MAP['recurring'] !== $type_int ) {
-			return new WP_Error(
-				'subscrpt_plan_type_pro',
-				__( 'Recurring Delivery and Split Payment plans require Subscription Pro.', 'subscription' ),
-				array( 'status' => 403 )
-			);
-		}
-
+		// The parameter remains part of this compatibility hook; PlanRepository
+		// performs the canonical type normalization and validation.
+		unset( $params );
 		return true;
 	}
 
 	/**
-	 * Reject a per-variation relation (vid != 0) on a free-only install.
+	 * Validate a product relation target.
 	 *
 	 * @param array $params Relation params.
 	 *
 	 * @return true|WP_Error
 	 */
 	protected function guard_simple_only( array $params ) {
-		if ( subscrpt_pro_activated() ) {
-			return true;
-		}
-
-		if ( ! empty( $params['vid'] ) ) {
-			return new WP_Error(
-				'subscrpt_variation_pro',
-				__( 'Attaching plans to product variations requires Subscription Pro.', 'subscription' ),
-				array( 'status' => 403 )
-			);
-		}
-
+		// The parameter remains part of this compatibility hook; relation checks
+		// below validate the submitted product and variation ownership.
+		unset( $params );
 		return true;
 	}
 

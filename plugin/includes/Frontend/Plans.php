@@ -1,15 +1,11 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- This filename is part of the imported public compatibility surface.
 /**
- * Storefront plan selector (free).
+ * Storefront plan selector.
  *
  * Renders the plan selector — a radio card per plan group, with the group's
- * terms as buttons — on a simple product tied to a plan, and carries the chosen
+ * terms as buttons — on a product tied to a plan, and carries the chosen
  * plan-term id onto the add-to-cart request. Guarded by `subscrpt_plan_offered()`:
  * with no tied plan this class does nothing and the classic price suffix stands.
- *
- * Runs only when Pro is inactive (see Frontend::__construct). Pro ships a superset
- * on the same hooks — One-Time card, discount badges, variable products and the
- * Subscribe & Save / Installments plan types.
  *
  * The storefront never calls REST; plan data is read directly through
  * `PlanRepository::resolve_for_product()` (object cache → DB).
@@ -23,7 +19,7 @@ use SpringDevs\Subscription\Admin\PlanPresenter;
 use SpringDevs\Subscription\Illuminate\Plans\PlanRepository;
 
 /**
- * Frontend plan selector for simple products.
+ * Frontend plan selector for simple and variable products.
  */
 class Plans {
 
@@ -31,7 +27,7 @@ class Plans {
 	 * Register storefront hooks.
 	 */
 	public function __construct() {
-		// Runs after Frontend\Product::change_price_html (priority 10) so the plan
+		// Runs after Frontend\Product::change_price_html (priority 10) so the plan.
 		// price replaces the classic suffix rather than appending to it.
 		add_filter( 'woocommerce_get_price_html', array( $this, 'plan_price_html' ), 20, 2 );
 		add_action( 'woocommerce_before_add_to_cart_button', array( $this, 'render_selector' ) );
@@ -48,17 +44,27 @@ class Plans {
 	}
 
 	/**
-	 * Whether a simple product offers a subscription: tied to a plan AND
-	 * subscription-enabled. Free is simple-only.
+	 * Whether a product or variation offers a subscription: tied to a plan AND
+	 * subscription-enabled on the exact purchasable entity.
 	 *
 	 * @param mixed $product Product object.
 	 *
 	 * @return bool
 	 */
 	private function product_has_plans( $product ) {
-		return $product instanceof \WC_Product
-			&& $product->is_type( 'simple' )
-			&& subscrpt_plan_offered( $product->get_id() );
+		if ( ! $product instanceof \WC_Product ) {
+			return false;
+		}
+
+		if ( $product->is_type( 'simple' ) ) {
+			return subscrpt_plan_offered( $product->get_id() );
+		}
+
+		if ( $product->is_type( 'variation' ) ) {
+			return subscrpt_plan_offered( $product->get_parent_id(), $product->get_id() );
+		}
+
+		return $product->is_type( 'variable' ) && subscrpt_product_has_plan( $product->get_id() );
 	}
 
 	/**
@@ -111,7 +117,9 @@ class Plans {
 			return $price_html;
 		}
 
-		$rows = PlanRepository::resolve_for_product( $product->get_id() );
+		$parent_id    = $product->is_type( 'variation' ) ? $product->get_parent_id() : $product->get_id();
+		$variation_id = $product->is_type( 'variation' ) ? $product->get_id() : 0;
+		$rows         = PlanRepository::resolve_for_product( $parent_id, $variation_id );
 		if ( empty( $rows ) ) {
 			return $price_html;
 		}
@@ -158,35 +166,78 @@ class Plans {
 			return;
 		}
 
-		$groups = $this->build_groups( $product );
-		if ( empty( $groups ) ) {
+		$contexts = $this->build_contexts( $product );
+		if ( empty( $contexts ) ) {
 			return;
 		}
+		$groups = $contexts[0]['groups'];
 
 		wc_get_template(
 			'product/plan-selector.php',
-			array( 'groups' => $groups ),
+			array(
+				'groups'   => $groups,
+				'contexts' => $contexts,
+			),
 			'subscription',
 			SUBSCRPT_TEMPLATES
 		);
 	}
 
 	/**
-	 * Build the selector groups for a simple product from resolved plan data.
+	 * Build selector contexts for a simple product or each variation.
+	 *
+	 * Variable products carry one context per child so the browser can switch
+	 * plan prices when WooCommerce resolves a variation, without an AJAX request.
+	 *
+	 * @param \WC_Product $product Product being rendered.
+	 *
+	 * @return array<int,array{variation_id:int,groups:array}>
+	 */
+	private function build_contexts( $product ) {
+		if ( $product->is_type( 'variable' ) ) {
+			$contexts = array();
+			foreach ( $product->get_children() as $variation_id ) {
+				if ( ! subscrpt_plan_offered( $product->get_id(), $variation_id ) ) {
+					continue;
+				}
+				$groups = $this->build_groups( $product, (int) $variation_id );
+				if ( ! empty( $groups ) ) {
+					$contexts[] = array(
+						'variation_id' => (int) $variation_id,
+						'groups'       => $groups,
+					);
+				}
+			}
+
+			return $contexts;
+		}
+
+		$variation_id = $product->is_type( 'variation' ) ? $product->get_id() : 0;
+		$groups       = $this->build_groups( $product, $variation_id );
+
+		return empty( $groups ) ? array() : array(
+			array(
+				'variation_id' => $variation_id,
+				'groups'       => $groups,
+			),
+		);
+	}
+
+	/**
+	 * Build selector groups from resolved plan data.
 	 *
 	 * One entry per plan group, each with its terms (id, label, price, note)
 	 * and a discount badge when its offer price beats the regular one, followed
 	 * by the One-Time card when the merchant offers one.
 	 *
-	 * @param \WC_Product $product Simple product.
+	 * @param \WC_Product $product Product being rendered.
+	 * @param int         $variation_id Variation id, or 0 for simple products.
 	 *
 	 * @return array
 	 */
-	private function build_groups( $product ) {
-		$resolved = PlanRepository::resolve_for_product( $product->get_id() );
-		if ( empty( $resolved ) ) {
-			return array();
-		}
+	private function build_groups( $product, $variation_id = 0 ) {
+		$parent_id = $product->is_type( 'variation' ) ? $product->get_parent_id() : $product->get_id();
+		$resolved  = PlanRepository::resolve_for_product( $parent_id, $variation_id );
 
 		$groups = array();
 		foreach ( $resolved as $row ) {
@@ -207,7 +258,7 @@ class Plans {
 
 			$price_num = $this->term_price( $row );
 
-			// Each term's discount (offer below regular). Installments price on a
+			// Each term's discount (offer below regular). Installments price on a.
 			// different basis, so they never contribute a percentage.
 			$row_regular = isset( $row['relation_data']['regular_price'] ) ? (float) $row['relation_data']['regular_price'] : 0.0;
 			if ( 'installments' !== $groups[ $gid ]['type'] && $row_regular > 0 && $price_num < $row_regular ) {
@@ -222,7 +273,7 @@ class Plans {
 			);
 		}
 
-		// Card header price = the first term of each group; the badge reports the
+		// Card header price = the first term of each group; the badge reports the.
 		// group's best discount, and says "up to" when its terms differ.
 		foreach ( $groups as &$group ) {
 			$group['price'] = $group['terms'][0]['price'];
@@ -238,9 +289,10 @@ class Plans {
 
 		$groups = array_values( $groups );
 
-		// One-Time purchase card, after the plans so a subscription stays the
+		// One-Time purchase card, after the plans so a subscription stays the.
 		// pre-selected default. The base template already renders this type.
-		$one_time = subscrpt_one_time_group( $product );
+		$offer_product = $variation_id && function_exists( 'wc_get_product' ) ? wc_get_product( $variation_id ) : $product;
+		$one_time      = subscrpt_one_time_group( $offer_product );
 		if ( $one_time ) {
 			$groups[] = $one_time;
 		}
@@ -262,7 +314,15 @@ class Plans {
 		$dtype   = isset( $data['discount_type'] ) ? (string) $data['discount_type'] : 'percentage';
 		$dvalue  = isset( $data['discount_value'] ) ? (string) $data['discount_value'] : '0';
 
-		return (float) PlanPresenter::offer_price( $regular, $selling, $dtype, $dvalue );
+		$price = (float) PlanPresenter::offer_price( $regular, $selling, $dtype, $dvalue );
+		if ( 'installments' === PlanRepository::type_to_string( (int) $row['group_type'] ) ) {
+			$count = max( 2, (int) ( $row['plan_data']['installment_count'] ?? 2 ) );
+			if ( function_exists( 'subscrpt_split_amounts' ) ) {
+				$price = (float) subscrpt_split_amounts( $price, $count )['per_installment'];
+			}
+		}
+
+		return $price;
 	}
 
 	/**

@@ -1,4 +1,9 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- This filename is part of the imported public compatibility surface.
+/**
+ * Admin order handlers.
+ *
+ * @package SpringDevs\Subscription\Admin
+ */
 
 namespace SpringDevs\Subscription\Admin;
 
@@ -47,6 +52,7 @@ class Order {
 		$screen    = wps_subscription_is_wc_order_hpos_enabled()
 				? wc_get_page_screen_id( 'shop-order' )
 				: 'shop_order';
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- The WooCommerce order screen identifier is read-only here; this callback performs no mutation.
 		$order_id  = wps_subscription_is_wc_order_hpos_enabled() && isset( $_GET['id'] ) ? ( sanitize_text_field( wp_unslash( $_GET['id'] ) ) ) : get_the_ID();
 		$histories = Helper::get_subscriptions_from_order( $order_id );
 		if ( is_array( $histories ) ) {

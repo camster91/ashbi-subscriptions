@@ -1,4 +1,12 @@
 <?php
+/**
+ * AJAX handlers for the onboarding wizard.
+ *
+ * @package SpringDevs\Subscription\Admin
+ */
+
+// This filename is part of the imported public compatibility surface.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
 
 namespace SpringDevs\Subscription\Admin;
 

@@ -5,6 +5,9 @@
  * @package SpringDevs\Subscription\Illuminate
  */
 
+// PSR-4 class filename is retained for the public renewal compatibility path.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
+
 namespace SpringDevs\Subscription\Illuminate;
 
 /**
@@ -103,8 +106,8 @@ final class RenewalClaim {
 	/**
 	 * Claim the period for an order already created by checkout.
 	 *
-	 * @param int $subscription_id Subscription post ID.
-	 * @param int $order_id        WooCommerce order ID.
+	 * @param int      $subscription_id Subscription post ID.
+	 * @param int      $order_id        WooCommerce order ID.
 	 * @param int|null $period_anchor Captured due-date timestamp.
 	 * @return bool
 	 */

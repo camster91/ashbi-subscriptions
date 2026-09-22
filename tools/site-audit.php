@@ -324,7 +324,7 @@ if ( class_exists( '\\Automattic\\WooCommerce\\Utilities\\OrderUtil' ) ) {
 
 if ( ashbi_audit_table_exists( $relation_table ) ) {
 	$order_table = true === $hpos ? $wpdb->prefix . 'wc_orders' : $wpdb->posts;
-	$relation = array(
+	$relation    = array(
 		'exists'                => true,
 		'rows'                  => ashbi_audit_count( "SELECT COUNT(*) FROM {$relation_table}" ),
 		'type_counts'           => ashbi_audit_relation_types( $relation_table ),
@@ -361,13 +361,13 @@ $report = array(
 	),
 	'commerce'       => array(
 		'woocommerce_version' => defined( 'WC_VERSION' ) ? WC_VERSION : null,
-		'hpos_enabled'         => $hpos,
-		'active_plugins'       => ashbi_audit_plugins(),
+		'hpos_enabled'        => $hpos,
+		'active_plugins'      => ashbi_audit_plugins(),
 	),
 	'subscriptions'  => array(
-		'status_counts'        => ashbi_audit_subscription_statuses(),
-		'meta_coverage'        => ashbi_audit_meta_coverage(),
-		'overdue_active'       => (int) $wpdb->get_var(
+		'status_counts'          => ashbi_audit_subscription_statuses(),
+		'meta_coverage'          => ashbi_audit_meta_coverage(),
+		'overdue_active'         => (int) $wpdb->get_var(
 			$wpdb->prepare(
 				"SELECT COUNT(DISTINCT p.ID) FROM {$wpdb->posts} p INNER JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID AND pm.meta_key = %s WHERE p.post_type = %s AND p.post_status IN ('active','pe_cancelled') AND CAST(pm.meta_value AS UNSIGNED) <= %d",
 				'_subscrpt_next_date',
@@ -375,7 +375,7 @@ $report = array(
 				$now
 			)
 		),
-		'due_within_7_days'    => (int) $wpdb->get_var(
+		'due_within_7_days'      => (int) $wpdb->get_var(
 			$wpdb->prepare(
 				"SELECT COUNT(DISTINCT p.ID) FROM {$wpdb->posts} p INNER JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID AND pm.meta_key = %s WHERE p.post_type = %s AND p.post_status IN ('active','pe_cancelled') AND CAST(pm.meta_value AS UNSIGNED) BETWEEN %d AND %d",
 				'_subscrpt_next_date',
@@ -384,16 +384,16 @@ $report = array(
 				$now + WEEK_IN_SECONDS
 			)
 		),
-		'next_date_min'        => (int) $wpdb->get_var( $wpdb->prepare( "SELECT MIN(CAST(pm.meta_value AS UNSIGNED)) FROM {$wpdb->postmeta} pm INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id WHERE p.post_type = %s AND pm.meta_key = %s AND pm.meta_value <> ''", 'subscrpt_order', '_subscrpt_next_date' ) ),
-		'next_date_max'        => (int) $wpdb->get_var( $wpdb->prepare( "SELECT MAX(CAST(pm.meta_value AS UNSIGNED)) FROM {$wpdb->postmeta} pm INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id WHERE p.post_type = %s AND pm.meta_key = %s AND pm.meta_value <> ''", 'subscrpt_order', '_subscrpt_next_date' ) ),
+		'next_date_min'          => (int) $wpdb->get_var( $wpdb->prepare( "SELECT MIN(CAST(pm.meta_value AS UNSIGNED)) FROM {$wpdb->postmeta} pm INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id WHERE p.post_type = %s AND pm.meta_key = %s AND pm.meta_value <> ''", 'subscrpt_order', '_subscrpt_next_date' ) ),
+		'next_date_max'          => (int) $wpdb->get_var( $wpdb->prepare( "SELECT MAX(CAST(pm.meta_value AS UNSIGNED)) FROM {$wpdb->postmeta} pm INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id WHERE p.post_type = %s AND pm.meta_key = %s AND pm.meta_value <> ''", 'subscrpt_order', '_subscrpt_next_date' ) ),
 		'overdue_reconciliation' => ashbi_audit_overdue_reconciliation( $now, $relation_table, ! empty( $relation['exists'] ) ),
 	),
 	'relations'      => $relation,
 	'payment_tokens' => $tokens,
 	'schedules'      => array(
-		'subscrpt_hourly_cron'        => wp_next_scheduled( 'subscrpt_hourly_cron' ) ?: null,
-		'subscrpt_daily_cron'         => wp_next_scheduled( 'subscrpt_daily_cron' ) ?: null,
-		'subscrpt_renew_reminder_cron'=> wp_next_scheduled( 'subscrpt_renew_reminder_cron' ) ?: null,
+		'subscrpt_hourly_cron'         => false !== wp_next_scheduled( 'subscrpt_hourly_cron' ) ? wp_next_scheduled( 'subscrpt_hourly_cron' ) : null,
+		'subscrpt_daily_cron'          => false !== wp_next_scheduled( 'subscrpt_daily_cron' ) ? wp_next_scheduled( 'subscrpt_daily_cron' ) : null,
+		'subscrpt_renew_reminder_cron' => false !== wp_next_scheduled( 'subscrpt_renew_reminder_cron' ) ? wp_next_scheduled( 'subscrpt_renew_reminder_cron' ) : null,
 	),
 	'options'        => array(
 		'subscrpt_version'           => (string) get_option( 'subscrpt_version', '' ),

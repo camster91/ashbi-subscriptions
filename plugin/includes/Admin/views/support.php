@@ -31,7 +31,7 @@ defined( 'ABSPATH' ) || exit;
 	</div>
 
 	<div class="wpsubs-table-card" style="padding:24px;">
-		<h2 style="margin-top:0;"><?php esc_html_e( 'Feature availability', 'subscription' ); ?></h2>
-		<p><?php esc_html_e( 'This build does not require a commercial license or vendor account. Screens marked unavailable describe optional functionality that is not included in the current distribution.', 'subscription' ); ?></p>
+		<h2 style="margin-top:0;"><?php esc_html_e( 'Integrations and extensions', 'subscription' ); ?></h2>
+		<p><?php esc_html_e( 'Ashbi Subscriptions includes the core subscription lifecycle. Payment gateways, licensing, delivery, and other connected services are optional adapters and must be configured and supported independently.', 'subscription' ); ?></p>
 	</div>
 </div>

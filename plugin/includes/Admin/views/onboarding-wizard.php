@@ -16,7 +16,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-$is_pro          = subscrpt_pro_activated();
 $currency_symbol = get_woocommerce_currency_symbol();
 
 // Whether the store has any product at all — decides the connect step's shape.
@@ -28,8 +27,7 @@ $has_products = (bool) wc_get_products(
 	)
 );
 
-// Plan types. Only "recurring" is available on the free plugin; the others are
-// shown as unavailable so the choice is visible but cannot be selected here.
+// Plan types supported by the standalone Ashbi build.
 $plan_types = array(
 	array(
 		'key'   => 'recurring',
@@ -44,7 +42,7 @@ $plan_types = array(
 		'label' => __( 'Subscribe & Save', 'subscription' ),
 		'desc'  => __( 'Recurring with a discount.', 'subscription' ),
 		'name'  => __( 'Subscribe & Save', 'subscription' ),
-		'pro'   => true,
+		'pro'   => false,
 		'icon'  => '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
 	),
 	array(
@@ -52,7 +50,7 @@ $plan_types = array(
 		'label' => __( 'Installments', 'subscription' ),
 		'desc'  => __( 'Split a price into payments.', 'subscription' ),
 		'name'  => __( 'Installment Plan', 'subscription' ),
-		'pro'   => true,
+		'pro'   => false,
 		'icon'  => '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>',
 	),
 );
@@ -172,20 +170,16 @@ $subscrpt_icon_plan = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 						<p class="wpsubs-p2-section-label"><?php esc_html_e( '1. Plan type', 'subscription' ); ?></p>
 						<div class="wpsubs-p2-option-cards wpsubs-p2-option-cards--list">
 							<?php foreach ( $plan_types as $subscrpt_type ) : ?>
-								<?php $subscrpt_locked = $subscrpt_type['pro'] && ! $is_pro; ?>
 								<button type="button"
 									class="wpsubs-p2-option-card wpsubs-plan-type-card<?php echo 'recurring' === $subscrpt_type['key'] ? ' active' : ''; ?>"
 									data-type="<?php echo esc_attr( $subscrpt_type['key'] ); ?>"
 									data-name="<?php echo esc_attr( $subscrpt_type['name'] ); ?>"
 									data-label="<?php echo esc_attr( $subscrpt_type['label'] ); ?>"
-									<?php echo $subscrpt_locked ? 'disabled' : ''; ?>>
+									>
 									<div class="wpsubs-p2-option-card__icon"><?php echo $subscrpt_type['icon']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- trusted static SVG defined above. ?></div>
 									<div class="wpsubs-p2-option-card__text">
 										<p class="wpsubs-p2-option-card__title">
 											<?php echo esc_html( $subscrpt_type['label'] ); ?>
-											<?php if ( $subscrpt_locked ) : ?>
-												<span class="wpsubs-p2-pro-badge" title="<?php esc_attr_e( 'Not included in this build', 'subscription' ); ?>"><?php esc_html_e( 'Unavailable', 'subscription' ); ?></span>
-											<?php endif; ?>
 										</p>
 										<p class="wpsubs-p2-option-card__desc"><?php echo esc_html( $subscrpt_type['desc'] ); ?></p>
 									</div>
@@ -228,8 +222,7 @@ $subscrpt_icon_plan = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 								<div class="wpsubs-form-row">
 									<label><?php esc_html_e( 'Billing every', 'subscription' ); ?></label>
 									<div class="wpsubs-p2-billing-group">
-										<input type="number" class="wpsubs-input wpsubs-p2-billing-per-input" autocomplete="off" min="1" value="1" data-dur-freq
-											<?php echo $is_pro ? '' : 'readonly max="1" title="' . esc_attr__( 'This billing option is not included in the current build.', 'subscription' ) . '"'; ?>>
+										<input type="number" class="wpsubs-input wpsubs-p2-billing-per-input" autocomplete="off" min="1" value="1" data-dur-freq>
 <?php
 								wpsubs_render_adv_select(
 									array(
@@ -291,7 +284,7 @@ $subscrpt_icon_plan = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 													'limit' => 100,
 													'orderby' => 'title',
 													'order' => 'ASC',
-													'type' => $is_pro ? array( 'simple', 'variable' ) : array( 'simple' ),
+													'type' => array( 'simple', 'variable' ),
 												)
 											);
 											foreach ( $subscrpt_products as $subscrpt_i => $subscrpt_wc_p ) :
@@ -314,7 +307,7 @@ $subscrpt_icon_plan = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 													)
 												);
 												$subscrpt_color    = $avatar_palette[ $subscrpt_i % count( $avatar_palette ) ];
-												// A product already attached to a plan can't be connected again —
+												// A product already attached to a plan can't be connected again —.
 												// same rule as the Plans page product tab.
 												$subscrpt_conns     = \SpringDevs\Subscription\Illuminate\Plans\PlanRepository::get_product_connections( $subscrpt_wc_p->get_id() );
 												$subscrpt_connected = ! empty( $subscrpt_conns );

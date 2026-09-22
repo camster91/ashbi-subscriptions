@@ -67,10 +67,10 @@ use SpringDevs\Subscription\Illuminate\Cancellation;
 				<?php if ( 'reasons' === $active_tab ) : ?>
 					<div class="wpsubs-table-card subscrpt-flow__panel subscrpt-flow__panel--reasons">
 						<?php
-						// The list in the order customers see it. It is rendered from what is
-						// saved, and cancellation-flow.js keeps it in step with the editor, so
-						// an edit shows here as soon as the modal closes, before saving. The
-						// automatic "Other" is shown last, as customers see it, but marked as
+						// The list in the order customers see it. It is rendered from what is.
+						// saved, and cancellation-flow.js keeps it in step with the editor, so.
+						// an edit shows here as soon as the modal closes, before saving. The.
+						// automatic "Other" is shown last, as customers see it, but marked as.
 						// not part of the list.
 						$subscrpt_reasons    = Cancellation::get_configured_reasons();
 						$subscrpt_auto_other = Cancellation::is_feedback_comment_enabled();
@@ -99,6 +99,7 @@ use SpringDevs\Subscription\Illuminate\Cancellation;
 
 				<?php if ( 'offers' === $active_tab ) : ?>
 					<div class="wpsubs-table-card subscrpt-flow__panel">
+						<input type="hidden" name="subscrpt_cancellation_offer_enabled" value="0" />
 						<?php
 						foreach ( CancellationFlow::offer_fields() as $subscrpt_offer_field ) {
 							SettingsHelper::render_settings_field( $subscrpt_offer_field['type'], $subscrpt_offer_field['field_data'] );
@@ -113,6 +114,8 @@ use SpringDevs\Subscription\Illuminate\Cancellation;
 
 			<aside>
 				<div class="wpsubs-table-card subscrpt-flow__panel subscrpt-flow__options">
+					<input type="hidden" name="subscrpt_cancellation_feedback_enabled" value="0" />
+					<input type="hidden" name="subscrpt_cancellation_feedback_comment" value="0" />
 					<?php
 					foreach ( CancellationFlow::sidebar_fields() as $subscrpt_field ) {
 						SettingsHelper::render_settings_field( $subscrpt_field['type'], $subscrpt_field['field_data'] );

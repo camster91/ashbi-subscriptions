@@ -27,44 +27,44 @@ $third_party      = array_filter(
 );
 
 // Category config. The `section` key is the full sub-section heading; `label` is the short card badge.
-$category_config = [
-	'lms'        => [
+$category_config = array(
+	'lms'        => array(
 		'label'   => __( 'LMS', 'subscription' ),
 		'section' => __( 'Learning Management System', 'subscription' ),
 		'bg'      => '#ede9fe',
 		'color'   => '#6d28d9',
-	],
-	'crm'        => [
+	),
+	'crm'        => array(
 		'label'   => __( 'CRM', 'subscription' ),
 		'section' => __( 'Customer Relationship Management', 'subscription' ),
 		'bg'      => '#fce7f3',
 		'color'   => '#9d174d',
-	],
-	'automation' => [
+	),
+	'automation' => array(
 		'label'   => __( 'Automation', 'subscription' ),
 		'section' => __( 'Automation', 'subscription' ),
 		'bg'      => '#e0f2fe',
 		'color'   => '#0369a1',
-	],
-	'email'      => [
+	),
+	'email'      => array(
 		'label'   => __( 'Email', 'subscription' ),
 		'section' => __( 'Email Marketing', 'subscription' ),
 		'bg'      => '#dcfce7',
 		'color'   => '#166534',
-	],
-	'license'    => [
+	),
+	'license'    => array(
 		'label'   => __( 'License', 'subscription' ),
 		'section' => __( 'License Management', 'subscription' ),
 		'bg'      => '#fef3c7',
 		'color'   => '#92400e',
-	],
-];
+	),
+);
 
-// Group third-party integrations by category, preserving the config order above
+// Group third-party integrations by category, preserving the config order above.
 // and appending any uncategorised ones under "Other".
-$third_party_grouped = [];
+$third_party_grouped = array();
 foreach ( array_keys( $category_config ) as $cat_key ) {
-	$third_party_grouped[ $cat_key ] = [];
+	$third_party_grouped[ $cat_key ] = array();
 }
 foreach ( $third_party as $integration ) {
 	$cat_key                           = $integration['category'] ?? '';
@@ -88,23 +88,23 @@ $subscrpt_status_of = static function ( array $integration ): string {
 	return ! empty( $integration['is_installed'] ) ? 'inactive' : 'not-installed';
 };
 
-$subscrpt_facets = [
-	'category' => [],
-	'status'   => [
+$subscrpt_facets = array(
+	'category' => array(),
+	'status'   => array(
 		'active'        => 0,
 		'inactive'      => 0,
 		'not-installed' => 0,
-	],
-	// No `recurring` facet: every integration that supports automatic
-	// recurring is a payment gateway, so the chip selected exactly the same
-	// six cards as the Payment Gateways category. The card badge still shows
+	),
+	// No `recurring` facet: every integration that supports automatic.
+	// recurring is a payment gateway, so the chip selected exactly the same.
+	// six cards as the Payment Gateways category. The card badge still shows.
 	// it, where it says something about that one integration.
-	'tag'      => [
-		'free' => 0,
-		'pro'  => 0,
-		'beta' => 0,
-	],
-];
+		'tag'  => array(
+			'core'     => 0,
+			'external' => 0,
+			'beta'     => 0,
+		),
+);
 
 foreach ( $integrations as $integration ) {
 	$cat_key = ( ( $integration['type'] ?? '' ) === 'payment_gateway' )
@@ -114,10 +114,10 @@ foreach ( $integrations as $integration ) {
 	$subscrpt_facets['category'][ $cat_key ] = ( $subscrpt_facets['category'][ $cat_key ] ?? 0 ) + 1;
 	++$subscrpt_facets['status'][ $subscrpt_status_of( $integration ) ];
 
-	if ( ! empty( $integration['is_pro'] ) ) {
-		++$subscrpt_facets['tag']['pro'];
+	if ( ! empty( $integration['is_optional'] ) ) {
+		++$subscrpt_facets['tag']['external'];
 	} else {
-		++$subscrpt_facets['tag']['free'];
+		++$subscrpt_facets['tag']['core'];
 	}
 	if ( ! empty( $integration['is_beta'] ) ) {
 		++$subscrpt_facets['tag']['beta'];
@@ -126,31 +126,31 @@ foreach ( $integrations as $integration ) {
 
 $subscrpt_total = count( $integrations );
 
-// Labels for the category chips. Payment gateways are a `type`, not a
+// Labels for the category chips. Payment gateways are a `type`, not a.
 // `category`, but on this page they read as one more group.
 //
-// The short `label` rather than the full `section`: in a 232px rail
-// "Customer Relationship Management" wraps to two lines and the group of
-// chips ends up taller than the viewport. The section headings above the
+// The short `label` rather than the full `section`: in a 232px rail.
+// "Customer Relationship Management" wraps to two lines and the group of.
+// chips ends up taller than the viewport. The section headings above the.
 // cards still spell it out in full.
-$subscrpt_category_labels = [ 'payment_gateway' => __( 'Payment Gateways', 'subscription' ) ];
+$subscrpt_category_labels = array( 'payment_gateway' => __( 'Payment Gateways', 'subscription' ) );
 foreach ( $category_config as $key => $cfg ) {
 	$subscrpt_category_labels[ $key ] = $cfg['label'] ?? $cfg['section'];
 }
 $subscrpt_category_labels['other'] = __( 'Other', 'subscription' );
 
-$subscrpt_status_labels = [
+$subscrpt_status_labels = array(
 	'active'        => __( 'Active', 'subscription' ),
 	'inactive'      => __( 'Inactive', 'subscription' ),
 	'not-installed' => __( 'Not installed', 'subscription' ),
-];
+);
 
-$subscrpt_tag_labels = [
-	'free' => __( 'Free', 'subscription' ),
-	'pro'  => __( 'Optional', 'subscription' ),
-	'beta' => __( 'Beta', 'subscription' ),
-];
-?>
+	$subscrpt_tag_labels = array(
+		'core'     => __( 'Core', 'subscription' ),
+		'external' => __( 'External', 'subscription' ),
+		'beta'     => __( 'Beta', 'subscription' ),
+	);
+	?>
 
 <div class="wp-subscription-admin-content list-page">
 
@@ -189,26 +189,26 @@ $subscrpt_tag_labels = [
 		<div class="subscrpt-int-filters" data-subscrpt-integration-filters hidden>
 
 			<?php
-			$subscrpt_chip_groups = [
-				[
+			$subscrpt_chip_groups = array(
+				array(
 					'facet'  => 'category',
 					'legend' => __( 'Category', 'subscription' ),
 					'counts' => $subscrpt_facets['category'],
 					'labels' => $subscrpt_category_labels,
-				],
-				[
+				),
+				array(
 					'facet'  => 'status',
 					'legend' => __( 'Status', 'subscription' ),
 					'counts' => $subscrpt_facets['status'],
 					'labels' => $subscrpt_status_labels,
-				],
-				[
+				),
+				array(
 					'facet'  => 'tag',
 					'legend' => __( 'Tags', 'subscription' ),
 					'counts' => $subscrpt_facets['tag'],
 					'labels' => $subscrpt_tag_labels,
-				],
-			];
+				),
+			);
 
 			foreach ( $subscrpt_chip_groups as $subscrpt_group ) :
 				// A facet nothing has is noise, not information.
@@ -279,7 +279,7 @@ $subscrpt_tag_labels = [
 					$is_installed = ! empty( $integration['is_installed'] );
 					$is_active    = ! empty( $integration['is_active'] );
 					$is_beta      = ! empty( $integration['is_beta'] );
-					$is_pro       = ! empty( $integration['is_pro'] );
+					$is_optional  = ! empty( $integration['is_optional'] );
 					$icon_url     = $integration['icon_url'] ?? '';
 					$icon_initial = $integration['icon_initial'] ?? strtoupper( substr( $integration['title'], 0, 2 ) );
 					$icon_color   = $integration['icon_color'] ?? '#64748b';
@@ -295,17 +295,17 @@ $subscrpt_tag_labels = [
 						$status_text = __( 'Not Installed', 'subscription' );
 					}
 
-					// Filtering reads these rather than scraping the rendered markup,
+					// Filtering reads these rather than scraping the rendered markup,.
 					// which would break the moment a label is translated.
 					$subscrpt_card_status = $subscrpt_status_of( $integration );
 					$subscrpt_card_tags   = array_keys(
 						array_filter(
-							[
-								'free'      => ! $is_pro,
-								'pro'       => $is_pro,
+							array(
+								'core'      => ! $is_optional,
+								'external'  => $is_optional,
 								'beta'      => $is_beta,
 								'recurring' => ! empty( $integration['supports_recurring'] ),
-							]
+							)
 						)
 					);
 					?>
@@ -338,7 +338,7 @@ $subscrpt_tag_labels = [
 									</span>
 								</div>
 								<div style="display:flex;flex-wrap:wrap;gap:4px;">
-									<?php if ( $is_pro ) : ?>
+									<?php if ( $is_optional ) : ?>
 										<span style="display:inline-flex;align-items:center;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:var(--wpsubs-brand-light,#fff1eb);color:var(--wpsubs-brand-dark,#d93f00);line-height:1.6;"><?php esc_html_e( 'Optional', 'subscription' ); ?></span>
 									<?php endif; ?>
 									<?php if ( $is_beta ) : ?>
@@ -364,29 +364,22 @@ $subscrpt_tag_labels = [
 
 						<!-- Actions -->
 						<div style="display:flex;gap:6px;flex-wrap:wrap;">
-							<?php if ( $is_pro && ! defined( 'SUBSCRIPT_PRO_VERSION' ) ) : ?>
-								<div style="width:100%;display:flex;align-items:center;gap:6px;background:var(--wpsubs-brand-light,#fff1eb);border-radius:6px;padding:7px 10px;font-size:12px;font-weight:500;color:var(--wpsubs-brand-dark,#d93f00);line-height:1.4;">
-									<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-									<?php esc_html_e( 'Not included in this build', 'subscription' ); ?>
-								</div>
-							<?php else : ?>
 								<?php
-								foreach ( $integration['actions'] as $action ) :
-									$is_primary = ( 'function' === $action['type'] );
+								foreach ( $integration['actions'] as $integration_action ) :
+									$is_primary = ( 'function' === $integration_action['type'] );
 									$btn_class  = $is_primary ? 'wpsubs-btn wpsubs-btn--primary wpsubs-btn--sm' : 'wpsubs-btn wpsubs-btn--outline wpsubs-btn--sm';
 									?>
-									<?php if ( 'link' === $action['type'] ) : ?>
-										<a href="<?php echo esc_url( $action['url'] ); ?>" class="<?php echo esc_attr( $btn_class ); ?>"><?php echo esc_html( $action['label'] ); ?></a>
-									<?php elseif ( 'external_link' === $action['type'] ) : ?>
-										<a href="<?php echo esc_url( $action['url'] ); ?>" target="_blank" rel="noopener noreferrer" class="<?php echo esc_attr( $btn_class ); ?>">
-											<?php echo esc_html( $action['label'] ); ?>
+									<?php if ( 'link' === $integration_action['type'] ) : ?>
+										<a href="<?php echo esc_url( $integration_action['url'] ); ?>" class="<?php echo esc_attr( $btn_class ); ?>"><?php echo esc_html( $integration_action['label'] ); ?></a>
+									<?php elseif ( 'external_link' === $integration_action['type'] ) : ?>
+										<a href="<?php echo esc_url( $integration_action['url'] ); ?>" target="_blank" rel="noopener noreferrer" class="<?php echo esc_attr( $btn_class ); ?>">
+											<?php echo esc_html( $integration_action['label'] ); ?>
 											<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
 										</a>
-									<?php elseif ( 'function' === $action['type'] ) : ?>
-										<button class="<?php echo esc_attr( $btn_class ); ?>" onclick="<?php echo esc_attr( $action['function'] ); ?>"><?php echo esc_html( $action['label'] ); ?></button>
+									<?php elseif ( 'function' === $integration_action['type'] ) : ?>
+										<button class="<?php echo esc_attr( $btn_class ); ?>" onclick="<?php echo esc_attr( $integration_action['function'] ); ?>"><?php echo esc_html( $integration_action['label'] ); ?></button>
 									<?php endif; ?>
 								<?php endforeach; ?>
-							<?php endif; ?>
 						</div>
 
 					</div>
@@ -403,17 +396,17 @@ $subscrpt_tag_labels = [
 			<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;">
 				<?php foreach ( $cat_integrations as $integration ) : ?>
 					<?php
-					$is_active    = ! empty( $integration['is_active'] );
-					$is_pro       = ! empty( $integration['is_pro'] );
-					$icon_url     = $integration['icon_url'] ?? '';
-					$icon_initial = $integration['icon_initial'] ?? strtoupper( substr( $integration['title'], 0, 2 ) );
-					$icon_color   = $integration['icon_color'] ?? '#64748b';
-					$category     = $integration['category'] ?? '';
-					$cat          = $category_config[ $category ] ?? [
+					$is_active     = ! empty( $integration['is_active'] );
+					$is_optional   = ! empty( $integration['is_optional'] );
+					$icon_url      = $integration['icon_url'] ?? '';
+					$icon_initial  = $integration['icon_initial'] ?? strtoupper( substr( $integration['title'], 0, 2 ) );
+					$icon_color    = $integration['icon_color'] ?? '#64748b';
+					$category      = $integration['category'] ?? '';
+					$category_meta = $category_config[ $category ] ?? array(
 						'label' => $category,
 						'bg'    => '#f1f5f9',
 						'color' => '#475569',
-					];
+					);
 
 					$status_dot  = $is_active ? '#16a34a' : '#9ca3af';
 					$status_text = $is_active ? __( 'Active', 'subscription' ) : __( 'Not Installed', 'subscription' );
@@ -421,12 +414,12 @@ $subscrpt_tag_labels = [
 					$subscrpt_card_status = $subscrpt_status_of( $integration );
 					$subscrpt_card_tags   = array_keys(
 						array_filter(
-							[
-								'free'      => ! $is_pro,
-								'pro'       => $is_pro,
+							array(
+								'core'      => ! $is_optional,
+								'external'  => $is_optional,
 								'beta'      => ! empty( $integration['is_beta'] ),
 								'recurring' => ! empty( $integration['supports_recurring'] ),
-							]
+							)
 						)
 					);
 					?>
@@ -458,13 +451,13 @@ $subscrpt_tag_labels = [
 										<?php echo esc_html( $status_text ); ?>
 									</span>
 								</div>
-								<?php if ( $cat['label'] || $is_pro ) : ?>
+								<?php if ( $category_meta['label'] || $is_optional ) : ?>
 									<div style="display:flex;flex-wrap:wrap;gap:4px;">
-										<?php if ( $is_pro ) : ?>
+										<?php if ( $is_optional ) : ?>
 											<span style="display:inline-flex;align-items:center;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:var(--wpsubs-brand-light,#fff1eb);color:var(--wpsubs-brand-dark,#d93f00);line-height:1.6;"><?php esc_html_e( 'Optional', 'subscription' ); ?></span>
 										<?php endif; ?>
-										<?php if ( $cat['label'] ) : ?>
-											<span style="display:inline-flex;align-items:center;font-size:10px;font-weight:500;padding:2px 7px;border-radius:10px;background:<?php echo esc_attr( $cat['bg'] ); ?>;color:<?php echo esc_attr( $cat['color'] ); ?>;line-height:1.6;"><?php echo esc_html( $cat['label'] ); ?></span>
+										<?php if ( $category_meta['label'] ) : ?>
+											<span style="display:inline-flex;align-items:center;font-size:10px;font-weight:500;padding:2px 7px;border-radius:10px;background:<?php echo esc_attr( $category_meta['bg'] ); ?>;color:<?php echo esc_attr( $category_meta['color'] ); ?>;line-height:1.6;"><?php echo esc_html( $category_meta['label'] ); ?></span>
 										<?php endif; ?>
 									</div>
 								<?php endif; ?>
@@ -479,29 +472,22 @@ $subscrpt_tag_labels = [
 
 						<!-- Actions -->
 						<div style="display:flex;gap:6px;flex-wrap:wrap;">
-							<?php if ( $is_pro && ! defined( 'SUBSCRIPT_PRO_VERSION' ) ) : ?>
-								<div style="width:100%;display:flex;align-items:center;gap:6px;background:var(--wpsubs-brand-light,#fff1eb);border-radius:6px;padding:7px 10px;font-size:12px;font-weight:500;color:var(--wpsubs-brand-dark,#d93f00);line-height:1.4;">
-									<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-									<?php esc_html_e( 'Not included in this build', 'subscription' ); ?>
-								</div>
-							<?php else : ?>
 								<?php
-								foreach ( $integration['actions'] as $action ) :
-									$is_primary = ( 'function' === $action['type'] );
+								foreach ( $integration['actions'] as $integration_action ) :
+									$is_primary = ( 'function' === $integration_action['type'] );
 									$btn_class  = $is_primary ? 'wpsubs-btn wpsubs-btn--primary wpsubs-btn--sm' : 'wpsubs-btn wpsubs-btn--outline wpsubs-btn--sm';
 									?>
-									<?php if ( 'link' === $action['type'] ) : ?>
-										<a href="<?php echo esc_url( $action['url'] ); ?>" class="<?php echo esc_attr( $btn_class ); ?>"><?php echo esc_html( $action['label'] ); ?></a>
-									<?php elseif ( 'external_link' === $action['type'] ) : ?>
-										<a href="<?php echo esc_url( $action['url'] ); ?>" target="_blank" rel="noopener noreferrer" class="<?php echo esc_attr( $btn_class ); ?>">
-											<?php echo esc_html( $action['label'] ); ?>
+									<?php if ( 'link' === $integration_action['type'] ) : ?>
+										<a href="<?php echo esc_url( $integration_action['url'] ); ?>" class="<?php echo esc_attr( $btn_class ); ?>"><?php echo esc_html( $integration_action['label'] ); ?></a>
+									<?php elseif ( 'external_link' === $integration_action['type'] ) : ?>
+										<a href="<?php echo esc_url( $integration_action['url'] ); ?>" target="_blank" rel="noopener noreferrer" class="<?php echo esc_attr( $btn_class ); ?>">
+											<?php echo esc_html( $integration_action['label'] ); ?>
 											<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
 										</a>
-									<?php elseif ( 'function' === $action['type'] ) : ?>
-										<button class="<?php echo esc_attr( $btn_class ); ?>" onclick="<?php echo esc_attr( $action['function'] ); ?>"><?php echo esc_html( $action['label'] ); ?></button>
+									<?php elseif ( 'function' === $integration_action['type'] ) : ?>
+										<button class="<?php echo esc_attr( $btn_class ); ?>" onclick="<?php echo esc_attr( $integration_action['function'] ); ?>"><?php echo esc_html( $integration_action['label'] ); ?></button>
 									<?php endif; ?>
 								<?php endforeach; ?>
-							<?php endif; ?>
 						</div>
 
 					</div>

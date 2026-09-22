@@ -3,7 +3,11 @@
  * Static-analysis declarations for runtime symbols supplied by WordPress,
  * WooCommerce, Action Scheduler, WooCommerce Stripe, and optional Pro code.
  * This file is never loaded by the plugin.
+ *
+ * @package AshbiSubscriptions\Tests
  */
+
+// phpcs:ignoreFile WordPress.Files.FileName.InvalidClassFileName,Squiz.Commenting.ClassComment.Missing,Squiz.Commenting.FileComment.MissingPackageTag,Squiz.Commenting.FunctionComment.Missing,Generic.Files.OneObjectStructurePerFile.MultipleFound,Universal.Files.SeparateFunctionsFromOO.Mixed,Universal.Namespaces.DisallowCurlyBraceSyntax.Forbidden,Universal.Namespaces.DisallowDeclarationWithoutName.Forbidden,Universal.Namespaces.OneDeclarationPerFile.MultipleFound -- Static-analysis stubs intentionally declare multiple global namespaces and runtime symbols in one file.
 
 namespace {
 	define( 'ABSPATH', '/' );
@@ -64,8 +68,8 @@ namespace {
 	}
 
 	class WC_Stripe_Intent_Status {
-		const SUCCEEDED = 'succeeded';
-		const REQUIRES_ACTION = 'requires_action';
+		const SUCCEEDED             = 'succeeded';
+		const REQUIRES_ACTION       = 'requires_action';
 		const REQUIRES_CONFIRMATION = 'requires_confirmation';
 	}
 

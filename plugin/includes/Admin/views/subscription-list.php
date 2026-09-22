@@ -18,22 +18,17 @@ if ( ! isset( $renewal_due ) ) {
 
 $filters_active = ! empty( $status ) || ! empty( $date_filter ) || ! empty( $search ) || ! empty( $renewal_due );
 
-// The last twelve of the store's months, counted back from the 1st: stepping
+// The last twelve of the store's months, counted back from the 1st: stepping.
 // back from today skips a month on the 29th–31st (31 Oct − 1 month is 1 Oct).
 // The store's timezone, because the list filters on the local post date.
 $months     = array();
 $this_month = ( new DateTimeImmutable( 'now', wp_timezone() ) )->modify( 'first day of this month' )->setTime( 0, 0 );
 for ( $i = 0; $i < 12; $i++ ) {
-	$month                           = strtotime( "-$i month" );
+	$month                             = strtotime( "-$i month" );
 	$months[ gmdate( 'Y-m', $month ) ] = gmdate( 'F Y', $month );
 }
 ?>
 <div class="wp-subscription-admin-content list-page">
-
-	<?php
-		// Getting started card hidden for now — re-enable later.
-		// require __DIR__ . '/subscription-gsc.php';
-	?>
 
 	<?php
 	wpsubs_render_page_header(
@@ -114,8 +109,8 @@ for ( $i = 0; $i < 12; $i++ ) {
 			?>
 
 			<?php
-			// Next-renewal window. The Overview's "Renewals due" figure opens the
-			// list with 7 chosen; a window reached by URL is offered too, so the
+			// Next-renewal window. The Overview's "Renewals due" figure opens the.
+			// list with 7 chosen; a window reached by URL is offered too, so the.
 			// dropdown always shows what is applied.
 			$renewal_windows = array_unique( array_merge( array( 7, 14, 30 ), $renewal_due ? array( $renewal_due ) : array() ) );
 			sort( $renewal_windows );
@@ -159,6 +154,7 @@ for ( $i = 0; $i < 12; $i++ ) {
 			<?php // Page size and bulk actions wrap as one right-aligned group, never one without the other. ?>
 			<div style="display:flex;flex-wrap:wrap;gap:8px;margin-inline-start:auto;">
 			<?php
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- This only controls presentation pagination; list mutations have their own nonce-protected request path.
 			$current_per_page = isset( $_GET['per_page'] ) ? intval( wp_unslash( $_GET['per_page'] ) ) : 20;
 			wpsubs_render_per_page_select(
 				array(
@@ -248,19 +244,19 @@ for ( $i = 0; $i < 12; $i++ ) {
 						$subscrpt_status = $subscription_data['status'] ?? '';
 						$subscrpt_status = empty( $subscrpt_status ) ? get_post_status( $subscription_id ) : $subscrpt_status;
 
-						$order_id      = $subscription_data['order']['order_id'] ?? 0;
-						$order_item_id = $subscription_data['order']['order_item_id'] ?? 0;
-						$order         = $order_id ? wc_get_order( $order_id ) : null;
-						$order_item    = $order ? $order->get_item( $order_item_id ) : null;
-						$product_name  = $order_item ? $order_item->get_name() : '-';
+						$order_id                = $subscription_data['order']['order_id'] ?? 0;
+						$order_item_id           = $subscription_data['order']['order_item_id'] ?? 0;
+						$subscription_order      = $order_id ? wc_get_order( $order_id ) : null;
+						$subscription_order_item = $subscription_order ? $subscription_order->get_item( $order_item_id ) : null;
+						$product_name            = $subscription_order_item ? $subscription_order_item->get_name() : '-';
 
-						$product_id  = $subscription_data['product']['variation_id'] ?: ( $subscription_data['product']['product_id'] ?? 0 );
+						$product_id  = ! empty( $subscription_data['product']['variation_id'] ) ? $subscription_data['product']['variation_id'] : ( $subscription_data['product']['product_id'] ?? 0 );
 						$product_url = $product_id ? get_edit_post_link( $product_id ) : '';
 
-						$customer       = $order ? $order->get_formatted_billing_full_name() : '-';
-						$customer_id    = $order ? $order->get_customer_id() : 0;
+						$customer       = $subscription_order ? $subscription_order->get_formatted_billing_full_name() : '-';
+						$customer_id    = $subscription_order ? $subscription_order->get_customer_id() : 0;
 						$customer_url   = $customer_id ? admin_url( 'user-edit.php?user_id=' . $customer_id ) : '';
-						$customer_email = $order ? $order->get_billing_email() : '';
+						$customer_email = $subscription_order ? $subscription_order->get_billing_email() : '';
 
 						$start_date   = $subscription_data['start_date'] ? strtotime( $subscription_data['start_date'] ) : 0;
 						$renewal_date = $subscription_data['next_date'] ? strtotime( $subscription_data['next_date'] ) : 0;
@@ -286,7 +282,7 @@ for ( $i = 0; $i < 12; $i++ ) {
 								: $timing_unit;
 						}
 
-						// Avatar
+						// Avatar.
 						$name_parts = array_values( array_filter( explode( ' ', trim( $customer ) ) ) );
 						$initials   = '?';
 						if ( $name_parts ) {
@@ -297,14 +293,14 @@ for ( $i = 0; $i < 12; $i++ ) {
 						}
 						$color_slot = ord( strtolower( $initials[0] ?? 'a' ) ) % 8;
 
-						// Action URLs
+						// Action URLs.
 						$nonce_action = 'wpsubs_action_' . $subscription->ID;
 						$view_url     = admin_url( 'admin.php?page=wp-subscription-details&id=' . $subscription->ID );
 						$trash_url    = wp_nonce_url( admin_url( 'admin.php?page=wp-subscription-list&action=trash&sub_id=' . $subscription->ID ), $nonce_action );
 						$delete_url   = wp_nonce_url( admin_url( 'admin.php?page=wp-subscription-list&action=delete&sub_id=' . $subscription->ID ), $nonce_action );
 						$restore_url  = wp_nonce_url( admin_url( 'admin.php?page=wp-subscription-list&action=restore&sub_id=' . $subscription->ID ), $nonce_action );
 
-						// Status badge
+						// Status badge.
 						$badge_mod_map  = array(
 							'active'       => 'active',
 							'pending'      => 'pending',
@@ -494,18 +490,18 @@ for ( $i = 0; $i < 12; $i++ ) {
 		} );
 	}
 
-	// ── Advanced-select event handlers ──────────────────────────
+	// ── Advanced-select event handlers ──────────────────────────.
 	var bulkSubmit = document.getElementById( 'wpsubs-bulk-action-submit' );
 	document.addEventListener( 'wpsubs:select', function ( e ) {
 		var id = e.target && e.target.id;
 
-		// Bulk action: submit via hidden button
+		// Bulk action: submit via hidden button.
 		if ( id === 'wpsubs-bulk-action-select' && bulkSubmit ) {
 			bulkSubmit.click();
 			return;
 		}
 
-		// Per-page: auto-submit as a filter action
+		// Per-page: auto-submit as a filter action.
 		if ( id === 'wpsubs-per-page-select' && form ) {
 			var fi = document.createElement( 'input' );
 			fi.type  = 'hidden';
@@ -516,7 +512,7 @@ for ( $i = 0; $i < 12; $i++ ) {
 		}
 	} );
 
-	// ── Row action dropdowns ─────────────────────────────────────
+	// ── Row action dropdowns ─────────────────────────────────────.
 	function closeAllRowMenus() {
 		document.querySelectorAll( '.wpsubs-row-actions--open' ).forEach( function ( el ) {
 			el.classList.remove( 'wpsubs-row-actions--open' );

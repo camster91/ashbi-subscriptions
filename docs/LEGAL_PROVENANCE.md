@@ -39,6 +39,9 @@ redistribute premium code.
 - Use independent Ashbi branding while retaining the legacy plugin directory,
   main filename, text domain, hooks, slugs, option keys, and database identifiers
   required for in-place upgrades and existing-store data compatibility.
+- Do not distribute imported upstream or third-party provider logo assets; the
+  release packager excludes unused image directories and built-in integration
+  cards use neutral initials for nominative compatibility references.
 - Do not imply endorsement by Convers Lab, WPSubscription, WordPress, or WooCommerce.
 
 ## Commercial model

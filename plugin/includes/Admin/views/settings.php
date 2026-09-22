@@ -27,8 +27,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use SpringDevs\Subscription\Admin\SettingsHelper;
 
-wp_enqueue_style( 'wp-subscription-admin-settings', SUBSCRPT_ASSETS . '/css/admin-settings.css', [], SUBSCRPT_VERSION );
-wp_enqueue_script( 'wp-subscription-admin-settings', SUBSCRPT_ASSETS . '/js/admin-settings.js', [ 'jquery' ], SUBSCRPT_VERSION, true );
+wp_enqueue_style( 'wp-subscription-admin-settings', SUBSCRPT_ASSETS . '/css/admin-settings.css', array(), SUBSCRPT_VERSION );
+wp_enqueue_script( 'wp-subscription-admin-settings', SUBSCRPT_ASSETS . '/js/admin-settings.js', array( 'jquery' ), SUBSCRPT_VERSION, true );
 
 $subscrpt_settings_base = admin_url( 'admin.php?page=wp-subscription-settings' );
 ?>
@@ -39,7 +39,7 @@ $subscrpt_settings_base = admin_url( 'admin.php?page=wp-subscription-settings' )
 		<?php do_settings_sections( 'wp_subscription_settings' ); ?>
 
 		<?php
-		// Shared page header (title + description + dashed rule) with the Save
+		// Shared page header (title + description + dashed rule) with the Save.
 		// button pinned to the right of the title row.
 		wpsubs_render_page_header(
 			array(
@@ -78,9 +78,6 @@ $subscrpt_settings_base = admin_url( 'admin.php?page=wp-subscription-settings' )
 						aria-current="<?php echo $subscrpt_cat_active ? 'page' : 'false'; ?>"
 					>
 						<span class="wpsubs-vnav__label"><?php echo esc_html( $subscrpt_cat_labels[ $subscrpt_cat_id ] ?? $subscrpt_cat_id ); ?></span>
-						<?php if ( SettingsHelper::category_is_pro_locked( $subscrpt_cat_group_ids, $settings_fields ) ) : ?>
-							<?php echo wp_kses_post( SettingsHelper::pro_badge_html() ); ?>
-						<?php endif; ?>
 					</a>
 				<?php endforeach; ?>
 				</nav>
@@ -90,8 +87,8 @@ $subscrpt_settings_base = admin_url( 'admin.php?page=wp-subscription-settings' )
 
 				<div class="subscrpt-settings__panels">
 					<?php
-					// One card per settings group, so groups stay visually separate
-					// instead of running together in a single section card. The rail
+					// One card per settings group, so groups stay visually separate.
+					// instead of running together in a single section card. The rail.
 					// shows a group's whole section; "All Settings" shows every card.
 					foreach ( $category_groups as $subscrpt_cat_id => $subscrpt_cat_group_ids ) :
 						$subscrpt_cat_open = 'all' === $active_cat || $subscrpt_cat_id === $active_cat;

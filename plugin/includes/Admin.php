@@ -1,4 +1,11 @@
 <?php
+/**
+ * Admin bootstrap.
+ *
+ * @package SpringDevs\Subscription
+ */
+
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- Legacy class filename is part of the public plugin compatibility contract.
 
 namespace SpringDevs\Subscription;
 
@@ -29,32 +36,28 @@ class Admin {
 		if ( ! function_exists( 'is_plugin_active' ) ) {
 			include_once ABSPATH . 'wp-admin/includes/plugin.php';
 		}
-		// Only show required plugins notice if Pro is NOT active
-		if ( ! is_plugin_active( 'subscription-pro/subscription-pro.php' ) ) {
-			if ( ! is_plugin_active( 'woocommerce/woocommerce.php' ) ) {
-				// Show required notice only, do not load other admin content
-				new Required();
-				return;
-			} else {
-				new Required();
-			}
+		// Ashbi Subscriptions only depends on WooCommerce. Required() owns the.
+		// missing-dependency notice; no paid vendor plugin is needed to load the.
+		// standalone admin.
+		if ( ! is_plugin_active( 'woocommerce/woocommerce.php' ) ) {
+			new Required();
+			return;
 		}
-		// Only load admin content if WooCommerce is active
-		if ( is_plugin_active( 'woocommerce/woocommerce.php' ) ) {
-			new Menu();
-			new Dashboard();
-			new Plans();
-			new CancellationFlow();
-			new Product\Plans();
-			new Integrations();
-			new Product();
-			new Subscriptions();
-			new AdminOrder();
-			new Comments();
-			new Settings();
-			new ProSettingsFields();
-			new Links();
-		}
+
+		new Required();
+		new Menu();
+		new Dashboard();
+		new Plans();
+		new CancellationFlow();
+		new Product\Plans();
+		new Integrations();
+		new Product();
+		new Subscriptions();
+		new AdminOrder();
+		new Comments();
+		new Settings();
+		new ProSettingsFields();
+		new Links();
 	}
 
 	/**

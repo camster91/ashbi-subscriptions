@@ -5,8 +5,8 @@
  * owner opens this page to find out.
  */
 
-// TODO(refactor): replace @wordpress/components with our `wpsubs-*` admin
-// components (wpsubs-btn, …) — see src/dashboard/index.js.
+// WordPress core supplies the standard button primitive; Ashbi owns the
+// banner layout and status treatment.
 import { Button } from "@wordpress/components";
 import Icon from "./Icon";
 

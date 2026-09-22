@@ -26,12 +26,12 @@ $now     = time();
 $records = ashbi_overdue_evidence_records( $now );
 
 $worksheet = array(
-	'schema_version' => OverdueDispositionPlan::SCHEMA_VERSION,
-	'generated_at'   => gmdate( 'c', $now ),
-	'site_url'       => site_url(),
-	'record_count'   => count( $records ),
+	'schema_version'       => OverdueDispositionPlan::SCHEMA_VERSION,
+	'generated_at'         => gmdate( 'c', $now ),
+	'site_url'             => site_url(),
+	'record_count'         => count( $records ),
 	'allowed_dispositions' => OverdueDispositionPlan::dispositions(),
-	'records'        => $records,
+	'records'              => $records,
 );
 
 WP_CLI::line( wp_json_encode( $worksheet, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );

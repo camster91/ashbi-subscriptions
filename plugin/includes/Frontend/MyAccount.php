@@ -1,8 +1,16 @@
 <?php
+/**
+ * Customer subscription account views.
+ *
+ * @package SpringDevs\Subscription\Frontend
+ */
+
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase, WordPress.Files.FileName.InvalidClassFileName -- Legacy class filename is part of the public plugin compatibility contract.
 
 namespace SpringDevs\Subscription\Frontend;
 
 use SpringDevs\Subscription\Illuminate\Helper;
+use SpringDevs\Subscription\Illuminate\Switching;
 use SpringDevs\Subscription\Illuminate\Subscription\Subscription;
 
 // HPOS: This file is compatible with WooCommerce High-Performance Order Storage (HPOS).
@@ -39,8 +47,10 @@ class MyAccount {
 		$this->subscriptions_endpoint      = Subscription::get_user_endpoint( 'subs_list' );
 		$this->view_subscriptions_endpoint = Subscription::get_user_endpoint( 'view_subs' );
 
-		// Flush rewrite rules on init.
-		add_action( 'init', array( $this, 'flush_rewrite_rules' ) );
+		// Register endpoints on every request, but only flush rules after an.
+		// activation or versioned migration explicitly schedules a one-time flush.
+		add_action( 'init', array( $this, 'register_rewrite_endpoints' ) );
+		add_action( 'init', array( $this, 'maybe_flush_rewrite_rules' ), 99 );
 
 		// Add My Subscriptions menu item.
 		add_filter( 'woocommerce_account_menu_items', array( $this, 'custom_my_account_menu_items' ), 200 );
@@ -52,7 +62,7 @@ class MyAccount {
 		add_action( "woocommerce_account_{$this->subscriptions_endpoint}_endpoint", array( $this, 'subscrpt_endpoint_content' ) );
 		add_action( "woocommerce_account_{$this->view_subscriptions_endpoint}_endpoint", array( $this, 'view_subscrpt_content' ) );
 
-		// Subscription page titles
+		// Subscription page titles.
 		add_filter( "woocommerce_endpoint_{$this->subscriptions_endpoint}_title", array( $this, 'change_subscriptions_title' ) );
 		add_filter( "woocommerce_endpoint_{$this->view_subscriptions_endpoint}_title", array( $this, 'change_single_subscription_title' ) );
 
@@ -82,11 +92,15 @@ class MyAccount {
 		$id = absint( $id ); // typecast to int.
 
 		$subs_post       = get_post( $id );
+		if ( ! $subs_post || 'subscrpt_order' !== $subs_post->post_type ) {
+			return wp_safe_redirect( '/404' );
+		}
 		$author_id       = $subs_post ? (int) $subs_post->post_author : 0;
 		$current_user_id = get_current_user_id();
 		$user_is_admin   = current_user_can( 'manage_options' );
 
-		if ( ! $user_is_admin && (int) $author_id !== (int) $current_user_id ) {
+		// Do not treat anonymous user ID 0 as the owner of a guest-owned record.
+		if ( ! is_user_logged_in() || ( ! $user_is_admin && ( 0 === (int) $author_id || (int) $author_id !== (int) $current_user_id ) ) ) {
 			return wp_safe_redirect( '/404' );
 		}
 
@@ -153,7 +167,7 @@ class MyAccount {
 					'label' => $label,
 				);
 			} elseif ( 'expired' === $status && 'pending' !== $order->get_status() ) {
-				// Check if maximum payments reached before showing renew button
+				// Check if maximum payments reached before showing renew button.
 				if ( ! subscrpt_is_max_payments_reached( $id ) ) {
 					$label = __( 'Renew', 'subscription' );
 					$label = apply_filters( 'subscrpt_split_payment_button_text', $label, 'renew', $id, $status );
@@ -163,6 +177,32 @@ class MyAccount {
 						'label' => $label,
 					);
 				}
+			}
+
+			if ( 'active' === $status ) {
+				$action_buttons['pause'] = array(
+					'url'   => subscrpt_get_action_url( 'pause', $subscrpt_nonce, $id ),
+					'label' => __( 'Pause', 'subscription' ),
+				);
+
+				$early_renewal_enabled = in_array( get_option( 'subscrpt_early_renew', '1' ), array( 1, '1', true, 'yes' ), true );
+				$next_timestamp        = (int) get_post_meta( $id, '_subscrpt_next_date', true );
+				if (
+					$early_renewal_enabled
+					&& $next_timestamp > time()
+					&& ! subscrpt_is_max_payments_reached( $id )
+					&& apply_filters( 'subscrpt_early_renewal_enabled_for_subscription', true, $id )
+				) {
+					$action_buttons['early-renew'] = array(
+						'url'   => subscrpt_get_action_url( 'early-renew', $subscrpt_nonce, $id ),
+						'label' => __( 'Renew early', 'subscription' ),
+					);
+				}
+			} elseif ( 'on_hold' === $status && 'manual' === get_post_meta( $id, '_subscrpt_hold_reason', true ) ) {
+				$action_buttons['resume'] = array(
+					'url'   => subscrpt_get_action_url( 'resume', $subscrpt_nonce, $id ),
+					'label' => __( 'Resume', 'subscription' ),
+				);
 			}
 
 			if ( 'pending' === $order->get_status() ) {
@@ -177,12 +217,12 @@ class MyAccount {
 		}
 
 		$is_auto_renew   = $subscription_data['is_auto_renew'];
-		$renewal_setting = in_array( get_option( 'wp_subscription_auto_renewal_toggle', '1' ), [ 1, '1', 'true', 'yes' ], true );
+		$renewal_setting = in_array( get_option( 'wp_subscription_auto_renewal_toggle', '1' ), array( 1, '1', 'true', 'yes' ), true );
 
-		$saved_methods = wc_get_customer_saved_methods_list( get_current_user_id() );
-		$has_methods   = isset( $saved_methods['cc'] );
-		if ( $has_methods && $renewal_setting && class_exists( 'WC_Stripe' ) && $order && 'stripe' === $order->get_payment_method() ) {
-			// Check maximum payment limit for auto-renewal buttons too
+		$payment_method_context = PaymentMethodController::get_subscription_context( $id, get_current_user_id() );
+		$has_methods            = $payment_method_context && ! empty( $payment_method_context['tokens'] );
+		if ( $has_methods && $renewal_setting ) {
+			// Check maximum payment limit for auto-renewal buttons too.
 			if ( ! subscrpt_is_max_payments_reached( $id ) ) {
 				if ( ! $is_auto_renew ) {
 					$label = __( 'Turn on Auto Renewal', 'subscription' );
@@ -204,37 +244,42 @@ class MyAccount {
 			}
 		}
 
-		// Allow programmatically disabling cancel button
+		// Allow programmatically disabling cancel button.
 		$disable_cancel = apply_filters( 'subscrpt_split_payment_disable_cancel', false, $id, $status );
 		if ( $disable_cancel && isset( $action_buttons['cancel'] ) ) {
 			unset( $action_buttons['cancel'] );
 		}
 
 		$action_buttons = apply_filters( 'subscrpt_single_action_buttons', $action_buttons, $id, $subscrpt_nonce, $status );
+		if ( $payment_method_context ) {
+			$payment_method_context['nonce'] = wp_create_nonce( $payment_method_context['nonce_action'] );
+		}
 
 		wc_get_template(
 			'myaccount/single.php',
 			array(
-				'id'              => $id,
-				'status'          => $status,
-				'verbose_status'  => $verbose_status,
-				'start_date'      => $start_date,
-				'next_date'       => $next_date,
-				'is_grace_period' => $is_grace_period,
-				'grace_remaining' => $grace_remaining,
-				'grace_end_date'  => $grace_end_date,
-				'trial'           => $trial,
-				'trial_mode'      => empty( $trial_mode ) ? 'off' : $trial_mode,
-				'order'           => $order,
-				'order_item'      => $order_item,
-				'related_orders'  => $related_orders,
-				'price'           => $price,
-				'price_excl_tax'  => $price_excl_tax,
-				'tax'             => $tax_amount,
-				'discount'        => $discount,
-				'user_cancel'     => $user_cancel,
-				'action_buttons'  => $action_buttons,
-				'wp_button_class' => wc_wp_theme_get_element_class_name( 'button' ) ? ' ' . wc_wp_theme_get_element_class_name( 'button' ) : '',
+				'id'                       => $id,
+				'status'                   => $status,
+				'verbose_status'           => $verbose_status,
+				'start_date'               => $start_date,
+				'next_date'                => $next_date,
+				'is_grace_period'          => $is_grace_period,
+				'grace_remaining'          => $grace_remaining,
+				'grace_end_date'           => $grace_end_date,
+				'trial'                    => $trial,
+				'trial_mode'               => empty( $trial_mode ) ? 'off' : $trial_mode,
+				'order'                    => $order,
+				'order_item'               => $order_item,
+				'related_orders'           => $related_orders,
+				'price'                    => $price,
+				'price_excl_tax'           => $price_excl_tax,
+				'tax'                      => $tax_amount,
+				'discount'                 => $discount,
+				'user_cancel'              => $user_cancel,
+				'action_buttons'           => $action_buttons,
+				'payment_method_context'   => $payment_method_context,
+				'switch_options'           => Switching::get_options( $id ),
+				'wp_button_class'          => wc_wp_theme_get_element_class_name( 'button' ) ? ' ' . wc_wp_theme_get_element_class_name( 'button' ) : '',
 			),
 			'subscription',
 			SUBSCRPT_TEMPLATES
@@ -242,11 +287,28 @@ class MyAccount {
 	}
 
 	/**
-	 * Re-write flush
+	 * Register My Account endpoints without mutating global rewrite state.
+	 *
+	 * @return void
 	 */
-	public function flush_rewrite_rules() {
+	public function register_rewrite_endpoints() {
 		add_rewrite_endpoint( $this->subscriptions_endpoint, EP_ROOT | EP_PAGES );
-		flush_rewrite_rules();
+		add_rewrite_endpoint( $this->view_subscriptions_endpoint, EP_ROOT | EP_PAGES );
+	}
+
+	/**
+	 * Flush rewrite rules once after activation or a versioned migration.
+	 *
+	 * @return void
+	 */
+	public function maybe_flush_rewrite_rules() {
+		if ( ! get_option( 'subscrpt_rewrite_flush_pending', false ) ) {
+			return;
+		}
+
+		// Delete first so concurrent requests cannot repeatedly flush global rules.
+		delete_option( 'subscrpt_rewrite_flush_pending' );
+		flush_rewrite_rules( false );
 	}
 
 	/**
@@ -283,7 +345,7 @@ class MyAccount {
 	 * @return array
 	 */
 	public function custom_my_account_menu_items( array $items ): array {
-		// Check if subscriptions menu item already exists to prevent duplicates
+		// Check if subscriptions menu item already exists to prevent duplicates.
 		if ( ! isset( $items[ $this->subscriptions_endpoint ] ) ) {
 			$logout = $items['customer-logout'];
 			unset( $items['customer-logout'] );

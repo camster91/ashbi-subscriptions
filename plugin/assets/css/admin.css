@@ -141,23 +141,6 @@
   display: block;
 }
 
-/* The licence badge sits before the logo and must not pick up the underline
-   that admin anchors get, since the inactive state is a link. */
-.wp-subscription-license-badge,
-.wp-subscription-license-badge:hover,
-.wp-subscription-license-badge:focus {
-  text-decoration: none;
-}
-
-a.wp-subscription-license-badge:hover {
-  filter: brightness(0.97);
-}
-
-a.wp-subscription-license-badge:focus {
-  box-shadow: 0 0 0 3px var(--wpsubs-brand-ring, rgba(255, 77, 0, 0.2));
-  outline: none;
-}
-
 .wp-subscription-admin-header-right {
   display: flex;
   align-items: center;
@@ -561,86 +544,11 @@ body[class*="wpsubscription_page_wp-subscription"] #wpcontent {
   box-shadow: 0 4px 16px #e0e7ef;
   transition: box-shadow 0.2s;
 }
-.wp-subscription-pro-callout {
-  background: #2271b1 !important;
-}
-.wp-subscription-pro-callout h2,
-.wp-subscription-pro-callout p {
-  color: #fff !important;
-}
-.wp-subscription-pro-callout .button-primary {
-  background: #fff !important;
-  color: #2271b1 !important;
-}
-.wp-subscription-pro-callout .button-primary:hover {
-  background: #e0e7ef !important;
-}
 @media (max-width: 900px) {
   .wp-subscription-support-resources {
     grid-template-columns: 1fr !important;
   }
 }
-.wp-subscription-hero-upgrade {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #2196f3;
-  border-radius: 12px;
-  padding: 32px 36px;
-  margin-bottom: 28px;
-  overflow: hidden;
-  min-height: 90px;
-}
-.wp-subscription-hero-upgrade::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0 2px, transparent 2px 40px);
-  opacity: 0.25;
-  pointer-events: none;
-}
-.wp-subscription-hero-content {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  z-index: 1;
-}
-.wp-subscription-hero-icon {
-  font-size: 2em;
-  line-height: 1;
-}
-.wp-subscription-hero-title {
-  font-size: 2em;
-  font-weight: bold;
-  color: #fff;
-  line-height: 1.2;
-}
-.wp-subscription-hero-btn {
-  z-index: 1;
-  background: #fff;
-  color: #2196f3;
-  font-weight: 600;
-  font-size: 1.1em;
-  padding: 16px 32px;
-  border-radius: 8px;
-  text-decoration: none;
-  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.08);
-  transition:
-    background 0.18s,
-    color 0.18s,
-    transform 0.18s;
-  border: none;
-  outline: none;
-  display: inline-block;
-  text-align: center;
-}
-.wp-subscription-hero-btn:hover {
-  background: #e3f0fd;
-  color: #1565c0;
-  transform: translateY(-2px) scale(1.03);
-}
-
 /* Bulk Actions Styling */
 .tablenav {
   margin: 8px 0 16px 0;

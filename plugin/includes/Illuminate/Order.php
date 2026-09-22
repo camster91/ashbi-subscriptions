@@ -1,4 +1,11 @@
 <?php
+/**
+ * WooCommerce order and subscription schedule integration.
+ *
+ * @package SpringDevs\Subscription\Illuminate
+ */
+
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase, WordPress.Files.FileName.InvalidClassFileName -- Legacy class path is part of the public plugin compatibility contract.
 
 namespace SpringDevs\Subscription\Illuminate;
 
@@ -16,7 +23,8 @@ class Order {
 		add_action( 'woocommerce_admin_order_item_headers', array( $this, 'register_custom_column' ) );
 		add_action( 'woocommerce_admin_order_item_values', array( $this, 'add_column_value' ), 10, 2 );
 		add_action( 'woocommerce_before_order_itemmeta', array( $this, 'add_order_item_data' ), 10, 3 );
-		add_action( 'woocommerce_order_status_changed', array( $this, 'order_status_changed' ) );
+		add_action( 'woocommerce_order_status_changed', array( $this, 'order_status_changed' ), 10, 2 );
+		add_action( 'woocommerce_payment_complete', array( $this, 'payment_complete' ), 30 );
 		add_filter( 'woocommerce_order_needs_payment', array( $this, 'block_quarantined_renewal_payment' ), 10, 2 );
 		add_action( 'woocommerce_before_delete_order', array( $this, 'delete_the_subscription' ) );
 		add_action( 'subscrpt_subscription_activated', array( $this, 'generate_dates_for_subscription' ) );
@@ -42,6 +50,35 @@ class Order {
 	}
 
 	/**
+	 * Reconcile paid renewal orders when a gateway marks payment complete.
+	 *
+	 * Some gateways fire `woocommerce_payment_complete` before changing the
+	 * order status, so relying only on `woocommerce_order_status_changed` would
+	 * leave a successfully paid renewal unapplied.
+	 *
+	 * @param int $order_id Paid order ID.
+	 * @return void
+	 */
+	public function payment_complete( $order_id ) {
+		$order = wc_get_order( $order_id );
+		if ( ! $order || ! $order->is_paid() ) {
+			return;
+		}
+
+		global $wpdb;
+		$table = $wpdb->prefix . 'subscrpt_order_relation';
+		$renewal = $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT id FROM %i WHERE order_id = %d AND type IN (%s, %s) LIMIT 1',
+				array( $table, (int) $order_id, 'early-renew', 'renew' )
+			)
+		);
+		if ( $renewal ) {
+			$this->order_status_changed( $order_id );
+		}
+	}
+
+	/**
 	 * Generate start, next and trial dates.
 	 *
 	 * @param int $subscription_id Subscription Id.
@@ -49,14 +86,21 @@ class Order {
 	 * @return void
 	 */
 	public function generate_dates_for_subscription( $subscription_id ) {
-		$order_item_id        = get_post_meta( $subscription_id, '_subscrpt_order_item_id', true );
-		$subscription_history = Helper::get_subscription_from_order_item_id( $order_item_id );
+		$order_item_id = absint( get_post_meta( $subscription_id, '_subscrpt_order_item_id', true ) );
+		if ( ! $order_item_id ) {
+			return;
+		}
 
-		$order_item_meta = wc_get_order_item_meta( $order_item_id, '_subscrpt_meta' );
-		$type            = Helper::get_typos( 1, $order_item_meta['type'] );
-		$trial           = get_post_meta( $subscription_id, '_subscrpt_trial', true );
-		$recurr_timing   = ( $order_item_meta['time'] ?? 1 ) . ' ' . $type;
-		$next_date       = null;
+		$subscription_history = Helper::get_subscription_from_order_item_id( $order_item_id );
+		$order_item_meta      = wc_get_order_item_meta( $order_item_id, '_subscrpt_meta' );
+		if ( ! is_object( $subscription_history ) || empty( $subscription_history->type ) || ! is_array( $order_item_meta ) || empty( $order_item_meta['type'] ) ) {
+			return;
+		}
+
+		$type          = Helper::get_typos( 1, $order_item_meta['type'] );
+		$trial         = get_post_meta( $subscription_id, '_subscrpt_trial', true );
+		$recurr_timing = ( $order_item_meta['time'] ?? 1 ) . ' ' . $type;
+		$next_date     = null;
 
 		if ( 'new' === $subscription_history->type ) {
 			$start_date = time();
@@ -145,7 +189,7 @@ class Order {
 	 * @return bool
 	 */
 	private function persist_renewal_schedule( int $subscription_id, int $renewal_order_id, int $order_item_id, string $history_type = 'renew' ): bool {
-		if ( $renewal_order_id === (int) get_post_meta( $subscription_id, '_subscrpt_next_date_set_by_order', true ) ) {
+		if ( (int) get_post_meta( $subscription_id, '_subscrpt_next_date_set_by_order', true ) === $renewal_order_id ) {
 			return RenewalClaim::mark_schedule_complete( $subscription_id, $renewal_order_id );
 		}
 
@@ -237,7 +281,7 @@ class Order {
 			}
 
 			$next_date = sdevs_wp_strtotime( $recurr_timing, $anchor );
-			$guard      = 0;
+			$guard     = 0;
 			while ( $next_date <= $now && $guard < 1000 ) {
 				$stepped = sdevs_wp_strtotime( $recurr_timing, $next_date );
 				if ( $stepped <= $next_date ) {
@@ -290,7 +334,7 @@ class Order {
 
 		$args      = array( $subscription_id, $renewal_order_id );
 		$run_at    = RenewalClaim::schedule_next_attempt( $subscription_id, $renewal_order_id );
-		$run_at    = max( time() + 1, $run_at ?: time() + 60 );
+		$run_at    = max( time() + 1, ! empty( $run_at ) ? $run_at : time() + 60 );
 		$scheduled = false;
 		if ( function_exists( 'as_has_scheduled_action' ) && function_exists( 'as_schedule_single_action' ) ) {
 			$scheduled = (bool) as_has_scheduled_action( 'subscrpt_retry_subscription_schedule', $args, 'ashbi-subscriptions' );
@@ -404,6 +448,14 @@ class Order {
 		<?php
 	}
 
+	/**
+	 * Render subscription metadata below an admin order item.
+	 *
+	 * @param int        $item_id Order item ID.
+	 * @param object     $item Order item object.
+	 * @param \WC_Product $product Product object.
+	 * @return bool|null
+	 */
 	public function add_order_item_data( $item_id, $item, $product ) {
 		if ( ! $product ) {
 			return;
@@ -426,10 +478,11 @@ class Order {
 	/**
 	 * Take some actions based on order status changed.
 	 *
-	 * @param int $order_id Order Id.
+	 * @param int    $order_id    Order Id.
+	 * @param string $from_status Previous order status.
 	 */
-	public function order_status_changed( $order_id ) {
-		$order       = wc_get_order( $order_id );
+	public function order_status_changed( $order_id, $from_status = '' ) {
+		$order = wc_get_order( $order_id );
 		if ( ! $order || $order->get_meta( '_subscrpt_renewal_quarantined' ) ) {
 			return;
 		}
@@ -459,15 +512,62 @@ class Order {
 		$histories = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i WHERE order_id=%d', array( $table_name, $order_id ) ) );
 
 		foreach ( $histories as $history ) {
+			// Early renewal is a prepaid order for the next period. A failed or.
+			// cancelled early checkout must not cancel an otherwise active.
+			// subscription; only a verified payment advances its schedule.
+			if ( 'early-renew' === $history->type ) {
+				if ( $order->is_paid() ) {
+					$this->process_early_renewal( $order, $history );
+				}
+				continue;
+			}
 			if ( 'new' === $history->type || 'renew' === $history->type ) {
-				$subscription_id = $history->subscription_id;
+				$subscription_id      = $history->subscription_id;
+				$renewal_meta_changed = false;
+				if (
+					'renew' === $history->type
+					&& in_array( (string) $order->get_status(), array( 'failed', 'on-hold' ), true )
+					&& ! $order->get_meta( '_subscrpt_renewal_payment_failed' )
+				) {
+					$order->update_meta_data( '_subscrpt_renewal_payment_failed', 1 );
+					$renewal_meta_changed = true;
+				}
+				// Attribute the first subsequent paid renewal to a previously.
+				// accepted retention campaign. The event key makes repeated order.
+				// callbacks and webhook replays harmless.
+				if (
+					$order->is_paid()
+					&& Cancellation::has_recovery_event( (int) $subscription_id, 'offer_accepted' )
+					&& ! Cancellation::has_recovery_event( (int) $subscription_id, 'win_back' )
+				) {
+					Cancellation::record_recovery_event(
+						(int) $subscription_id,
+						'win_back',
+						Cancellation::RECOVERY_CAMPAIGN,
+						'',
+						(int) $order->get_id(),
+						(int) $order->get_customer_id()
+					);
+				}
+				// A renewal with a recorded failed/on-hold state that later becomes.
+				// paid is a recovery, not an ordinary renewal. Store the fact on the.
+				// Woo order so the report remains HPOS-safe and can count it without.
+				// customer data. The durable failure marker covers failed -> pending.
+				// -> paid sequences where the final transition's source is pending.
+				if (
+					'renew' === $history->type
+					&& $order->is_paid()
+					&& $order->get_meta( '_subscrpt_renewal_payment_failed' )
+					&& ! $order->get_meta( '_subscrpt_renewal_recovered' )
+				) {
+					$order->update_meta_data( '_subscrpt_renewal_recovered', 1 );
+					$renewal_meta_changed = true;
+				}
+				if ( $renewal_meta_changed ) {
+					$order->save();
+				}
 				if ( 'renew' === $history->type && $order->is_paid() ) {
 					RenewalClaim::mark_payment_complete( (int) $subscription_id, (int) $order_id );
-				}
-
-				// Renewals ignore the intermediate `processing` state for renewal orders.
-				if ( 'renew' === $history->type && 'processing' === $order->get_status() ) {
-					continue;
 				}
 
 				// Capture the status before the max-payments check below may flip it.
@@ -483,7 +583,7 @@ class Order {
 					$target_status = 'completed';
 				}
 
-				// Retry only the missing schedule side effect on a repeated paid-renewal
+				// Retry only the missing schedule side effect on a repeated paid-renewal.
 				// callback; notes, counts, roles, and other activation effects stay idempotent.
 				if ( $current_status === $target_status ) {
 					if ( 'renew' === $history->type && in_array( $target_status, array( 'active', 'completed' ), true ) ) {
@@ -510,7 +610,7 @@ class Order {
 					continue;
 				}
 
-				// A paid renewal is not allowed to activate until its exact relation has
+				// A paid renewal is not allowed to activate until its exact relation has.
 				// durably advanced the billing schedule.
 				if (
 					'renew' === $history->type
@@ -554,20 +654,148 @@ class Order {
 				// If possible change order status to completed if it has a trial subscription.
 				$this->maybe_trigger_auto_complete_trial_order( $order_id, $subscription_id );
 
-				// Increment renewal count for completed renewal orders (wps-pro)
-				if ( 'renew' === $history->type && 'active' === $post_status && function_exists( 'subscrpt_pro_activated' ) && subscrpt_pro_activated() ) {
-					if ( class_exists( '\\SpringDevs\\SubscriptionPro\\Illuminate\\LimitChecker' ) ) {
-						\SpringDevs\SubscriptionPro\Illuminate\LimitChecker::increment_renewal_count( $history->subscription_id );
-					}
-				}
-
-				// Add enhanced split payment activity logging
+				// Add enhanced split payment activity logging.
 				$this->add_split_payment_activity_note( $history->subscription_id, $history->type, $post_status, $order );
 
 				Action::write_comment( $target_status, $history->subscription_id );
 			} else {
 				do_action( 'subscrpt_order_status_changed', $order, $history );
 			}
+		}
+	}
+
+	/**
+	 * Apply a paid early-renewal order and consume the stored next period.
+	 *
+	 * The subscription remains active while the order is pending. A database
+	 * lock plus order-scoped markers makes payment-complete/status callbacks
+	 * replay-safe without treating a failed early checkout as a cancellation.
+	 *
+	 * @param \WC_Order $order   Paid early-renewal order.
+	 * @param object    $history Relation row.
+	 * @return bool
+	 */
+	private function process_early_renewal( \WC_Order $order, $history ): bool {
+		$subscription_id = (int) ( $history->subscription_id ?? 0 );
+		if ( ! $subscription_id || 'active' !== get_post_status( $subscription_id ) ) {
+			subscrpt_write_log( "Paid early renewal #{$order->get_id()} ignored because subscription #{$subscription_id} is not active." );
+			return false;
+		}
+
+		global $wpdb;
+		$lock_name = 'ashbi_subscrpt_early_apply_' . $subscription_id . '_' . (int) $order->get_id();
+		if ( 1 !== (int) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 5)', $lock_name ) ) ) {
+			subscrpt_write_log( "Could not acquire early renewal application lock for subscription #{$subscription_id}." );
+			return false;
+		}
+
+		try {
+			$fresh_order = wc_get_order( $order->get_id() );
+			if ( ! $fresh_order || ! $fresh_order->is_paid() ) {
+				return false;
+			}
+			if ( in_array( $fresh_order->get_meta( '_subscrpt_early_renewal_applied' ), array( true, 1, '1' ), true ) ) {
+				return true;
+			}
+
+			$order_item = $fresh_order->get_item( (int) ( $history->order_item_id ?? 0 ) );
+			if ( ! $order_item instanceof \WC_Order_Item_Product ) {
+				return false;
+			}
+			$item_meta = $order_item->get_meta( '_subscrpt_meta', true );
+		$item_meta = is_array( $item_meta ) ? $item_meta : array();
+		$time_meta = $item_meta['time'] ?? get_post_meta( $subscription_id, '_subscrpt_timing_per', true );
+		$unit_meta = $item_meta['type'] ?? get_post_meta( $subscription_id, '_subscrpt_timing_option', true );
+		$time      = max( 1, (int) ( ! empty( $time_meta ) ? $time_meta : 1 ) );
+		$unit      = (string) ( ! empty( $unit_meta ) ? $unit_meta : 'months' );
+		$timing    = $time . ' ' . Helper::get_typos( $time, $unit );
+		$anchor    = (int) $fresh_order->get_meta( '_subscrpt_early_renewal_anchor', true );
+		if ( ! $anchor ) {
+			$anchor = (int) get_post_meta( $subscription_id, '_subscrpt_next_date', true );
+		}
+			if ( $anchor <= 0 ) {
+				return false;
+			}
+
+			$next_date = sdevs_wp_strtotime( $timing, $anchor );
+			$guard     = 0;
+			while ( false !== $next_date && $next_date <= time() && $guard < 1000 ) {
+				$stepped = sdevs_wp_strtotime( $timing, $next_date );
+				if ( $stepped <= $next_date ) {
+					break;
+				}
+				$next_date = $stepped;
+				++$guard;
+			}
+			if ( false === $next_date ) {
+				return false;
+			}
+			$filtered_next_date = apply_filters( 'subscrpt_subscription_next_date', $next_date, $subscription_id, $timing, 'early-renew' );
+			if ( ! is_numeric( $filtered_next_date ) || (int) $filtered_next_date <= 0 ) {
+				return false;
+			}
+			$next_date = (int) $filtered_next_date;
+			update_post_meta( $subscription_id, '_subscrpt_next_date', $next_date );
+			update_post_meta( $subscription_id, '_subscrpt_next_date_set_by_order', $order->get_id() );
+			if (
+				(int) get_post_meta( $subscription_id, '_subscrpt_next_date', true ) !== $next_date
+				|| (int) get_post_meta( $subscription_id, '_subscrpt_next_date_set_by_order', true ) !== (int) $order->get_id()
+			) {
+				return false;
+			}
+
+			// A paid early renewal consumes the trial state, if a legacy record still.
+			// carried one, and makes the paid order the new canonical source.
+			foreach ( array( '_subscrpt_trial', '_subscrpt_trial_mode', '_subscrpt_trial_started', '_subscrpt_trial_ended' ) as $trial_key ) {
+				delete_post_meta( $subscription_id, $trial_key );
+			}
+			update_post_meta( $subscription_id, '_subscrpt_order_id', $order->get_id() );
+			update_post_meta( $subscription_id, '_subscrpt_order_item_id', $order_item->get_id() );
+
+			if ( ! $fresh_order->get_meta( '_subscrpt_early_renewal_activity_done' ) ) {
+				$existing_activity = get_comments(
+					array(
+						'post_id'    => $subscription_id,
+						'type'       => 'order_note',
+						'number'     => 1,
+						'meta_key'   => '_subscrpt_early_renewal_order_id',
+						'meta_value' => $order->get_id(),
+					)
+				);
+				if ( empty( $existing_activity ) ) {
+					$comment_id = wp_insert_comment(
+						array(
+							'comment_author'  => 'Ashbi Subscriptions',
+							// translators: %d: early-renewal order ID.
+							'comment_content' => sprintf( __( 'Early renewal payment received. Order #%d is now the active subscription source.', 'subscription' ), $order->get_id() ),
+							'comment_post_ID' => $subscription_id,
+							'comment_type'    => 'order_note',
+						)
+					);
+					if ( ! $comment_id ) {
+						return false;
+					}
+					update_comment_meta( $comment_id, '_subscrpt_early_renewal_order_id', $order->get_id() );
+					update_comment_meta( $comment_id, '_subscrpt_activity', 'Early Renewal Payment' );
+					update_comment_meta( $comment_id, '_subscrpt_activity_type', 'early_renewal_payment' );
+				}
+				$fresh_order->update_meta_data( '_subscrpt_early_renewal_activity_done', 1 );
+			}
+
+			$fresh_order->update_meta_data( '_subscrpt_early_renewal_applied', 1 );
+			$fresh_order->update_meta_data( '_subscrpt_early_renewal_applied_at', time() );
+			if ( ! $fresh_order->save() ) {
+				return false;
+			}
+			if ( ! $fresh_order->get_meta( '_subscrpt_early_renewal_applied' ) ) {
+				return false;
+			}
+			delete_post_meta( $subscription_id, '_subscrpt_early_renewal_order_id' );
+			delete_post_meta( $subscription_id, '_subscrpt_early_renewal_anchor' );
+			do_action( 'subscrpt_early_renewal_applied', $subscription_id, $order->get_id(), $order_item->get_id() );
+			return true;
+		} finally {
+			$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock_name ) );
 		}
 	}
 
@@ -695,12 +923,12 @@ class Order {
 	 * @param \WC_Order $order           WooCommerce order object.
 	 */
 	private function add_split_payment_activity_note( $subscription_id, $history_type, $post_status, $order ) {
-		// Only add enhanced notes for active subscriptions
+		// Only add enhanced notes for active subscriptions.
 		if ( 'active' !== $post_status ) {
 			return true;
 		}
 
-		// Check if this is a split payment subscription
+		// Check if this is a split payment subscription.
 		if ( ! function_exists( 'subscrpt_get_payment_type' ) ) {
 			return true;
 		}
@@ -710,17 +938,17 @@ class Order {
 			return true;
 		}
 
-		// Get payment progress information
+		// Get payment progress information.
 		$max_payments       = function_exists( 'subscrpt_get_max_payments' ) ? subscrpt_get_max_payments( $subscription_id ) : 0;
 		$payments_made      = function_exists( 'subscrpt_count_payments_made' ) ? subscrpt_count_payments_made( $subscription_id ) : 0;
 		$remaining_payments = function_exists( 'subscrpt_get_remaining_payments' ) ? subscrpt_get_remaining_payments( $subscription_id ) : 0;
 
-		// Determine payment number for this order
+		// Determine payment number for this order.
 		$payment_number = $payments_made;
 		$order_total    = $order->get_total();
 		$order_currency = $order->get_currency();
 
-		// Create enhanced activity note
+		// Create enhanced activity note.
 		$comment_content = '';
 		$activity_type   = '';
 
@@ -747,11 +975,11 @@ class Order {
 			$activity_type = __( 'Split Payment - Installment', 'subscription' );
 		}
 
-		// Add the enhanced activity note
+		// Add the enhanced activity note.
 		if ( $comment_content ) {
 			$comment_id = wp_insert_comment(
 				array(
-					'comment_author'  => 'Subscription for WooCommerce',
+					'comment_author'  => 'Ashbi Subscriptions',
 					'comment_content' => $comment_content,
 					'comment_post_ID' => $subscription_id,
 					'comment_type'    => 'order_note',
@@ -767,7 +995,7 @@ class Order {
 				return false;
 			}
 
-			// Add order note with split payment context
+			// Add order note with split payment context.
 			$order_note = sprintf(
 				/* translators: %1$d: payment number, %2$d: total payments, %3$d: subscription id */
 				__( 'Split payment %1$d of %2$d received for subscription #%3$d', 'subscription' ),
@@ -789,7 +1017,7 @@ class Order {
 	 * @return bool|null True when complete/not applicable, null when queued, false on queue failure.
 	 */
 	public function maybe_trigger_auto_complete_trial_order( $order_id, $subscription_id ) {
-		$order       = wc_get_order( $order_id );
+		$order = wc_get_order( $order_id );
 		if ( ! $order ) {
 			return false;
 		}

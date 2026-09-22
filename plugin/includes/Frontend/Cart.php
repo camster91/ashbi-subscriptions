@@ -1,4 +1,4 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- This filename is part of the imported public compatibility surface.
 /**
  * Cart handling for subscription products.
  *
@@ -51,8 +51,7 @@ class Cart {
 	 * @return bool
 	 */
 	public function add_to_cart_validation( $passed, $product_id, $quantity, $variation_id = 0 ) {
-		$product_id = (int) $variation_id > 0 ? (int) $variation_id : (int) $product_id;
-		$validation = $this->validate_cart_items( $product_id );
+		$validation = $this->validate_cart_items( (int) $product_id, (int) $variation_id );
 
 		if ( $validation['failed'] ) {
 			$error_notice = empty( $validation['error_notice'] ) ? __( 'This product cannot be added to the cart.', 'subscription' ) : $validation['error_notice'];
@@ -71,8 +70,9 @@ class Cart {
 	 * @throws \Exception If validation fails.
 	 */
 	public function add_to_cart_validation_store_api( $product ) {
-		$product_id = $product->get_id();
-		$validation = $this->validate_cart_items( $product_id );
+		$variation_id = 'variation' === $product->get_type() ? $product->get_id() : 0;
+		$product_id   = $variation_id ? $product->get_parent_id() : $product->get_id();
+		$validation   = $this->validate_cart_items( $product_id, $variation_id );
 
 		if ( $validation['failed'] ) {
 			$error_notice = empty( $validation['error_notice'] ) ? __( 'This product cannot be added to the cart.', 'subscription' ) : $validation['error_notice'];
@@ -83,18 +83,25 @@ class Cart {
 	/**
 	 * Validate cart items.
 	 *
-	 * @param int $product_id Product Id.
+	 * @param int $product_id   Product parent id.
+	 * @param int $variation_id Variation id, or 0 for simple products.
 	 * @return array
 	 */
-	public function validate_cart_items( $product_id ) {
+	public function validate_cart_items( $product_id, $variation_id = 0 ) {
 		$cart_items = WC()->cart->cart_contents;
 
-		$product = Subscription::get_subs_product( $product_id );
+		$product = Subscription::get_subs_product( $variation_id ? $variation_id : $product_id );
+		if ( ! $product ) {
+			return array(
+				'failed'       => false,
+				'error_notice' => null,
+			);
+		}
 
 		$error_notice = null;
 		$failed       = false;
 		// A tied plan counts as a subscription even without classic `_subscrpt_enabled`.
-		$enabled = $product->is_enabled() || subscrpt_plan_offered( $product_id );
+		$enabled = $product->is_enabled() || subscrpt_plan_offered( $product_id, $variation_id );
 
 		foreach ( $cart_items as $key => $cart_item ) {
 			if ( isset( $cart_item['subscription'] ) ) {
@@ -110,10 +117,10 @@ class Cart {
 			}
 		}
 
-		return [
+		return array(
 			'failed'       => (bool) $failed,
 			'error_notice' => $error_notice,
-		];
+		);
 	}
 
 	/**
@@ -135,6 +142,9 @@ class Cart {
 	 */
 	public function set_prices_for_calculation( $price, $product ) {
 		$product = Subscription::get_subs_product( $product );
+		if ( ! $product ) {
+			return $price;
+		}
 		if ( $product->is_enabled() && $product->is_type( 'simple' ) ) {
 			$trial_time_per = $product->get_meta( '_subscrpt_trial_timing_per' );
 			if ( ! empty( $trial_time_per ) && $trial_time_per > 0 && Helper::check_trial( $product->get_id() ) ) {
@@ -183,15 +193,12 @@ class Cart {
 	 * @return void
 	 */
 	public function check_cart_items() {
-		if ( subscrpt_pro_activated() ) {
-			return;
-		}
 		$cart_items = WC()->cart->cart_contents;
 		if ( is_array( $cart_items ) ) {
 			foreach ( $cart_items as $key => $value ) {
-				// Plan items were validated against the plan by the resolver at
-				// add-to-cart; their `subscription` snapshot intentionally differs
-				// from the product's classic meta, so skip the classic re-check
+				// Plan items were validated against the plan by the resolver at.
+				// add-to-cart; their `subscription` snapshot intentionally differs.
+				// from the product's classic meta, so skip the classic re-check.
 				// (which would otherwise drop them from the cart).
 				if ( ! empty( $value['subscrpt_plan_id'] ) ) {
 					continue;
@@ -204,8 +211,13 @@ class Cart {
 				 */
 				$product = $value['data'];
 				$product = Subscription::get_subs_product( $product );
+				if ( ! $product ) {
+					wc_add_notice( __( 'An item which is no longer available was removed from your cart.', 'subscription' ), 'error' );
+					WC()->cart->remove_cart_item( $key );
+					continue;
+				}
 				if ( isset( $value['subscription'] ) ) {
-					if ( $product->is_type( 'simple' ) ) {
+					if ( $product->is_type( 'simple' ) || $product->is_type( 'variation' ) ) {
 						if ( Helper::get_typos( 1, $product->get_meta( '_subscrpt_timing_option' ) ) !== $value['subscription']['type'] || $product->get_trial() !== $value['subscription']['trial'] ) {
 							// remove the item.
 							wc_add_notice( __( 'An item which is no longer available was removed from your cart.', 'subscription' ), 'error' );
@@ -346,14 +358,14 @@ class Cart {
 						$cart_subscription['trial']
 					);
 
-					// Subscription timing & type
+					// Subscription timing & type.
 					$time = $cart_subscription['time'];
 					$type = Helper::get_typos( $time, $cart_subscription['type'], true );
 
 					// Discount-aware totals, shared with the classic cart.
 					$price_data = Helper::build_cart_recurring_price_data( $cart_item, $cart_item_key, $type );
 
-					// Description
+					// Description.
 					$description = empty( $cart_subscription['trial'] )
 								? __( 'Next billing on', 'subscription' ) . ': ' . $next_date
 								: __( 'First billing on', 'subscription' ) . ': ' . $start_date;
@@ -447,8 +459,8 @@ class Cart {
 			unset( $item_data['per_cost'] );
 			$item_data['cost'] = (float) $cart_item['subscription']['per_cost'] * $cart_item['quantity'];
 
-			// Plan items don't stamp the installment count into the subscription
-			// array (it rides the cart item as subscrpt_max_no_payment); classic
+			// Plan items don't stamp the installment count into the subscription.
+			// array (it rides the cart item as subscrpt_max_no_payment); classic.
 			// products carry it on the product meta.
 			if ( ! isset( $item_data['max_no_payment'] ) ) {
 				$item_data['max_no_payment'] = ! empty( $cart_item['subscrpt_max_no_payment'] )
@@ -456,19 +468,14 @@ class Cart {
 					: $cart_item['data']->get_meta( '_subscrpt_max_no_payment' );
 			}
 
-			// Normalise the cadence word to singular/plural by frequency for the
-			// blocks (Store API) cart — plan items store the raw plural interval
+			// Normalise the cadence word to singular/plural by frequency for the.
+			// blocks (Store API) cart — plan items store the raw plural interval.
 			// (e.g. "months"), which the block would otherwise render as-is.
 			if ( ! empty( $item_data['type'] ) ) {
 				$sub_time          = max( 1, (int) ( $item_data['time'] ?? 1 ) );
 				$item_data['type'] = Helper::get_typos( $sub_time, $item_data['type'] );
 			}
 		}
-		if ( ! subscrpt_pro_activated() ) {
-			$item_data['time']       = null;
-			$item_data['signup_fee'] = null;
-		}
-
 		return $item_data;
 	}
 
@@ -476,23 +483,30 @@ class Cart {
 	 * Add product meta on cart item.
 	 *
 	 * @param array $cart_item_data cart_item_data.
-	 * @param int   $product_id Product ID.
+	 * @param int   $product_id   Product parent id.
+	 * @param int   $variation_id Variation id, or 0 for simple products.
 	 *
 	 * @return array
 	 */
-	public function add_to_cart_item_data( array $cart_item_data, int $product_id ): array {
-		$product = Subscription::get_subs_product( $product_id );
+	public function add_to_cart_item_data( array $cart_item_data, int $product_id, int $variation_id = 0 ): array {
+		$context_id = $variation_id ? $variation_id : $product_id;
+		$product    = Subscription::get_subs_product( $context_id );
+		if ( ! $product ) {
+			return $cart_item_data;
+		}
 		if ( ! $product->is_type( 'simple' ) ) {
-			return $cart_item_data;
+			if ( ! $variation_id || 'variation' !== $product->get_type() ) {
+				return $cart_item_data;
+			}
 		}
-		// Plan products stamp their subscription snapshot in the plan checkout
-		// (Frontend\PlanCheckout / Pro), gated on the chosen plan id — so a One-Time
-		// purchase of a plan product is not wrongly tagged as a subscription here
+		// Plan products stamp their subscription snapshot in the plan checkout.
+		// (Frontend\PlanCheckout / Pro), gated on the chosen plan id — so a One-Time.
+		// purchase of a plan product is not wrongly tagged as a subscription here.
 		// (which would show a cadence + list it under "Recurring totals").
-		if ( subscrpt_product_has_plan( $product_id ) ) {
+		if ( subscrpt_product_has_plan( $product_id, $variation_id ) ) {
 			return $cart_item_data;
 		}
-		if ( $product->is_enabled() ) :
+		if ( $product->is_enabled() && $product->is_type( 'simple' ) ) :
 			$subscription_data          = array();
 			$subscription_data['time']  = null;
 			$subscription_data['type']  = $product->get_timing_option();
@@ -531,15 +545,20 @@ class Cart {
 	 * @return string
 	 */
 	public function change_price_cart_html( $price, $cart_item ) {
-		$product = Subscription::get_subs_product( $cart_item['product_id'] );
-		if ( ! $product->is_type( 'simple' ) ) {
+		$product_id = ! empty( $cart_item['variation_id'] ) ? $cart_item['variation_id'] : $cart_item['product_id'];
+		$product    = Subscription::get_subs_product( $product_id );
+		if ( ! $product ) {
 			return $price;
 		}
 
-		// A tied plan makes it a subscription even without classic `_subscrpt_enabled`;
-		// get_price_html() already resolves to the plan line (Frontend\Plans), so this
+		// A tied plan makes it a subscription even without classic `_subscrpt_enabled`;.
+		// get_price_html() already resolves to the plan line (Frontend\Plans), so this.
 		// shows the plan cadence on the cart line without doubling.
-		if ( $product->is_enabled() || subscrpt_plan_offered( $product->get_id() ) ) {
+		$parent_id    = $product->get_parent_id();
+		$plan_offered = $parent_id
+			? subscrpt_plan_offered( $parent_id, $product->get_id() )
+			: subscrpt_plan_offered( $product->get_id() );
+		if ( $product->is_enabled() || $plan_offered ) {
 			return $product->get_price_html();
 		}
 
@@ -649,7 +668,7 @@ class Cart {
 	 * @return array
 	 */
 	public function set_renew_status( $cart_item_data, $product_id ) {
-		// Plan purchases are new subscriptions unless an explicit renewal action
+		// Plan purchases are new subscriptions unless an explicit renewal action.
 		// already carried the exact subscription and plan into the cart.
 		if ( empty( $cart_item_data['renew_subscrpt'] ) && function_exists( 'subscrpt_product_has_plan' ) && subscrpt_product_has_plan( $product_id ) ) {
 			return $cart_item_data;
@@ -657,10 +676,10 @@ class Cart {
 
 		$expired = Helper::subscription_exists( $product_id, 'expired' );
 		if ( $expired ) {
-			// Check if maximum payment limit has been reached
+			// Check if maximum payment limit has been reached.
 			if ( subscrpt_is_max_payments_reached( $expired ) ) {
 				wc_add_notice( __( 'This subscription has reached its maximum payment limit and cannot be renewed further.', 'subscription' ), 'error' );
-				return $cart_item_data; // Don't add renew status
+				return $cart_item_data; // Don't add renew status.
 			}
 
 			if ( empty( $cart_item_data['renew_subscrpt'] ) ) {

@@ -1,4 +1,12 @@
 <?php
+/**
+ * WooCommerce Blocks bootstrap.
+ *
+ * @package SpringDevs\Subscription\Illuminate
+ */
+
+// PSR-4 class filename is retained for the public Blocks compatibility path.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
 
 namespace SpringDevs\Subscription\Illuminate;
 

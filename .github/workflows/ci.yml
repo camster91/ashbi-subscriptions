@@ -43,6 +43,17 @@ jobs:
       - name: Run tests
         run: composer test
 
+      - name: Build deterministic release evidence
+        run: |
+          mkdir -p dist
+          bash scripts/build-release.sh dist/ashbi-subscriptions-${{ github.sha }}.zip
+          bash scripts/build-release-evidence.sh dist/ashbi-subscriptions-${{ github.sha }}.zip dist/ashbi-subscriptions-${{ github.sha }}
+          test -s dist/ashbi-subscriptions-${{ github.sha }}.sha256
+          test -s dist/ashbi-subscriptions-${{ github.sha }}.manifest
+          (cd dist && sha256sum --check ashbi-subscriptions-${{ github.sha }}.sha256)
+          grep -q '^source_commit=${{ github.sha }}$' dist/ashbi-subscriptions-${{ github.sha }}.manifest
+          grep -q '^dirty_tree=no$' dist/ashbi-subscriptions-${{ github.sha }}.manifest
+
       - name: Run static analysis
         run: composer lint:phpstan
 
@@ -93,6 +104,9 @@ jobs:
 
       - name: Audit integration dependencies
         run: npm audit --audit-level=moderate
+
+      - name: Check JavaScript and JSX syntax
+        run: npm run lint:js
 
       - name: Start disposable WordPress
         run: npm run env:start

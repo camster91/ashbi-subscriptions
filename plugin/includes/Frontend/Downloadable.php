@@ -1,4 +1,12 @@
 <?php
+/**
+ * Restrict downloadable products for inactive subscriptions.
+ *
+ * @package SpringDevs\Subscription\Frontend
+ */
+
+// The filename is part of the imported public class path.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
 
 namespace SpringDevs\Subscription\Frontend;
 
@@ -10,11 +18,20 @@ use SpringDevs\Subscription\Illuminate\Helper;
  */
 class Downloadable {
 
+	/**
+	 * Register downloadable-product filtering.
+	 */
 	public function __construct() {
 		add_filter( 'woocommerce_customer_get_downloadable_products', array( $this, 'check_download_items' ), 10, 1 );
 		add_filter( 'woocommerce_order_get_downloadable_items', array( $this, 'check_download_items' ), 10, 1 );
 	}
 
+	/**
+	 * Remove downloads associated with inactive subscriptions.
+	 *
+	 * @param array $downloads WooCommerce download records.
+	 * @return array Filtered download records.
+	 */
 	public function check_download_items( $downloads ) {
 		foreach ( $downloads as $key => $download ) {
 			$unactive_items = Helper::subscription_exists( $download['product_id'], array( 'expired', 'cancelled', 'pending' ) );

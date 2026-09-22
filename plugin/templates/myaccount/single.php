@@ -1,10 +1,16 @@
 <?php
+/**
+ * Single subscription page.
+ *
+ * @package SpringDevs\Subscription
+ */
+
 // Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 /**
- * Single subscription page
+ * Template variables.
  *
  * @var WC_Order $order
  * @var WC_Order_Item $order_item
@@ -15,6 +21,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @var string|null $trial_mode
  * @var string $status
  * @var array $action_buttons
+ * @var array|null $payment_method_context Customer saved payment-method context.
+ * @var array $switch_options Available product/plan targets for switching.
  * @var bool $is_grace_period
  * @var int $grace_remaining
  * @var float $price Renewal total, after any discount that recurs.
@@ -22,9 +30,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @var float $tax Tax on the discounted renewal amount.
  * @var float $discount Discount that applies to each renewal. 0 when none recurs.
  *
- * This template can be overridden by copying it to <your_theme>/subscription/myaccount/single.php
- *
- * @package SpringDevs\Subscription
+ * This template can be overridden by copying it to <your_theme>/subscription/myaccount/single.php.
  */
 
 use SpringDevs\Subscription\Illuminate\Helper;
@@ -96,7 +102,7 @@ do_action( 'before_single_subscrpt_content', $id );
 			</tr>
 		<?php endif; ?>
 
-		<?php if ( null != $trial && 'off' !== $trial ) : ?>
+		<?php if ( null !== $trial && 'off' !== $trial ) : ?>
 		<tr>
 			<td><?php esc_html_e( 'Trial', 'subscription' ); ?></td>
 			<td><?php echo esc_html( $trial ); ?></td>
@@ -105,7 +111,7 @@ do_action( 'before_single_subscrpt_content', $id );
 		<tr>
 			<td>
 			<?php
-			if ( 'null' == $trial || 'off' === $trial_mode ) {
+			if ( 'null' === $trial || 'off' === $trial_mode ) {
 				esc_html_e( 'Start date', 'subscription' );
 			} elseif ( 'extended' === $trial_mode ) {
 				esc_html_e( 'Trial End & Subscription Start', 'subscription' );
@@ -116,7 +122,7 @@ do_action( 'before_single_subscrpt_content', $id );
 			</td>
 			<td><?php echo esc_html( $start_date ); ?></td>
 		</tr>
-		<?php if ( ( null == $trial || in_array( $trial_mode, array( 'off', 'extended' ), true ) ) && get_post_meta( $id, '_subscrpt_next_date', true ) ) : ?>
+	<?php if ( ( null === $trial || in_array( $trial_mode, array( 'off', 'extended' ), true ) ) && get_post_meta( $id, '_subscrpt_next_date', true ) ) : ?>
 			<tr>
 				<td>
 				<?php
@@ -133,25 +139,25 @@ do_action( 'before_single_subscrpt_content', $id );
 		<?php $remaining_payments = subscrpt_get_remaining_payments( $id ); ?>
 		<?php $payments_made = subscrpt_count_payments_made( $id ); ?>
 		<?php
-		// Get maximum payments using helper function (handles variations properly)
+		// Get maximum payments using helper function (handles variations properly).
 		$product_id   = get_post_meta( $id, '_subscrpt_product_id', true );
 		$max_payments = subscrpt_get_max_payments( $id );
 
-		// Get Payment Type and Access Duration Information
+		// Get Payment Type and Access Duration Information.
 		$payment_type = $product_id ? get_post_meta( $product_id, '_subscrpt_payment_type', true ) : 'recurring';
-		$payment_type = $payment_type ?: 'recurring'; // Default to recurring if empty
+		$payment_type = $payment_type ? $payment_type : 'recurring'; // Default to recurring if empty.
 
-		// Also check subscription's own meta data
+		// Also check subscription's own meta data.
 		$subscription_payment_type = get_post_meta( $id, '_subscrpt_payment_type', true );
 		$subscription_max_payments = get_post_meta( $id, '_subscrpt_max_no_payment', true );
 
-		// Also check if this subscription has variation data
+		// Also check if this subscription has variation data.
 		$variation_id = get_post_meta( $id, '_subscrpt_variation_id', true );
 		if ( $variation_id ) {
 			$variation_payment_type = get_post_meta( $variation_id, '_subscrpt_payment_type', true );
 			$variation_max_payments = get_post_meta( $variation_id, '_subscrpt_max_no_payment', true );
 
-			// Use variation data if product data is not available
+			// Use variation data if product data is not available.
 			if ( empty( $payment_type ) || 'recurring' === $payment_type ) {
 				if ( ! empty( $variation_payment_type ) ) {
 					$payment_type = $variation_payment_type;
@@ -162,7 +168,7 @@ do_action( 'before_single_subscrpt_content', $id );
 			}
 		}
 
-		// Use subscription's own data if available and more specific
+		// Use subscription's own data if available and more specific.
 		if ( ! empty( $subscription_payment_type ) ) {
 			$payment_type = $subscription_payment_type;
 		}
@@ -170,17 +176,17 @@ do_action( 'before_single_subscrpt_content', $id );
 			$max_payments = $subscription_max_payments;
 		}
 
-		// Final fallback: Infer payment type from max_payments if not explicitly set
+		// Final fallback: Infer payment type from max_payments if not explicitly set.
 		if ( ( empty( $payment_type ) || 'recurring' === $payment_type ) && $max_payments > 0 ) {
 			$payment_type = 'split_payment';
 		}
 
-		// Ensure max_payments is properly set for display
+		// Ensure max_payments is properly set for display.
 		$max_payments = (int) $max_payments;
 		?>
 
 		<!-- show payment progress if max_payments is set and not unlimited -->
-		<?php if ( ( $remaining_payments !== 'unlimited' && $max_payments > 0 ) || ( 'split_payment' === $payment_type && $max_payments > 0 ) ) : ?>
+		<?php if ( ( 'unlimited' !== $remaining_payments && $max_payments > 0 ) || ( 'split_payment' === $payment_type && $max_payments > 0 ) ) : ?>
 			<tr>
 				<td><?php esc_html_e( 'Total Payments', 'subscription' ); ?></td>
 				<td><?php echo esc_html( $payments_made ) . ' / ' . esc_html( $max_payments ); ?></td>
@@ -200,7 +206,7 @@ do_action( 'before_single_subscrpt_content', $id );
 				<!-- DEBUG: Show raw values -->
 				<!-- <small style="color: #666; font-size: 11px; display: block;">
 					Debug: Product ID: <?php echo esc_html( $product_id ); ?>, 
-					Variation ID: <?php echo esc_html( $variation_id ?: 'None' ); ?>, 
+					Variation ID: <?php echo esc_html( $variation_id ? $variation_id : 'None' ); ?>,
 					Type: <?php echo esc_html( $payment_type ); ?>, 
 					Max: <?php echo esc_html( $max_payments ); ?>
 				</small> -->
@@ -210,20 +216,14 @@ do_action( 'before_single_subscrpt_content', $id );
 		<!-- Access Duration Information for Split Payments -->
 		<?php if ( 'split_payment' === $payment_type && $max_payments > 0 ) : ?>
 			<?php
-			// Plan subscriptions store access-ends on the subscription; classic ones on
+			// Plan subscriptions store access-ends on the subscription; classic ones on.
 			// the product. Prefer the subscription meta, fall back to the product.
 			$access_ends_timing   = get_post_meta( $id, '_subscrpt_access_ends_timing', true );
-			$access_ends_timing   = $access_ends_timing ? $access_ends_timing : ( get_post_meta( $product_id, '_subscrpt_access_ends_timing', true ) ?: 'after_full_duration' );
-			$custom_duration_time = get_post_meta( $id, '_subscrpt_custom_access_duration_time', true ) ?: ( get_post_meta( $product_id, '_subscrpt_custom_access_duration_time', true ) ?: 1 );
-			$custom_duration_type = get_post_meta( $id, '_subscrpt_custom_access_duration_type', true ) ?: ( get_post_meta( $product_id, '_subscrpt_custom_access_duration_type', true ) ?: 'months' );
+			$access_ends_timing   = $access_ends_timing ? $access_ends_timing : ( get_post_meta( $product_id, '_subscrpt_access_ends_timing', true ) ? get_post_meta( $product_id, '_subscrpt_access_ends_timing', true ) : 'after_full_duration' );
+			$custom_duration_time = get_post_meta( $id, '_subscrpt_custom_access_duration_time', true ) ? get_post_meta( $id, '_subscrpt_custom_access_duration_time', true ) : ( get_post_meta( $product_id, '_subscrpt_custom_access_duration_time', true ) ? get_post_meta( $product_id, '_subscrpt_custom_access_duration_time', true ) : 1 );
+			$custom_duration_type = get_post_meta( $id, '_subscrpt_custom_access_duration_type', true ) ? get_post_meta( $id, '_subscrpt_custom_access_duration_type', true ) : ( get_post_meta( $product_id, '_subscrpt_custom_access_duration_type', true ) ? get_post_meta( $product_id, '_subscrpt_custom_access_duration_type', true ) : 'months' );
 
-			// Calculate access end date if Pro version is available
-			$access_end_date_string = null;
-			if ( function_exists( 'subscrpt_pro_activated' ) && subscrpt_pro_activated() ) {
-				if ( class_exists( '\SpringDevs\SubscriptionPro\Illuminate\SplitPaymentHandler' ) ) {
-					$access_end_date_string = \SpringDevs\SubscriptionPro\Illuminate\SplitPaymentHandler::get_access_end_date_string( $id );
-				}
-			}
+			$access_end_date_string = Helper::get_split_access_end_date_string( (int) $id );
 			?>
 			<tr>
 				<td><?php esc_html_e( 'Access Duration', 'subscription' ); ?></td>
@@ -233,9 +233,11 @@ do_action( 'before_single_subscrpt_content', $id );
 						case 'lifetime':
 							esc_html_e( 'Lifetime access after completion', 'subscription' );
 							break;
+						case 'full_duration':
 						case 'after_full_duration':
 							esc_html_e( 'Full subscription duration', 'subscription' );
 							break;
+						case 'custom':
 						case 'custom_duration':
 							printf(
 								/* translators: %1$s: duration time, %2$s: duration type */
@@ -287,6 +289,52 @@ do_action( 'before_single_subscrpt_content', $id );
 	</tbody>
 </table>
 
+<?php if ( ! empty( $payment_method_context ) ) : ?>
+	<section class="subscrpt-payment-method">
+		<h2><?php esc_html_e( 'Payment method', 'subscription' ); ?></h2>
+		<p><?php esc_html_e( 'Choose a saved payment method for future subscription renewals. Card details are handled by your payment gateway.', 'subscription' ); ?></p>
+		<?php if ( ! empty( $payment_method_context['tokens'] ) ) : ?>
+			<form method="post" class="subscrpt-payment-method-form">
+				<input type="hidden" name="subscrpt_payment_method_submit" value="1" />
+				<input type="hidden" name="subscrpt_id" value="<?php echo esc_attr( $id ); ?>" />
+				<?php wp_nonce_field( $payment_method_context['nonce_action'], 'subscrpt_payment_method_nonce' ); ?>
+				<label for="subscrpt-payment-token"><?php esc_html_e( 'Saved payment method', 'subscription' ); ?></label>
+				<select id="subscrpt-payment-token" name="subscrpt_payment_token" required>
+					<?php foreach ( $payment_method_context['tokens'] as $payment_token ) : ?>
+						<option value="<?php echo esc_attr( $payment_token['id'] ); ?>" <?php selected( $payment_token['is_current'], true ); ?>><?php echo esc_html( $payment_token['label'] ); ?></option>
+					<?php endforeach; ?>
+				</select>
+				<button type="submit" class="button<?php echo esc_attr( $wp_button_class ); ?>"><?php esc_html_e( 'Use this payment method', 'subscription' ); ?></button>
+			</form>
+		<?php else : ?>
+			<p><?php esc_html_e( 'No saved payment methods are available yet.', 'subscription' ); ?></p>
+		<?php endif; ?>
+		<p><a href="<?php echo esc_url( $payment_method_context['manage_url'] ); ?>"><?php esc_html_e( 'Manage saved payment methods', 'subscription' ); ?></a></p>
+	</section>
+<?php endif; ?>
+
+<?php if ( ! empty( $switch_options ) && 'active' === $status ) : ?>
+	<form method="post" class="subscrpt-switch-form">
+		<h2><?php esc_html_e( 'Change subscription', 'subscription' ); ?></h2>
+		<p><?php esc_html_e( 'Choose a subscription plan. The change is applied after the new order is paid.', 'subscription' ); ?></p>
+		<input type="hidden" name="subscrpt_switch_submit" value="1" />
+		<input type="hidden" name="subscrpt_id" value="<?php echo esc_attr( $id ); ?>" />
+		<?php wp_nonce_field( 'subscrpt_switch_' . (int) $id, 'subscrpt_switch_nonce' ); ?>
+		<label for="subscrpt-switch-target"><?php esc_html_e( 'New plan', 'subscription' ); ?></label>
+		<select id="subscrpt-switch-target" name="switch_target" required>
+			<option value=""><?php esc_html_e( 'Select a plan', 'subscription' ); ?></option>
+			<?php foreach ( $switch_options as $switch_option ) : ?>
+				<option
+					value="<?php echo esc_attr( (int) $switch_option['product_id'] . ':' . (int) $switch_option['variation_id'] . ':' . (int) $switch_option['plan_id'] ); ?>"
+				>
+					<?php echo esc_html( $switch_option['label'] ); ?>
+				</option>
+			<?php endforeach; ?>
+		</select>
+		<button type="submit" class="button"><?php esc_html_e( 'Continue to checkout', 'subscription' ); ?></button>
+	</form>
+<?php endif; ?>
+
 <?php do_action( 'subscrpt_before_subscription_totals', (int) $id ); ?>
 
 <h2><?php echo esc_html_e( 'Subscription Totals', 'subscription' ); ?></h2>
@@ -303,7 +351,7 @@ do_action( 'before_single_subscrpt_content', $id );
 		$product_link       = get_permalink( $order_item->get_variation_id() !== 0 ? $order_item->get_variation_id() : $order_item->get_product_id() );
 		$order_item_meta    = $order_item->get_meta( '_subscrpt_meta', true );
 		$time               = '1' === $order_item_meta['time'] ? null : $order_item_meta['time'];
-		$type               = subscrpt_get_typos( $order_item_meta['time'], $order_item_meta['type'] );
+		$order_item_type    = subscrpt_get_typos( $order_item_meta['time'], $order_item_meta['type'] );
 		$product_price_html = Helper::format_price_with_order_item( $price, $order_item->get_id() );
 		?>
 		<tr class="order_item">
@@ -386,7 +434,7 @@ do_action( 'before_single_subscrpt_content', $id );
  * map is built from the reversed list. Relations whose order no longer exists
  * are skipped here as well, keeping the numbering gapless with the rendered rows.
  */
-$related_order_seq = [];
+$related_order_seq = array();
 foreach ( array_reverse( $related_orders ) as $subscrpt_relation ) {
 	if ( isset( $related_order_seq[ $subscrpt_relation->order_id ] ) || ! wc_get_order( $subscrpt_relation->order_id ) ) {
 		continue;
@@ -416,22 +464,22 @@ foreach ( array_reverse( $related_orders ) as $subscrpt_relation ) {
 
 		<?php foreach ( $related_orders as $related_order ) : ?>
 			<?php
-				$order_id = $related_order->order_id;
-				$order    = wc_get_order( $order_id );
-			if ( ! $order ) {
+				$order_id             = $related_order->order_id;
+				$related_order_object = wc_get_order( $order_id );
+			if ( ! $related_order_object ) {
 				continue;
 			}
 
 				$order_type       = $related_order->type;
 				$order_type_label = wps_subscription_order_relation_type_cast( $order_type );
 
-				$order_created_date = $order->get_date_created()->date_i18n( get_option( 'date_format' ) );
+				$order_created_date = $related_order_object->get_date_created()->date_i18n( get_option( 'date_format' ) );
 
-				$order_status      = $order->get_status();
+				$order_status      = $related_order_object->get_status();
 				$order_status_name = wc_get_order_status_name( $order_status );
 
-				$order_total           = $order->get_total();
-				$formatted_order_total = wc_price( $order_total, array( 'currency' => $order->get_currency() ) );
+				$order_total           = $related_order_object->get_total();
+				$formatted_order_total = wc_price( $order_total, array( 'currency' => $related_order_object->get_currency() ) );
 			?>
 
 			<tr class="order_item">

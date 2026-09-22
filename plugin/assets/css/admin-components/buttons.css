@@ -28,9 +28,16 @@
 .wpsubs-btn:focus,
 .wpsubs-btn:focus-visible,
 .wpsubs-btn:active {
-  outline: none !important;
-  box-shadow: none !important;
-  border-radius: var(--wpsubs-radius-sm) !important;
+	outline: none !important;
+	box-shadow: none !important;
+	border-radius: var(--wpsubs-radius-sm) !important;
+}
+
+.wpsubs-btn:focus-visible,
+.wpsubs-icon-action:focus-visible {
+	outline: 2px solid var(--wpsubs-brand) !important;
+	outline-offset: 2px;
+	box-shadow: 0 0 0 3px var(--wpsubs-brand-ring) !important;
 }
 
 .wpsubs-btn--outline {
@@ -53,10 +60,23 @@
 }
 
 .wpsubs-btn--primary:hover {
-  background: var(--wpsubs-brand-dark);
-  border-color: var(--wpsubs-brand-dark);
-  color: #fff;
-  text-decoration: none;
+	background: var(--wpsubs-brand-dark);
+	border-color: var(--wpsubs-brand-dark);
+	color: #fff;
+	text-decoration: none;
+}
+
+.wpsubs-btn--secondary {
+	background: var(--wpsubs-surface);
+	border-color: var(--wpsubs-border-strong);
+	color: var(--wpsubs-text);
+}
+
+.wpsubs-btn--secondary:hover {
+	background: var(--wpsubs-surface-muted);
+	border-color: var(--wpsubs-text-subtle);
+	color: var(--wpsubs-text);
+	text-decoration: none;
 }
 
 /* Icon-only square button */

@@ -1,4 +1,4 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- This filename is part of the imported public compatibility surface.
 /**
  * Admin notice that a subscription was cancelled (free).
  *
@@ -32,8 +32,8 @@ class CancellationAdmin extends AdminCancellationEmail {
 		$this->title       = __( 'Subscription cancelled ( Admin )', 'subscription' );
 		$this->description = __( 'Sent to the store owner when a customer cancels a subscription.', 'subscription' );
 
-		// A customer's confirm puts an active subscription into `pe_cancelled`, and
-		// the cron only finalises it to `cancelled` up to a day later. Listen to
+		// A customer's confirm puts an active subscription into `pe_cancelled`, and.
+		// the cron only finalises it to `cancelled` up to a day later. Listen to.
 		// both, and let trigger() make sure only the first one sends.
 		add_action( 'subscrpt_subscription_pending_cancellation', array( $this, 'trigger' ) );
 		add_action( 'subscrpt_subscription_cancelled_email_notification', array( $this, 'trigger' ) );

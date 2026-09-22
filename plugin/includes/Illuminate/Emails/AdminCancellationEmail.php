@@ -1,13 +1,10 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- This filename is part of the imported public compatibility surface.
 /**
- * Base for the free plugin's admin cancellation notices.
+ * Base for Ashbi's admin cancellation notices.
  *
- * Free deliberately reports less than Pro: the reason and the shape of what
- * happened, but never which customer and never a link to the subscription. The
- * closing block points at Reports, where Pro shows the full churn history.
- *
- * Registered only while Pro is inactive (see Illuminate\Email), so a store never
- * lists both this and Pro's richer equivalent.
+ * The notification intentionally carries the cancellation reason and event
+ * context without customer or payment details. The closing block points to the
+ * local subscription reports page for authorized staff.
  *
  * @package SpringDevs\Subscription\Illuminate\Emails
  */
@@ -20,7 +17,7 @@ use WC_Email;
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Base for the free plugin's admin cancellation notices.
+ * Base for Ashbi's admin cancellation notices.
  */
 abstract class AdminCancellationEmail extends WC_Email {
 

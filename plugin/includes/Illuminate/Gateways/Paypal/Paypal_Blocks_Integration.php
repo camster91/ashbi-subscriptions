@@ -1,4 +1,12 @@
 <?php
+/**
+ * PayPal WooCommerce Blocks payment integration.
+ *
+ * @package SpringDevs\Subscription\Illuminate\Gateways\Paypal
+ */
+
+// PSR-4 class filename is retained for the public gateway compatibility path.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
 
 namespace SpringDevs\Subscription\Illuminate\Gateways\Paypal;
 
@@ -32,7 +40,7 @@ final class Paypal_Blocks_Integration extends AbstractPaymentMethodType {
 	 * @return void
 	 */
 	public function initialize() {
-		$this->settings = get_option( 'woocommerce_wp_subscription_paypal_settings', [] );
+		$this->settings = get_option( 'woocommerce_wp_subscription_paypal_settings', array() );
 		$this->gateway  = Paypal::get_instance();
 	}
 
@@ -54,7 +62,7 @@ final class Paypal_Blocks_Integration extends AbstractPaymentMethodType {
 		wp_register_script(
 			'wp_subscription_paypal-blocks-integration',
 			SUBSCRPT_URL . '/assets/js/wp_subscription_paypal-block.js',
-			[ 'wc-blocks-registry', 'wc-settings', 'wp-element', 'wp-html-entities', 'wp-i18n' ],
+			array( 'wc-blocks-registry', 'wc-settings', 'wp-element', 'wp-html-entities', 'wp-i18n' ),
 			1,
 			true
 		);
@@ -71,11 +79,11 @@ final class Paypal_Blocks_Integration extends AbstractPaymentMethodType {
 	 * @return string
 	 */
 	public function get_payment_method_data() {
-		return [
+		return array(
 			'title'       => $this->gateway->title,
 			'description' => $this->gateway->description,
 			'icon'        => $this->gateway->icon,
 			'features'    => $this->gateway->supports,
-		];
+		);
 	}
 }

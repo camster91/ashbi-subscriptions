@@ -5,6 +5,9 @@
  * @package SpringDevs\Subscription\Illuminate
  */
 
+// PSR-4 class filename is retained for the public checkout compatibility path.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
+
 namespace SpringDevs\Subscription\Illuminate;
 
 /**
@@ -17,25 +20,25 @@ class GuestCheckout {
 	 * Initialize the class
 	 */
 	public function __construct() {
-		// Add guest checkout settings
-		add_filter( 'subscrpt_settings_fields', [ $this, 'add_guest_checkout_settings_fields' ] );
-		add_action( 'subscrpt_register_settings', [ $this, 'register_settings' ] );
+		// Add guest checkout settings.
+		add_filter( 'subscrpt_settings_fields', array( $this, 'add_guest_checkout_settings_fields' ) );
+		add_action( 'subscrpt_register_settings', array( $this, 'register_settings' ) );
 
 		// Show warning if guest checkout is disabled in WooCommerce settings.
-		add_action( 'admin_notices', [ $this, 'check_woocommerce_checkout_settings' ] );
+		add_action( 'admin_notices', array( $this, 'check_woocommerce_checkout_settings' ) );
 
 		// Guest checkout validation.
-		add_action( 'woocommerce_checkout_process', [ $this, 'validate_guest_checkout' ] );
-		add_action( 'woocommerce_store_api_cart_errors', [ $this, 'validate_guest_checkout_storeapi' ] );
+		add_action( 'woocommerce_checkout_process', array( $this, 'validate_guest_checkout' ) );
+		add_action( 'woocommerce_store_api_cart_errors', array( $this, 'validate_guest_checkout_storeapi' ) );
 
-		// Enforce Login/Registration in checkout
-		add_action( 'woocommerce_checkout_process', [ $this, 'require_account_creation' ] );
-		add_filter( 'woocommerce_store_api_checkout_update_order_from_request', [ $this,'require_account_creation_store_api' ], 10, 2 );
+		// Enforce Login/Registration in checkout.
+		add_action( 'woocommerce_checkout_process', array( $this, 'require_account_creation' ) );
+		add_filter( 'woocommerce_store_api_checkout_update_order_from_request', array( $this, 'require_account_creation_store_api' ), 10, 2 );
 
 		// Guest account creation.
-		add_action( 'woocommerce_store_api_checkout_update_customer_from_request', [ $this, 'maybe_create_user_from_customer' ], 10, 1 );
-		add_action( 'woocommerce_store_api_checkout_update_order_from_request', [ $this, 'maybe_assign_user_to_order' ], 5, 1 );
-		add_action( 'woocommerce_checkout_create_order', [ $this, 'maybe_assign_user_to_order' ], 10, 1 );
+		add_action( 'woocommerce_store_api_checkout_update_customer_from_request', array( $this, 'maybe_create_user_from_customer' ), 10, 1 );
+		add_action( 'woocommerce_store_api_checkout_update_order_from_request', array( $this, 'maybe_assign_user_to_order' ), 5, 1 );
+		add_action( 'woocommerce_checkout_create_order', array( $this, 'maybe_assign_user_to_order' ), 10, 1 );
 	}
 
 	/**
@@ -45,41 +48,41 @@ class GuestCheckout {
 	 * @return array
 	 */
 	public function add_guest_checkout_settings_fields( $settings_fields ) {
-		$guest_checkout_fields = [
-			[
+		$guest_checkout_fields = array(
+			array(
 				'type'       => 'heading',
 				'group'      => 'guest_checkout',
 				'priority'   => 2,
-				'field_data' => [
+				'field_data' => array(
 					'title'       => __( 'Guest Checkout', 'subscription' ),
 					'description' => __( 'Manage guest checkout settings for subscriptions.', 'subscription' ),
-				],
-			],
-			[
+				),
+			),
+			array(
 				'type'       => 'toggle',
 				'group'      => 'guest_checkout',
 				'priority'   => 1,
-				'field_data' => [
+				'field_data' => array(
 					'id'          => 'wp_subscription_allow_guest_checkout',
 					'title'       => __( 'Allow Guest Checkout', 'subscription' ),
 					'description' => __( 'Allow customers to checkout without logging in.', 'subscription' ) . '<br/><sub>' . __( 'Note: You will need to enable <strong>Guest checkout</strong> and <strong>Allow customers to create an account during checkout</strong> options in WooCommerce settings for this to work properly.', 'subscription' ) . '</sub>',
 					'value'       => '1',
 					'checked'     => '1' === get_option( 'wp_subscription_allow_guest_checkout', '0' ),
-				],
-			],
-			[
+				),
+			),
+			array(
 				'type'       => 'toggle',
 				'group'      => 'guest_checkout',
 				'priority'   => 2,
-				'field_data' => [
+				'field_data' => array(
 					'id'          => 'wp_subscription_enforce_login',
 					'title'       => __( 'Enforce Login', 'subscription' ),
 					'description' => __( 'Force customers to login or check the "Create account" checkbox before checking out.', 'subscription' ),
 					'value'       => '1',
 					'checked'     => '1' === get_option( 'wp_subscription_enforce_login', '1' ),
-				],
-			],
-		];
+				),
+			),
+		);
 
 		return array_merge( $settings_fields, $guest_checkout_fields );
 	}
@@ -111,14 +114,14 @@ class GuestCheckout {
 	 * Is guest checkout allowed
 	 */
 	public static function is_guest_checkout_allowed() {
-		return in_array( get_option( 'wp_subscription_allow_guest_checkout', '0' ), [ 1, '1' ], true );
+		return in_array( get_option( 'wp_subscription_allow_guest_checkout', '0' ), array( 1, '1' ), true );
 	}
 
 	/**
 	 * Is guest login enforced
 	 */
 	public static function is_guest_login_enforced() {
-		return in_array( get_option( 'wp_subscription_enforce_login', '1' ), [ 1, '1' ], true );
+		return in_array( get_option( 'wp_subscription_enforce_login', '1' ), array( 1, '1' ), true );
 	}
 
 	/**
@@ -147,7 +150,7 @@ class GuestCheckout {
 	 * Check WooCommerce checkout settings and show admin notice if guest checkout is disabled.
 	 */
 	public function check_woocommerce_checkout_settings() {
-		// Check if WooCommerce is active
+		// Check if WooCommerce is active.
 		if ( ! class_exists( 'WooCommerce' ) ) {
 			return;
 		}
@@ -157,11 +160,11 @@ class GuestCheckout {
 			return;
 		}
 
-		$guest_checkout_enabled  = in_array( get_option( 'woocommerce_enable_guest_checkout' ), [ 1, '1', 'yes', 'on' ], true );
-		$account_during_checkout = in_array( get_option( 'woocommerce_enable_signup_and_login_from_checkout' ), [ 1, '1', 'yes', 'on' ], true );
-		$account_after_checkout  = in_array( get_option( 'woocommerce_enable_delayed_account_creation' ), [ 1, '1', 'yes', 'on' ], true );
+		$guest_checkout_enabled  = in_array( get_option( 'woocommerce_enable_guest_checkout' ), array( 1, '1', 'yes', 'on' ), true );
+		$account_during_checkout = in_array( get_option( 'woocommerce_enable_signup_and_login_from_checkout' ), array( 1, '1', 'yes', 'on' ), true );
+		$account_after_checkout  = in_array( get_option( 'woocommerce_enable_delayed_account_creation' ), array( 1, '1', 'yes', 'on' ), true );
 
-		$issues = [];
+		$issues = array();
 		if ( ! $guest_checkout_enabled ) {
 			$issues[] = 'Guest checkout.';
 		}
@@ -293,7 +296,7 @@ class GuestCheckout {
 	 * @param \WC_Order|\WC_Customer $order_or_customer Order or Customer object.
 	 */
 	public function build_user_info( $order_or_customer ): array {
-		$user_info = [];
+		$user_info = array();
 
 		// Billing info.
 		$user_info['billing_first_name'] = $order_or_customer->get_billing_first_name();
@@ -330,7 +333,7 @@ class GuestCheckout {
 	 */
 	public function maybe_create_user( $user_info ): ?int {
 		// Don't proceed if guest checkout is not allowed.
-		$is_guest_checkout_allowed = in_array( get_option( 'wp_subscription_allow_guest_checkout', '0' ), [ 1, '1', 'yes', 'on' ], true );
+		$is_guest_checkout_allowed = in_array( get_option( 'wp_subscription_allow_guest_checkout', '0' ), array( 1, '1', 'yes', 'on' ), true );
 		if ( ! $is_guest_checkout_allowed ) {
 			return null;
 		}
@@ -341,8 +344,8 @@ class GuestCheckout {
 		$user    = get_user_by( 'email', $user_info['billing_email'] );
 		$user_id = $user ? $user->ID : 0;
 
-		// Possession of a billing email is not proof of account ownership. Keep an
-		// existing-email checkout guest-owned unless that exact user is already
+		// Possession of a billing email is not proof of account ownership. Keep an.
+		// existing-email checkout guest-owned unless that exact user is already.
 		// authenticated; this also isolates their saved payment methods.
 		if ( $user_id && ( ! is_user_logged_in() || (int) get_current_user_id() !== (int) $user_id ) ) {
 			subscrpt_write_log( 'Guest subscription checkout matched an existing account; account binding was skipped.' );
@@ -357,11 +360,11 @@ class GuestCheckout {
 				$user_info['billing_email'],
 				'',
 				'',
-				[
+				array(
 					'first_name' => $user_info['billing_first_name'],
 					'last_name'  => $user_info['billing_last_name'],
 					'source'     => 'subscrpt-guest-checkout',
-				]
+				)
 			);
 
 			if ( is_wp_error( $user_id ) ) {
@@ -396,9 +399,9 @@ class GuestCheckout {
 		}
 
 		// Auto-login the newly created account so the subscription can be associated with the user.
-		// This ONLY runs when $is_new_customer is true — i.e. when wp_insert_user() succeeded
+		// This ONLY runs when $is_new_customer is true — i.e. when wp_insert_user() succeeded.
 		// just above in this same request. It never fires for returning/existing users.
-		// wc_set_customer_auth_cookie() is the WooCommerce-sanctioned way to log a customer in
+		// wc_set_customer_auth_cookie() is the WooCommerce-sanctioned way to log a customer in.
 		// during checkout; wp_set_auth_cookie() is the WP fallback if WC is not available.
 		if ( ! is_user_logged_in() && $is_new_customer && $user_id ) {
 			wp_set_current_user( $user_id );

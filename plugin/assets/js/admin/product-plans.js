@@ -104,7 +104,7 @@
 
   /**
    * The classic-settings pane for a plan-view wrapper. Free renders its own
-   * ([data-subscrpt-classic-view]); with Pro active the classic pane is Pro's
+   * ([data-subscrpt-classic-view]); extensions may enhance the classic pane
    * `.subscrpt-classic-fields` sibling inside the panel.
    *
    * @param {HTMLElement} el The [data-subscrpt-product-plans] wrapper.

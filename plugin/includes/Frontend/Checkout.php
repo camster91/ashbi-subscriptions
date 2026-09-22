@@ -1,4 +1,4 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- This filename is part of the imported public compatibility surface.
 /**
  * Checkout handlers for subscription plugin.
  *
@@ -20,13 +20,13 @@ class Checkout {
 	 */
 	public function __construct() {
 		// Subscription upgrade/downgrade order created hook.
-		add_action( 'woocommerce_checkout_order_processed', [ $this, 'trigger_subscription_switch_order_created' ] );
-		add_action( 'woocommerce_store_api_checkout_order_processed', [ $this, 'trigger_subscription_switch_order_created_storeapi' ] );
+		add_action( 'woocommerce_checkout_order_processed', array( $this, 'trigger_subscription_switch_order_created' ) );
+		add_action( 'woocommerce_store_api_checkout_order_processed', array( $this, 'trigger_subscription_switch_order_created_storeapi' ) );
 
-		add_action( 'woocommerce_checkout_order_processed', [ $this, 'create_subscription_after_checkout' ] );
-		add_action( 'woocommerce_store_api_checkout_order_processed', [ $this, 'create_subscription_after_checkout_storeapi' ] );
-		add_action( 'woocommerce_resume_order', [ $this, 'remove_subscriptions' ] );
-		add_action( 'woocommerce_checkout_create_order_line_item', [ $this, 'save_order_item_product_meta' ], 10, 3 );
+		add_action( 'woocommerce_checkout_order_processed', array( $this, 'create_subscription_after_checkout' ) );
+		add_action( 'woocommerce_store_api_checkout_order_processed', array( $this, 'create_subscription_after_checkout_storeapi' ) );
+		add_action( 'woocommerce_resume_order', array( $this, 'remove_subscriptions' ) );
+		add_action( 'woocommerce_checkout_create_order_line_item', array( $this, 'save_order_item_product_meta' ), 10, 3 );
 	}
 
 	/**
@@ -67,20 +67,31 @@ class Checkout {
 		// Create subscription for order items.
 		$order_items = $order->get_items();
 		foreach ( $order_items as $order_item ) {
-			$product = Subscription::get_subs_product( $order_item['product_id'] );
+			// A switch order pays for a target plan, but must never create a second.
+			// subscription. Illuminate\Switching applies the target to the existing.
+			// record after payment is confirmed.
+			if ( in_array( $order_item->get_meta( '_wp_subs_switch' ), array( true, 1, '1' ), true ) ) {
+				continue;
+			}
+			$variation_id = $order_item->get_variation_id();
+			$product_id   = $variation_id ? $variation_id : $order_item->get_product_id();
+			$product      = Subscription::get_subs_product( $product_id );
+			if ( ! $product ) {
+				continue;
+			}
 
-			// Plan items are created by Frontend\PlanCheckout on `subscrpt_product_checkout`
-			// below (resolution order: tied plan first, else classic meta). Skipping
+			// Plan items are created by Frontend\PlanCheckout on `subscrpt_product_checkout`.
+			// below (resolution order: tied plan first, else classic meta). Skipping.
 			// them here keeps the classic path from creating a second subscription.
-			if ( $product->is_type( 'simple' ) && ! subscrpt_pro_activated() && ! $order_item->get_meta( '_subscrpt_plan_id' ) ) {
-				// A plan product bought as One-Time carries no plan id — it is not a
+			if ( $product->is_type( 'simple' ) && ! $order_item->get_meta( '_subscrpt_plan_id' ) ) {
+				// A plan product bought as One-Time carries no plan id — it is not a.
 				// subscription, so never record one for it.
 				$is_one_time = function_exists( 'subscrpt_product_has_plan' ) && subscrpt_product_has_plan( $product->get_id() );
 
 				if ( $product->is_enabled() && ! $is_one_time ) {
-					$renew_requested        = ! empty( $order_item->get_meta( '_renew_subscrpt' ) );
+					$renew_requested       = ! empty( $order_item->get_meta( '_renew_subscrpt' ) );
 					$renew_subscription_id = Helper::resolve_checkout_renewal_subscription( $order_item, $product );
-					$is_renew               = false !== $renew_subscription_id;
+					$is_renew              = false !== $renew_subscription_id;
 					if ( $renew_requested && ! $is_renew ) {
 						$order->set_status( 'cancelled', esc_html__( 'Renewal checkout cancelled because the selected subscription is no longer eligible.', 'subscription' ) );
 						$order->save();
@@ -201,15 +212,18 @@ class Checkout {
 	 * @param int $order_id Order ID.
 	 */
 	public function trigger_subscription_switch_order_created( $order_id ) {
-		if ( ! $order_id || ! subscrpt_pro_activated() ) {
+		if ( ! $order_id ) {
 			return;
 		}
 
-		$order       = wc_get_order( $order_id );
+		$order = wc_get_order( $order_id );
+		if ( ! $order ) {
+			return;
+		}
 		$order_items = $order->get_items();
 
 		foreach ( $order_items as $order_item ) {
-			$is_switch      = in_array( $order_item->get_meta( '_wp_subs_switch' ), [ true, 1, '1' ], true );
+			$is_switch      = in_array( $order_item->get_meta( '_wp_subs_switch' ), array( true, 1, '1' ), true );
 			$switch_context = $order_item->get_meta( '_wp_subs_switch_context' );
 
 			if ( $is_switch ) {

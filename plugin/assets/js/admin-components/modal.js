@@ -8,7 +8,7 @@
  * Escape also closes. No per-page wiring needed.
  *
  * A modal with `data-wpsubs-modal-autoopen` opens automatically on load (e.g. the
- * Pro-upgrade preview modals). Opening locks body scroll; it's restored when the
+ * Contained admin modals. Opening locks body scroll; it's restored when the
  * last open modal closes.
  *
  * Usage:

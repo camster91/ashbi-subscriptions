@@ -21,6 +21,9 @@ final class BrandingBoundaryTest extends TestCase {
 		'/\bUpgrade to (?:Pro|premium)\b/i',
 		'/\bSee (?:it|what) (?:in )?Pro\b/i',
 		'/\bActivate licen[cs]e\b/i',
+		'/\bSubscription for WooCommerce\b/i',
+		'/\bWPS:\s/i',
+		'/What does Subscriptions for WooCommerce do\?/i',
 		'/wordpress\.org\/support\/plugin\/subscription/i',
 	);
 
@@ -34,14 +37,14 @@ final class BrandingBoundaryTest extends TestCase {
 	 * @return string[]
 	 */
 	private function distributedTextFiles(): array {
-		$root   = dirname( __DIR__, 2 );
-		$plugin = $root . '/plugin';
-		$files  = array();
+		$root                = dirname( __DIR__, 2 );
+		$plugin              = $root . '/plugin';
+		$files               = array();
 		$allowed_attribution = array(
 			'changelog.txt',
 			'THIRD_PARTY_NOTICES.md',
 		);
-		$text_extensions = array( 'css', 'js', 'json', 'md', 'php', 'pot', 'txt' );
+		$text_extensions     = array( 'css', 'js', 'json', 'md', 'php', 'pot', 'txt' );
 
 		$iterator = new RecursiveIteratorIterator(
 			new RecursiveDirectoryIterator( $plugin, FilesystemIterator::SKIP_DOTS )
@@ -107,6 +110,33 @@ final class BrandingBoundaryTest extends TestCase {
 	}
 
 	/**
+	 * Provider artwork is optional extension input, never a bundled dependency.
+	 */
+	public function testProviderLogoAssetsAreNotBundledOrReferencedByDefault(): void {
+		$root  = dirname( __DIR__, 2 );
+		$files = array(
+			$root . '/plugin/includes/Illuminate/Gateways/Paypal/Paypal.php',
+			$root . '/plugin/includes/Admin/Integrations.php',
+		);
+
+		foreach ( $files as $file ) {
+			$contents = file_get_contents( $file );
+			self::assertNotFalse( $contents, 'Unable to read ' . $file );
+			self::assertStringNotContainsString( 'assets/images/integrations/', $contents );
+			self::assertStringNotContainsString( 'assets/images/other_plugins/', $contents );
+		}
+
+		$paypal = file_get_contents( $root . '/plugin/includes/Illuminate/Gateways/Paypal/Paypal.php' );
+		self::assertIsString( $paypal );
+		self::assertStringContainsString( "apply_filters( 'wp_subscription_paypal_icon', '' )", $paypal );
+
+		$build_script = file_get_contents( $root . '/scripts/build-release.sh' );
+		self::assertIsString( $build_script );
+		self::assertStringContainsString( "--exclude 'assets/images/integrations/'", $build_script );
+		self::assertStringContainsString( "--exclude 'assets/images/other_plugins/'", $build_script );
+	}
+
+	/**
 	 * The repository landing page uses only Ashbi product branding.
 	 */
 	public function testRepositoryLandingPageContainsNoUpstreamBranding(): void {
@@ -123,22 +153,22 @@ final class BrandingBoundaryTest extends TestCase {
 	 * Rebranding must not alter identifiers used by existing installations.
 	 */
 	public function testLegacyCompatibilityIdentifiersRemainIntact(): void {
-		$root     = dirname( __DIR__, 2 );
-		$main     = file_get_contents( $root . '/plugin/subscription.php' );
-		$menu     = file_get_contents( $root . '/plugin/includes/Admin/Menu.php' );
-		$composer = file_get_contents( $root . '/plugin/composer.json' );
+		$root        = dirname( __DIR__, 2 );
+		$main        = file_get_contents( $root . '/plugin/subscription.php' );
+		$menu        = file_get_contents( $root . '/plugin/includes/Admin/Menu.php' );
+		$composer    = file_get_contents( $root . '/plugin/composer.json' );
 		$identifiers = array(
-			'Text Domain: subscription'          => $main,
+			'Text Domain: subscription'           => $main,
 			'final class Sdevs_Subscription'      => $main,
-			"'wp-subscription'"                  => $menu,
-			"'wp-subscription-list'"             => $menu,
-			"'wp-subscription-details'"          => $menu,
-			"'wp-subscription-stats'"            => $menu,
-			"'wp-subscription-health'"           => $menu,
-			"'wp-subscription-delivery'"         => $menu,
-			"'wp-subscription-support'"          => $menu,
+			"'wp-subscription'"                   => $menu,
+			"'wp-subscription-list'"              => $menu,
+			"'wp-subscription-details'"           => $menu,
+			"'wp-subscription-stats'"             => $menu,
+			"'wp-subscription-health'"            => $menu,
+			"'wp-subscription-delivery'"          => $menu,
+			"'wp-subscription-support'"           => $menu,
 			"rest_url( 'wpsubscription/v1/plans'" => $menu,
-			'SpringDevs\\\\Subscription\\\\' => $composer,
+			'SpringDevs\\\\Subscription\\\\'      => $composer,
 		);
 
 		foreach ( $identifiers as $identifier => $contents ) {
@@ -155,7 +185,8 @@ final class BrandingBoundaryTest extends TestCase {
 		$bundle = file_get_contents( $root . '/plugin/build/dashboard.js' );
 		self::assertIsString( $bundle );
 
-		self::assertStringContainsString( '.__)("Unavailable","subscription")', $bundle );
+		self::assertStringNotContainsString( '.__)("Unavailable","subscription")', $bundle );
+		self::assertStringNotContainsString( 'Not included in this build', $bundle );
 		self::assertStringNotContainsString( '.__)("Pro","subscription")', $bundle );
 		self::assertStringContainsString( 'target:s.external?"_blank":void 0', $bundle );
 		self::assertStringContainsString( 's.external?(0,t.jsx)(c,{name:"external",size:11}):null', $bundle );

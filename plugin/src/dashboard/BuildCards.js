@@ -4,7 +4,6 @@
 
 import { __ } from "@wordpress/i18n";
 import Icon from "./Icon";
-import ProBadge from "./ProBadge";
 
 export default function BuildCards({ cards }) {
   return (
@@ -26,9 +25,6 @@ export default function BuildCards({ cards }) {
             </span>
             <span className="subscrpt-build__eyebrow">
               {card.eyebrow}
-              {/* Keep the availability marker visually separated from the label. */}
-              {card.pro && " "}
-              {card.pro && <ProBadge />}
             </span>
             <span className="subscrpt-build__title">{card.title}</span>
             <span className="subscrpt-build__text">{card.text}</span>

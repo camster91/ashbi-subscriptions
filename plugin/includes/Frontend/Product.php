@@ -1,4 +1,4 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- This filename is part of the imported public compatibility surface.
 /**
  * Storefront product handling for subscriptions.
  *
@@ -35,9 +35,9 @@ class Product {
 			2
 		);
 		add_filter( 'woocommerce_product_add_to_cart_text', array( $this, 'change_loop_add_to_cart_text' ), 10, 2 );
-		// Plan-tied simple products behave like a variable product on the shop /
-		// Product Collection loops: a "Select options" link to the product page (so
-		// the customer picks a plan), never a direct/ajax add-to-cart. These native
+		// Plan-tied simple products behave like a variable product on the shop /.
+		// Product Collection loops: a "Select options" link to the product page (so.
+		// the customer picks a plan), never a direct/ajax add-to-cart. These native.
 		// product-method filters drive both the classic loop and the block button.
 		add_filter( 'woocommerce_product_add_to_cart_url', array( $this, 'plan_loop_add_to_cart_url' ), 10, 2 );
 		add_filter( 'woocommerce_product_supports', array( $this, 'plan_loop_disable_ajax' ), 10, 3 );
@@ -86,7 +86,7 @@ class Product {
 	 */
 	public function remove_button_active_products( $button, $product ) {
 		$product = Subscription::get_subs_product( $product );
-		if ( ! $product->is_type( 'simple' ) ) {
+		if ( ! $product || ! $product->is_type( 'simple' ) ) {
 			return $button;
 		}
 
@@ -111,7 +111,7 @@ class Product {
 	public function text_if_active() {
 		global $product;
 		$sdevs_product = Subscription::get_subs_product( $product );
-		if ( ! $sdevs_product->is_type( 'simple' ) ) {
+		if ( ! $sdevs_product || ! $sdevs_product->is_type( 'simple' ) ) {
 			return;
 		}
 
@@ -125,12 +125,12 @@ class Product {
 				if ( ! $unexpired ) {
 					return false;
 				} else {
-					echo '<strong>' . esc_html_e( 'You Already Subscribed These Product!', 'subscription' ) . '</strong>';
+					echo '<strong>' . esc_html__( 'You already subscribe to this product.', 'subscription' ) . '</strong>';
 				}
 			}
 			if ( 'only_one' === $limit ) {
 				if ( ! Helper::check_trial( $sdevs_product->get_id() ) ) {
-					echo '<strong>' . esc_html_e( 'You Already Subscribed These Product!', 'subscription' ) . '</strong>';
+					echo '<strong>' . esc_html__( 'You already subscribe to this product.', 'subscription' ) . '</strong>';
 				}
 			}
 		}
@@ -146,6 +146,9 @@ class Product {
 	 */
 	public function check_if_purchasable( $is_purchasable, $product ) {
 		$product = Subscription::get_subs_product( $product );
+		if ( ! $product ) {
+			return $is_purchasable;
+		}
 		if ( $product->is_enabled() ) {
 			$limit = $product->get_limit();
 			if ( 'unlimited' === $limit ) {
@@ -252,7 +255,7 @@ class Product {
 	 */
 	public function change_single_add_to_cart_text( $text, $product ) {
 		$product = Subscription::get_subs_product( $product );
-		if ( $product->is_type( 'variable' ) || '' === $product->get_price() ) {
+		if ( ! $product || $product->is_type( 'variable' ) || '' === $product->get_price() ) {
 			return $text;
 		}
 		$cart_btn_label = $product->get_button_label();
@@ -339,7 +342,7 @@ class Product {
 	 */
 	public function change_price_html( $price, $product ) {
 		$product = Subscription::get_subs_product( $product );
-		if ( ! $product->is_type( 'simple' ) || '' === $price ) {
+		if ( ! $product || ! $product->is_type( 'simple' ) || '' === $price ) {
 			return $price;
 		}
 

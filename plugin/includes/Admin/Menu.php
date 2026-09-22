@@ -5,6 +5,9 @@
  * @package SpringDevs\Subscription\Admin
  */
 
+// This filename is part of the imported public compatibility surface.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
+
 namespace SpringDevs\Subscription\Admin;
 
 use SpringDevs\Subscription\Illuminate\Helper;
@@ -25,6 +28,7 @@ class Menu {
 		add_action( 'admin_menu', array( $this, 'reorder_submenu' ), 999 );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
 		add_action( 'wp_ajax_subscrpt_bulk_action', array( $this, 'handle_bulk_action_ajax' ) );
+		add_action( 'admin_post_subscrpt_export_reports', array( $this, 'export_reports' ) );
 		add_action( 'admin_init', array( $this, 'maybe_onboarding_redirect' ) );
 	}
 
@@ -75,7 +79,7 @@ class Menu {
 			SUBSCRPT_VERSION
 		);
 
-		// Enqueue admin JavaScript for subscription list functionality
+		// Enqueue admin JavaScript for subscription list functionality.
 		wp_enqueue_script(
 			'sdevs_subscription_admin',
 			SUBSCRPT_ASSETS . '/js/admin.js',
@@ -92,7 +96,7 @@ class Menu {
 			SUBSCRPT_VERSION
 		);
 
-		// Enqueue onboarding wizard JS (loaded on wizard page). Depends on the
+		// Enqueue onboarding wizard JS (loaded on wizard page). Depends on the.
 		// admin components so the cadence picker (adv-select) is ready.
 		wp_enqueue_script(
 			'subscrpt-onboarding-wizard',
@@ -121,12 +125,11 @@ class Menu {
 				'rest_url'          => rest_url( 'wpsubscription/v1/plans' ),
 				'rest_nonce'        => wp_create_nonce( 'wp_rest' ),
 				'currency_symbol'   => get_woocommerce_currency_symbol(),
-				'is_pro'            => subscrpt_pro_activated(),
 				'has_products'      => $subscrpt_wizard_has_products,
 			)
 		);
 
-		// Localize script for AJAX
+		// Localize script for AJAX.
 		wp_localize_script(
 			'sdevs_subscription_admin',
 			'wp_subscription_ajax',
@@ -142,10 +145,8 @@ class Menu {
 	 */
 	public function create_admin_menu() {
 		$parent_slug = 'wp-subscription';
-		$pro_text  = __( 'Not included in this build', 'subscription' );
-		$pro_badge = subscrpt_pro_activated() ? '' : ' <span title="' . $pro_text . '"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" style="fill:var(--wpsubs-brand);vertical-align:middle;margin-bottom:2.2px;flex-shrink:0;" aria-hidden="true"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M19 19h-14c-.5 0 -.9 -.3 -1 -.8l-2 -10c0 -.4 .1 -.8 .5 -1.1c.4 -.2 .8 -.2 1.1 0l4.1 3.3l3.4 -5.1c.4 -.6 1.3 -.6 1.7 0l3.4 5.1l4.1 -3.3c.3 -.3 .8 -.3 1.1 0c.4 .2 .5 .6 .5 1.1l-2 10c0 .5 -.5 .8 -1 .8z"/></svg></span>';
 
-		// Main menu
+		// Main menu.
 		add_menu_page(
 			__( 'Ashbi Subscriptions', 'subscription' ),
 			__( 'Ashbi Subscriptions', 'subscription' ),
@@ -156,8 +157,8 @@ class Menu {
 			40
 		);
 
-		// Onboarding Wizard (hidden from menu with CSS. can be accessed via direct URL: admin.php?page=wp-subscription-onboarding)
-		// CSS Record: admin.css -> `.wp-submenu a[href*="page=wp-subscription-onboarding"]`
+		// Onboarding Wizard (hidden from menu with CSS. can be accessed via direct URL: admin.php?page=wp-subscription-onboarding).
+		// CSS Record: admin.css -> `.wp-submenu a[href*="page=wp-subscription-onboarding"]`.
 		add_submenu_page(
 			$parent_slug,
 			__( 'Setup Wizard', 'subscription' ),
@@ -167,7 +168,7 @@ class Menu {
 			array( $this, 'render_onboarding_wizard' )
 		);
 
-		// Overview. WordPress makes the first submenu entry share the parent
+		// Overview. WordPress makes the first submenu entry share the parent.
 		// slug, so this is the page the top-level item opens.
 		add_submenu_page(
 			$parent_slug,
@@ -178,8 +179,8 @@ class Menu {
 			array( $this, 'render_dashboard_page' )
 		);
 
-		// Subscriptions List. Moved off the parent slug when the dashboard took
-		// it; render_dashboard_page() redirects here when the request carries
+		// Subscriptions List. Moved off the parent slug when the dashboard took.
+		// it; render_dashboard_page() redirects here when the request carries.
 		// list-only query arguments, so old bookmarks still work.
 		add_submenu_page(
 			$parent_slug,
@@ -191,7 +192,7 @@ class Menu {
 		);
 
 		// Subscription Details (hidden from menu with CSS — accessed via admin.php?page=wp-subscription-details&id=ID).
-		// CSS Record: admin.css -> `.wp-submenu a[href*="page=wp-subscription-details"]`
+		// CSS Record: admin.css -> `.wp-submenu a[href*="page=wp-subscription-details"]`.
 		add_submenu_page(
 			$parent_slug,
 			__( 'Subscription Details', 'subscription' ),
@@ -201,37 +202,37 @@ class Menu {
 			array( $this, 'render_subscription_details_page' )
 		);
 
-		// Stats Overview
+		// Stats Overview.
 		add_submenu_page(
 			$parent_slug,
 			__( 'Reports', 'subscription' ),
-			__( 'Reports', 'subscription' ) . $pro_badge,
+			__( 'Reports', 'subscription' ),
 			'manage_options',
 			'wp-subscription-stats',
 			array( $this, 'render_stats_page' )
 		);
 
-		// Subscription Health
+		// Subscription Health.
 		add_submenu_page(
 			$parent_slug,
 			__( 'Health', 'subscription' ),
-			__( 'Health', 'subscription' ) . $pro_badge,
+			__( 'Health', 'subscription' ),
 			'manage_options',
 			'wp-subscription-health',
 			array( $this, 'render_health_page' )
 		);
 
-		// Delivery Schedules
+		// Delivery Schedules.
 		add_submenu_page(
 			$parent_slug,
 			__( 'Delivery', 'subscription' ),
-			__( 'Delivery', 'subscription' ) . $pro_badge,
+			__( 'Delivery', 'subscription' ),
 			'manage_options',
 			'wp-subscription-delivery',
 			array( $this, 'render_delivery_page' )
 		);
 
-		// Help & Resources
+		// Help & Resources.
 		add_submenu_page(
 			$parent_slug,
 			__( 'Help', 'subscription' ),
@@ -280,21 +281,19 @@ class Menu {
 
 		// slug => position. Use gaps of 10 so extensions can insert between items.
 		//
-		// The order is the same whether or not pro is active: a locked page
-		// carries a pro badge but keeps its place, so the menu does not
-		// rearrange itself the moment a licence is activated. Plans and
-		// Cancellation Flow position themselves through the filter below.
-		$default_order = [
-			'wp-subscription'              => 5,   // Overview
-			'wp-subscription-delivery'     => 20,  // Delivery (pro)
-			'wp-subscription-list'         => 30,  // Subscriptions
-			'wp-subscription-stats'        => 40,  // Reports
-			'wp-subscription-health'       => 50,  // Health
-			'wp-subscription-integrations' => 60,  // Integrations
-			'wp-subscription-settings'     => 998, // Settings
-			'wp-subscription-license'      => 999, // License (pro)
-			'wp-subscription-support'      => 1000, // Help & Resources
-		];
+		// Keep stable gaps so extensions can insert their own pages without.
+		// rearranging the built-in navigation. Plans and Cancellation Flow.
+		// position themselves through the filter below.
+		$default_order = array(
+			'wp-subscription'              => 5,   // Overview.
+			'wp-subscription-delivery'     => 20,  // Delivery.
+			'wp-subscription-list'         => 30,  // Subscriptions.
+			'wp-subscription-stats'        => 40,  // Reports.
+			'wp-subscription-health'       => 50,  // Health.
+			'wp-subscription-integrations' => 60,  // Integrations.
+			'wp-subscription-settings'     => 998, // Settings.
+			'wp-subscription-support'      => 1000, // Help & Resources.
+		);
 
 		/**
 		 * Filter the Ashbi Subscriptions submenu slug order.
@@ -317,13 +316,13 @@ class Menu {
 		asort( $order );
 
 		// Index current items by slug for fast lookup.
-		$indexed = [];
+		$indexed = array();
 		foreach ( $submenu[ $parent ] as $item ) {
 			$indexed[ $item[2] ] = $item;
 		}
 
 		// Build sorted list from the ordered slugs.
-		$sorted = [];
+		$sorted = array();
 		foreach ( $order as $slug => $position ) {
 			if ( isset( $indexed[ $slug ] ) ) {
 				$sorted[] = $indexed[ $slug ];
@@ -365,27 +364,27 @@ class Menu {
 	 * @param string $subtitle    Optional subtitle (reserved; not rendered).
 	 * @param array  $breadcrumbs Ordered trail of `[ 'label', 'url' ]` items.
 	 */
-	public function render_admin_header( string $title = '', string $subtitle = '', array $breadcrumbs = [] ) {
+	public function render_admin_header( string $title = '', string $subtitle = '', array $breadcrumbs = array() ) {
 		$current = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : 'wp-subscription';
 
 		// Kept for backward compatibility — extensions may hook here for side-effects.
-		$menu_items = apply_filters( 'subscrpt_admin_header_menu_items', [], $current );
+		$menu_items = apply_filters( 'subscrpt_admin_header_menu_items', array(), $current );
 		unset( $menu_items ); // Nav no longer rendered in header; navigation is in WP sidebar.
 
-		// Normalize to a single trail. Explicit breadcrumbs win; otherwise the
+		// Normalize to a single trail. Explicit breadcrumbs win; otherwise the.
 		// legacy single $title segment is used.
-		// A long breadcrumb label is truncated for display; the full text is kept
+		// A long breadcrumb label is truncated for display; the full text is kept.
 		// so the renderer can add it as a title attribute.
 		$make_crumb = static function ( $label, $url ) {
 			$label = (string) $label;
-			return [
+			return array(
 				'label' => subscrpt_truncate_text( $label ),
 				'full'  => $label,
 				'url'   => (string) $url,
-			];
+			);
 		};
 
-		$trail = [];
+		$trail = array();
 		if ( ! empty( $breadcrumbs ) ) {
 			foreach ( $breadcrumbs as $crumb ) {
 				if ( is_array( $crumb ) && '' !== ( $crumb['label'] ?? '' ) ) {
@@ -418,7 +417,7 @@ class Menu {
 			</div>
 			<div class="wp-subscription-admin-header-right">
 				<?php
-				// Preserve the extension hook while intentionally suppressing its
+				// Preserve the extension hook while intentionally suppressing its.
 				// upstream license/account call to action in this distribution.
 				apply_filters( 'subscrpt_admin_header_license', null );
 				?>
@@ -449,7 +448,7 @@ class Menu {
 				$query         = wp_unslash( $_GET );
 				$query['page'] = 'wp-subscription-list';
 
-				// The list filters on `subscrpt_status` and ignores `post_status`,
+				// The list filters on `subscrpt_status` and ignores `post_status`,.
 				// so forwarding the old name as-is lands on an unfiltered list.
 				if ( isset( $query['post_status'] ) ) {
 					if ( empty( $query['subscrpt_status'] ) ) {
@@ -473,7 +472,7 @@ class Menu {
 	public function render_subscriptions_page() {
 		$this->render_admin_header( __( 'Subscriptions', 'subscription' ), __( 'Manage your subscriptions', 'subscription' ) );
 
-		// Handle filters
+		// Handle filters.
 		$status      = isset( $_GET['subscrpt_status'] ) ? sanitize_text_field( wp_unslash( $_GET['subscrpt_status'] ) ) : '';
 		$search      = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
 		$date_filter = isset( $_GET['date_filter'] ) ? sanitize_text_field( wp_unslash( $_GET['date_filter'] ) ) : '';
@@ -481,7 +480,7 @@ class Menu {
 		$paged       = isset( $_GET['paged'] ) ? max( 1, intval( $_GET['paged'] ) ) : 1;
 		$renewal_due = isset( $_GET['renewal_due'] ) ? min( 366, absint( $_GET['renewal_due'] ) ) : 0;
 
-		// Handle form submissions (both filters and bulk actions)
+		// Handle form submissions (both filters and bulk actions).
 		$request_method = isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : '';
 		if ( 'POST' === $request_method ) {
 			// Verify nonce before processing any POST data.
@@ -489,25 +488,31 @@ class Menu {
 			if ( ! wp_verify_nonce( $nonce, 'subscrpt_list_action' ) ) {
 				wp_die( esc_html__( 'Security check failed.', 'subscription' ) );
 			}
-			// Handle bulk actions
+			// Handle bulk actions.
 			if ( isset( $_POST['bulk_action'] ) || isset( $_POST['bulk_action2'] ) ) {
 				$bulk_action = isset( $_POST['bulk_action'] ) ? sanitize_text_field( wp_unslash( $_POST['bulk_action'] ) ) : sanitize_text_field( wp_unslash( $_POST['bulk_action2'] ?? '' ) );
 				$action      = isset( $_POST['action'] ) ? sanitize_text_field( wp_unslash( $_POST['action'] ) ) : sanitize_text_field( wp_unslash( $_POST['action2'] ?? '' ) );
 
-				if ( $bulk_action && $action && $action !== '-1' && isset( $_POST['subscription_ids'] ) && is_array( $_POST['subscription_ids'] ) ) {
+				if ( $bulk_action && $action && '-1' !== $action && isset( $_POST['subscription_ids'] ) && is_array( $_POST['subscription_ids'] ) ) {
 					$subscription_ids = array_map( 'intval', $_POST['subscription_ids'] );
 
-					if ( $action === 'trash' ) {
+					if ( 'trash' === $action ) {
 						foreach ( $subscription_ids as $sub_id ) {
-							wp_trash_post( $sub_id );
+							if ( $this->can_mutate_subscription( $sub_id ) ) {
+								wp_trash_post( $sub_id );
+							}
 						}
-					} elseif ( $action === 'restore' ) {
+					} elseif ( 'restore' === $action ) {
 						foreach ( $subscription_ids as $sub_id ) {
-							wp_untrash_post( $sub_id );
+							if ( $this->can_mutate_subscription( $sub_id ) ) {
+								wp_untrash_post( $sub_id );
+							}
 						}
-					} elseif ( $action === 'delete' ) {
+					} elseif ( 'delete' === $action ) {
 						foreach ( $subscription_ids as $sub_id ) {
-							wp_delete_post( $sub_id, true );
+							if ( $this->can_mutate_subscription( $sub_id ) ) {
+								wp_delete_post( $sub_id, true );
+							}
 						}
 					}
 
@@ -516,7 +521,7 @@ class Menu {
 				}
 			}
 
-			// Handle filter form submission
+			// Handle filter form submission.
 			if ( isset( $_POST['filter_action'] ) ) {
 				$filter_params = array();
 
@@ -542,14 +547,14 @@ class Menu {
 			}
 		}
 
-		// Handle individual actions
+		// Handle individual actions.
 		if ( isset( $_GET['action'] ) && ! empty( $_GET['sub_id'] ) ) {
 			$sub_id = intval( $_GET['sub_id'] );
 			$action = sanitize_text_field( wp_unslash( $_GET['action'] ) );
 			$nonce  = isset( $_GET['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ) : '';
 
 			// Clean trash action.
-			if ( $action === 'clean_trash' ) {
+				if ( 'clean_trash' === $action ) {
 				// Verify nonce for security.
 				$nonce_action = 'wpsubs_action_clean_trash';
 				if ( ! wp_verify_nonce( $nonce, $nonce_action ) ) {
@@ -559,16 +564,18 @@ class Menu {
 
 				// Clean all trash items.
 				$trash_posts = get_posts(
-					[
+					array(
 						'post_type'   => 'subscrpt_order',
 						'post_status' => 'trash',
 						'numberposts' => -1,
 						'fields'      => 'ids',
-					]
+					)
 				);
 
 				foreach ( $trash_posts as $trash_id ) {
-					wp_delete_post( $trash_id, true );
+					if ( $this->can_mutate_subscription( $trash_id ) ) {
+						wp_delete_post( $trash_id, true );
+					}
 				}
 
 				wp_safe_redirect( admin_url( 'admin.php?page=wp-subscription-list&subscrpt_status=trash' ) );
@@ -583,16 +590,20 @@ class Menu {
 
 				$redirect_url = admin_url( 'admin.php?page=wp-subscription-list' );
 
+				if ( in_array( $action, array( 'trash', 'restore', 'delete' ), true ) && ! $this->can_mutate_subscription( $sub_id ) ) {
+					wp_die( esc_html__( 'You do not have permission to modify this subscription.', 'subscription' ) );
+				}
+
 				switch ( $action ) {
 					case 'duplicate':
 						$post = get_post( $sub_id );
-						if ( $post && $post->post_type === 'subscrpt_order' ) {
-							$new_post = [
+						if ( $post && 'subscrpt_order' === $post->post_type ) {
+							$new_post = array(
 								'post_title'   => $post->post_title . ' (Copy)',
 								'post_content' => $post->post_content,
 								'post_status'  => 'draft',
 								'post_type'    => 'subscrpt_order',
-							];
+							);
 							$new_id   = wp_insert_post( $new_post );
 							if ( $new_id ) {
 								$meta = get_post_meta( $sub_id );
@@ -621,42 +632,42 @@ class Menu {
 			}
 		}
 
-		$args = [
+		$args = array(
 			'post_type'      => 'subscrpt_order',
 			'post_status'    => 'any',
 			'posts_per_page' => $per_page,
 			'paged'          => $paged,
 			'orderby'        => 'date',
 			'order'          => 'DESC',
-		];
+		);
 
 		if ( $status ) {
 			$args['post_status'] = $status;
 		}
-		// Search only by subscription ID
+		// Search only by subscription ID.
 		if ( $search !== '' ) {
 			if ( is_numeric( $search ) ) {
 				$args['p'] = intval( $search );
 			} else {
-				// If not numeric, return no results
+				// If not numeric, return no results.
 				$args['post__in'] = array( 0 );
 			}
 		}
-		// Dynamic date filter (YYYY-MM)
+		// Dynamic date filter (YYYY-MM).
 		if ( $date_filter && preg_match( '/^\d{4}-\d{2}$/', $date_filter ) ) {
 			$year                 = substr( $date_filter, 0, 4 );
 			$month                = substr( $date_filter, 5, 2 );
-			$args['date_query'][] = [
+			$args['date_query'][] = array(
 				'year'  => intval( $year ),
 				'month' => intval( $month ),
-			];
+			);
 		}
-		// Next-renewal window, soonest first. The same arguments as the
+		// Next-renewal window, soonest first. The same arguments as the.
 		// Overview's "Renewals due" figure, so its 7-day rows equal its count.
 		if ( $renewal_due ) {
 			$due_args = Stats::renewals_due_args( $renewal_due );
 
-			// Only an active subscription renews, so a renewal window combined
+			// Only an active subscription renews, so a renewal window combined.
 			// with any other status matches nothing — the filters AND together.
 			if ( $status && $due_args['post_status'] !== $status ) {
 				$args['post__in'] = array( 0 );
@@ -664,7 +675,7 @@ class Menu {
 
 			$args['post_status'] = $due_args['post_status'];
 			$args['meta_query']  = $due_args['meta_query']; // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-			$args['orderby']     = [ 'subscrpt_next_date' => 'ASC' ];
+			$args['orderby']     = array( 'subscrpt_next_date' => 'ASC' );
 		}
 
 		$query         = new \WP_Query( $args );
@@ -672,8 +683,8 @@ class Menu {
 		$total         = $query->found_posts;
 		$max_num_pages = $query->max_num_pages;
 
-		// Get all possible statuses for filter dropdown
-		$all_statuses = get_post_stati( [ 'show_in_admin_all_list' => true ], 'objects' );
+		// Get all possible statuses for filter dropdown.
+		$all_statuses = get_post_stati( array( 'show_in_admin_all_list' => true ), 'objects' );
 
 		include __DIR__ . '/views/subscription-list.php';
 		?>
@@ -716,6 +727,43 @@ class Menu {
 			$action = sanitize_text_field( wp_unslash( $_POST['subscrpt_order_action'] ) );
 			if ( '' !== $action ) {
 				Subscriptions::process_status_change( $subscription_id, $action );
+			}
+
+			wp_safe_redirect( $form_action );
+			exit;
+		}
+
+		// Save the optional per-subscription renewal price override. A blank value.
+		// removes the override and returns the subscription to the store setting.
+		if ( 'POST' === $request_method && isset( $_POST['subscrpt_save_renewal_price'] ) ) {
+			$nonce = isset( $_POST['subscrpt_custom_renewal_price_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['subscrpt_custom_renewal_price_nonce'] ) ) : '';
+			if ( ! wp_verify_nonce( $nonce, 'subscrpt_custom_renewal_price_' . $subscription_id ) ) {
+				wp_die( esc_html__( 'Security check failed.', 'subscription' ) );
+			}
+
+			$raw_price = isset( $_POST['subscrpt_custom_renewal_price'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['subscrpt_custom_renewal_price'] ) ) ) : '';
+			if ( '' === $raw_price ) {
+				delete_post_meta( $subscription_id, '_subscrpt_custom_renewal_price' );
+				$activity = __( 'Custom renewal price cleared; the store renewal setting is now used.', 'subscription' );
+			} elseif ( ! is_numeric( $raw_price ) || (float) $raw_price < 0 ) {
+				wp_die( esc_html__( 'Enter a valid non-negative renewal price.', 'subscription' ) );
+			} else {
+				$price = function_exists( 'wc_format_decimal' ) ? wc_format_decimal( $raw_price, wc_get_price_decimals() ) : number_format( (float) $raw_price, 2, '.', '' );
+				update_post_meta( $subscription_id, '_subscrpt_custom_renewal_price', $price );
+				$activity = sprintf( __( 'Custom renewal price set to %s.', 'subscription' ), wc_price( (float) $price ) );
+			}
+
+			$comment_id = wp_insert_comment(
+				array(
+					'comment_author'  => 'Ashbi Subscriptions',
+					'comment_content' => wp_strip_all_tags( $activity ),
+					'comment_post_ID' => $subscription_id,
+					'comment_type'    => 'order_note',
+				)
+			);
+			if ( $comment_id ) {
+				update_comment_meta( $comment_id, '_subscrpt_activity', __( 'Renewal Price', 'subscription' ) );
+				update_comment_meta( $comment_id, '_subscrpt_activity_type', 'renewal_price' );
 			}
 
 			wp_safe_redirect( $form_action );
@@ -796,15 +844,81 @@ class Menu {
 	 */
 	public function render_stats_page() {
 		$this->render_admin_header( __( 'Reports', 'subscription' ), __( 'View your subscription analytics', 'subscription' ) );
-
-		if ( ! subscrpt_pro_activated() ) {
-			include 'views/reports-preview.php';
-		} else {
-			// Allow pro plugin to override the entire stats page content.
-			do_action( 'subscrpt_render_stats_page' );
-		}
+		include __DIR__ . '/views/reports.php';
+		do_action( 'subscrpt_render_stats_page' );
 
 		$this->render_admin_footer();
+	}
+
+	/**
+	 * Neutralize spreadsheet formula-like text before writing a CSV cell.
+	 *
+	 * @param mixed $value Report cell value.
+	 * @return mixed
+	 */
+	private static function csv_cell( $value ) {
+		if ( ! is_string( $value ) || ! preg_match( '/^[\x20\x09\x0d\x0a]*[=+\-@]/', $value ) ) {
+			return $value;
+		}
+
+		return "'" . $value;
+	}
+
+	/**
+	 * Download aggregate report metrics without customer or order identifiers.
+	 *
+	 * @return void
+	 */
+	public function export_reports() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to export subscription reports.', 'subscription' ), 403 );
+		}
+		check_admin_referer( 'subscrpt_export_reports' );
+
+		$counts        = Stats::get_status_counts();
+		$failed        = Stats::count_failed_renewals_since( 24 );
+		$recovered     = Stats::count_recovered_renewals_since( 24 );
+		$churned       = Stats::count_churned_since( 30 );
+		$churn_base    = (int) ( $counts['active'] ?? 0 ) + $churned;
+		$reasons       = Stats::get_cancellation_reason_counts( 90 );
+		$cohorts       = Stats::get_cohort_summary( 6 );
+		$campaign_data = Stats::get_recovery_campaign_counts( 90 );
+		$rows          = array(
+			array( 'section', 'key', 'value', 'value_2', 'value_3', 'value_4' ),
+			array( 'metric', 'active_mrr', Stats::calculate_active_mrr() ),
+			array( 'metric', 'active_subscriptions', (int) ( $counts['active'] ?? 0 ) ),
+			array( 'metric', 'new_subscriptions_30_days', Stats::count_new_since( 30 ) ),
+			array( 'metric', 'renewals_due_7_days', Stats::count_renewals_due_within( 7 ) ),
+			array( 'metric', 'failed_renewals_24_hours', $failed ),
+			array( 'metric', 'recovered_renewals_24_hours', $recovered ),
+			array( 'metric', 'recovery_rate_percent', Stats::calculate_recovery_rate( $recovered, $failed ) ),
+			array( 'metric', 'churned_subscriptions_30_days', $churned ),
+			array( 'metric', 'churn_rate_percent', Stats::calculate_churn_rate( $churned, $churn_base ) ),
+			array( 'metric', 'revenue_at_risk_mrr', Stats::calculate_revenue_at_risk() ),
+		);
+
+		foreach ( $reasons['reasons'] as $reason ) {
+			$rows[] = array( 'cancellation_reason', $reason['reason'], $reason['count'], $reason['percent'] );
+		}
+		foreach ( $cohorts as $cohort ) {
+			$rows[] = array( 'signup_cohort', $cohort['month'], $cohort['cohort'], $cohort['retained'], $cohort['churned'], $cohort['retention_rate'] );
+		}
+		foreach ( $campaign_data['campaigns'] as $campaign ) {
+			$rows[] = array( 'recovery_campaign', $campaign['campaign'], $campaign['offer_issued'], $campaign['offer_accepted'], $campaign['win_back'], $campaign['win_back_rate'] );
+		}
+
+		nocache_headers();
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename=ashbi-subscriptions-report-' . gmdate( 'Y-m-d' ) . '.csv' );
+		$output = fopen( 'php://output', 'w' );
+		if ( false === $output ) {
+			wp_die( esc_html__( 'The report could not be generated.', 'subscription' ), 500 );
+		}
+		foreach ( $rows as $row ) {
+			fputcsv( $output, array_map( array( self::class, 'csv_cell' ), $row ) );
+		}
+		fclose( $output );
+		exit;
 	}
 
 	/**
@@ -812,30 +926,19 @@ class Menu {
 	 */
 	public function render_health_page() {
 		$this->render_admin_header( __( 'Health', 'subscription' ), __( 'Monitor your subscription health', 'subscription' ) );
-
-		if ( ! subscrpt_pro_activated() ) {
-			include 'views/health-preview.php';
-		} else {
-			// Allow pro plugin to render the full health page content.
-			do_action( 'subscrpt_render_health_page' );
-		}
+		include __DIR__ . '/views/health.php';
+		do_action( 'subscrpt_render_health_page' );
 
 		$this->render_admin_footer();
 	}
 
 	/**
 	 * Render Delivery Schedules page.
-	 * When pro is active, fires subscrpt_render_delivery_page for pro to handle.
 	 */
 	public function render_delivery_page() {
 		$this->render_admin_header( __( 'Delivery Schedules', 'subscription' ), __( 'Track and manage subscription delivery schedules.', 'subscription' ) );
-
-		if ( ! subscrpt_pro_activated() ) {
-			include 'views/delivery-preview.php';
-		} else {
-			// Allow pro plugin to render the full delivery page content.
-			do_action( 'subscrpt_render_delivery_page' );
-		}
+		include __DIR__ . '/views/delivery.php';
+		do_action( 'subscrpt_render_delivery_page' );
 
 		$this->render_admin_footer();
 	}
@@ -875,19 +978,32 @@ class Menu {
 	/**
 	 * Handle bulk action AJAX
 	 */
+	private function can_mutate_subscription( int $subscription_id ): bool {
+		$post = get_post( $subscription_id );
+
+		if ( ! $post || 'subscrpt_order' !== $post->post_type ) {
+			return false;
+		}
+
+		return current_user_can( 'delete_post', $subscription_id );
+	}
+
+	/**
+	 * Handle bulk action AJAX
+	 */
 	public function handle_bulk_action_ajax() {
-		// Verify nonce
+		// Verify nonce.
 		$nonce = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
 		if ( ! wp_verify_nonce( $nonce, 'subscrpt_bulk_action_nonce' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Security check failed.', 'subscription' ) ) );
 		}
 
-		// Check permissions
+		// Check permissions.
 		if ( ! current_user_can( 'manage_woocommerce' ) ) {
 			wp_send_json_error( array( 'message' => __( 'You do not have permission to perform this action.', 'subscription' ) ) );
 		}
 
-		// Get action and subscription IDs
+		// Get action and subscription IDs.
 		$bulk_action      = isset( $_POST['bulk_action'] ) ? sanitize_text_field( wp_unslash( $_POST['bulk_action'] ) ) : '';
 		$subscription_ids = isset( $_POST['subscription_ids'] ) ? array_map( 'intval', $_POST['subscription_ids'] ) : array();
 
@@ -901,9 +1017,9 @@ class Menu {
 		foreach ( $subscription_ids as $subscription_id ) {
 			$post = get_post( $subscription_id );
 
-			if ( ! $post || $post->post_type !== 'subscrpt_order' ) {
+			if ( ! $post || 'subscrpt_order' !== $post->post_type || ! current_user_can( 'delete_post', $subscription_id ) ) {
 				// translators: Subscription ID.
-				$errors[] = sprintf( __( 'Subscription #%d not found.', 'subscription' ), $subscription_id );
+				$errors[] = sprintf( __( 'Subscription #%d is not available for this action.', 'subscription' ), $subscription_id );
 				continue;
 			}
 
@@ -963,7 +1079,7 @@ class Menu {
 			}
 		}
 
-		// Prepare response message
+		// Prepare response message.
 		$message = '';
 		if ( $processed_count > 0 ) {
 			switch ( $bulk_action ) {

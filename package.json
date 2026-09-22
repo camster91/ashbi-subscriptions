@@ -2,6 +2,7 @@
   "name": "ashbi-subscriptions-integration-tests",
   "private": true,
   "devDependencies": {
+    "@babel/parser": "^7.29.8",
     "@wordpress/env": "11.15.0"
   },
   "overrides": {
@@ -9,8 +10,9 @@
   },
   "scripts": {
     "env:start": "wp-env start",
-    "env:start:playground": "wp-env start --runtime=playground",
-    "env:stop": "wp-env stop",
+    "env:start:playground": "bash scripts/start-playground.sh",
+    "env:stop": "bash scripts/stop-playground.sh",
+    "lint:js": "node scripts/test-javascript.mjs",
     "test:integration": "bash scripts/run-integration.sh"
   }
 }

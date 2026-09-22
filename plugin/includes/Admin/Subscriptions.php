@@ -1,4 +1,9 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- This filename is part of the imported public compatibility surface.
+/**
+ * Admin subscription handlers.
+ *
+ * @package SpringDevs\Subscription\Admin
+ */
 
 namespace SpringDevs\Subscription\Admin;
 
@@ -198,11 +203,14 @@ class Subscriptions {
 			return null;
 		}
 		$order_item = $order->get_item( $order_item_id );
+		if ( ! $order_item instanceof \WC_Order_Item_Product ) {
+			return null;
+		}
 
 		$product_name = $order_item->get_name();
 		$product_link = get_the_permalink( $order_item->get_product_id() );
 
-		// Get payment information
+		// Get payment information.
 		$product_id    = $order_item->get_product_id();
 		$max_payments  = subscrpt_get_max_payments( $subscription_id ) ? subscrpt_get_max_payments( $subscription_id ) : 0;
 		$payments_made = subscrpt_count_payments_made( $subscription_id );
@@ -222,7 +230,7 @@ class Subscriptions {
 			),
 		);
 
-		// Add payment information if max_payments is set and not unlimited
+		// Add payment information if max_payments is set and not unlimited.
 		if ( ! empty( $max_payments ) && $max_payments > 0 ) {
 			$rows['total_payments'] = array(
 				'label' => __( 'Total Payments', 'subscription' ),
@@ -332,12 +340,25 @@ class Subscriptions {
 		}
 	}
 
+	/**
+	 * Keep the legacy post-list filter hook inert.
+	 *
+	 * Subscription filtering is rendered by the standalone Ashbi list screen;
+	 * this compatibility callback remains registered for extensions that still
+	 * expect the legacy hook to exist.
+	 *
+	 * @return void
+	 */
 	public function add_subscription_filter_select() {
-		// Implementation of add_subscription_filter_select method
 	}
 
+	/**
+	 * Register the legacy overview submenu entry.
+	 *
+	 * @return void
+	 */
 	public function add_overview_submenu() {
-		// Remove and re-add submenu to ensure Overview is first
+		// Remove and re-add submenu to ensure Overview is first.
 		remove_submenu_page( 'edit.php?post_type=subscrpt_order', 'edit.php?post_type=subscrpt_order' );
 		add_submenu_page(
 			'edit.php?post_type=subscrpt_order',
@@ -359,6 +380,11 @@ class Subscriptions {
 		);
 	}
 
+	/**
+	 * Render the legacy overview page with Ashbi-neutral copy.
+	 *
+	 * @return void
+	 */
 	public function render_overview_page() {
 		?>
 		<div class="wrap wpsubscription-overview" style="max-width:1100px;margin:40px auto 0 auto;">
@@ -376,7 +402,7 @@ class Subscriptions {
 				</div>
 
 				<div class="wpsubscription-what-section" style="margin-bottom:40px;">
-					<h2><?php esc_html_e( 'What does Subscriptions for WooCommerce do?', 'subscription' ); ?></h2>
+					<h2><?php esc_html_e( 'What does Ashbi Subscriptions do?', 'subscription' ); ?></h2>
 					<p style="font-size:1.08em;max-width:900px;line-height:1.7;">
 						<?php esc_html_e( 'Ashbi Subscriptions lets you create and manage recurring payment products and services, automate supported renewals, and provide customer subscription controls.', 'subscription' ); ?>
 					</p>
@@ -385,7 +411,7 @@ class Subscriptions {
 				<h2 style="margin-top:2em;"><?php esc_html_e( 'Highlights', 'subscription' ); ?></h2>
 				<div class="wpsubscription-features-grid">
 					<div class="feature-box"><span class="dashicons dashicons-admin-generic"></span><h3>Easy Setup</h3><p>Get started in minutes with our intuitive onboarding wizard.</p></div>
-					<div class="feature-box"><span class="dashicons dashicons-money"></span><h3>Multiple Gateways</h3><p>Support for Stripe, PayPal, and Paddle out of the box.</p></div>
+					<div class="feature-box"><span class="dashicons dashicons-money"></span><h3><?php esc_html_e( 'Multiple Gateways', 'subscription' ); ?></h3><p><?php esc_html_e( 'Connect Stripe, PayPal, Paddle, and other supported gateways through their own WooCommerce adapters.', 'subscription' ); ?></p></div>
 					<div class="feature-box"><span class="dashicons dashicons-schedule"></span><h3>Flexible Plans</h3><p>Create and manage various subscription types and delivery schedules.</p></div>
 					<div class="feature-box"><span class="dashicons dashicons-chart-line"></span><h3>Comprehensive Dashboard</h3><p>Monitor and manage all subscriptions in one place.</p></div>
 				</div>
@@ -428,24 +454,6 @@ class Subscriptions {
 			margin: 0;
 		}
 		</style>
-		<?php
-	}
-
-	public function render_go_pro_page() {
-		?>
-		<div class="wrap wpsubscription-go-pro" style="max-width:900px;margin:40px auto 0 auto;">
-			<div class="wpsubscription-go-pro-card" style="background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.06);padding:40px 32px 32px 32px;">
-				<h1 style="margin-bottom:0.5em;"><?php esc_html_e( 'Feature availability', 'subscription' ); ?></h1>
-				<p style="font-size:1.12em;max-width:600px;line-height:1.6;">
-					<?php esc_html_e( 'This legacy page is retained for bookmark compatibility. No paid upgrade is offered by this build.', 'subscription' ); ?>
-				</p>
-				<div style="text-align:center;margin-top:24px;">
-					<a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-subscription-support' ) ); ?>" class="button button-primary button-hero">
-						<?php esc_html_e( 'Open support', 'subscription' ); ?>
-					</a>
-				</div>
-			</div>
-		</div>
 		<?php
 	}
 }

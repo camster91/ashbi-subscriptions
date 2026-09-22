@@ -65,7 +65,7 @@ $subscrpt_divider  = 'border-top:1px solid #e3e3e8;';
 								SpringDevs\Subscription\Illuminate\Helper::get_subscription_recurring_price_html(
 									$subscription_id,
 									$item,
-									[ 'del_style' => 'color: #999999;' ]
+									array( 'del_style' => 'color: #999999;' )
 								)
 							);
 							?>

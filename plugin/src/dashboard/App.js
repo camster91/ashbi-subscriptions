@@ -6,8 +6,8 @@
  */
 
 import { __ } from "@wordpress/i18n";
-// TODO(refactor): replace @wordpress/components with our `wpsubs-*` admin
-// components (wpsubs-table-card, wpsubs-btn, …) — see src/dashboard/index.js.
+// WordPress core owns the standard card/button chrome; Ashbi owns the
+// dashboard-specific layout and data presentation below.
 import { Card, CardHeader, CardBody, Button } from "@wordpress/components";
 import StatTiles from "./StatTiles";
 import SalesChart from "./SalesChart";
@@ -15,7 +15,6 @@ import HealthBanner from "./HealthBanner";
 import SetupChecklist from "./SetupChecklist";
 import BuildCards from "./BuildCards";
 import FooterLinks from "./FooterLinks";
-import ProBadge from "./ProBadge";
 
 export default function App({ data }) {
   const { pulse = [], chart, health, setup, build = [], footer = [] } = data;
@@ -47,8 +46,6 @@ export default function App({ data }) {
                 </div>
                 <Button variant="tertiary" href={chart.url}>
                   {__("Open reports", "subscription")}
-                  {chart.pro && " "}
-                  {chart.pro && <ProBadge />}
                 </Button>
               </CardHeader>
               <CardBody>

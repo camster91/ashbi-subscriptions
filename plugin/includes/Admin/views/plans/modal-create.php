@@ -1,7 +1,6 @@
 <?php
 /**
- * Create Plan Group modal. Free is Recurring-only; the other two types are
- * locked unless Subscription Pro is active.
+ * Create Plan Group modal.
  *
  * @package SpringDevs\Subscription\Admin
  */
@@ -10,29 +9,24 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-$pro_active = function_exists( 'subscrpt_pro_activated' ) && subscrpt_pro_activated();
-
 $types = array(
 	'recurring'      => array(
 		'label' => __( 'Recurring Payment', 'subscription' ),
 		'badge' => __( 'Digital products', 'subscription' ),
 		'icon'  => 'dashicons-update',
 		'desc'  => __( 'Automatically charge recurring payments (best for virtual & downloadable products).', 'subscription' ),
-		'free'  => true,
 	),
 	'subscribe_save' => array(
 		'label' => __( 'Recurring Delivery', 'subscription' ),
 		'badge' => __( 'Physical products', 'subscription' ),
 		'icon'  => 'dashicons-cart',
 		'desc'  => __( 'Charge and deliver physical products on a schedule.', 'subscription' ),
-		'free'  => false,
 	),
 	'installments'   => array(
 		'label' => __( 'Split Payment', 'subscription' ),
 		'badge' => __( 'Installments', 'subscription' ),
 		'icon'  => 'dashicons-money-alt',
 		'desc'  => __( 'Split a price into a fixed number of payments.', 'subscription' ),
-		'free'  => false,
 	),
 );
 ?>
@@ -58,18 +52,17 @@ $types = array(
 			<div data-subscrpt-type-list style="display:flex;flex-direction:column;gap:10px;">
 				<?php
 				foreach ( $types as $key => $type_def ) :
-					$locked   = ! $type_def['free'] && ! $pro_active;
 					$selected = 'recurring' === $key;
 
 					$style  = 'display:flex;gap:12px;align-items:flex-start;box-sizing:border-box;width:100%;padding:12px 14px;border:1px solid var(--wpsubs-border);border-radius:var(--wpsubs-radius);';
 					$style .= $selected ? 'border-color:var(--wpsubs-brand);background:var(--wpsubs-brand-light);' : '';
-					$style .= $locked ? 'opacity:0.6;cursor:not-allowed;' : 'cursor:pointer;';
+					$style .= 'cursor:pointer;';
 					?>
 					<div
 						class="subscrpt-type-card<?php echo $selected ? ' is-selected' : ''; ?>"
 						data-subscrpt-type="<?php echo esc_attr( $key ); ?>"
 						data-subscrpt-type-label="<?php echo esc_attr( $type_def['label'] ); ?>"
-						<?php echo $locked ? 'data-locked="1"' : 'role="button" tabindex="0"'; ?>
+						role="button" tabindex="0"
 						style="<?php echo esc_attr( $style ); ?>"
 					>
 						<span class="dashicons <?php echo esc_attr( $type_def['icon'] ); ?>" style="flex:0 0 auto;color:<?php echo $selected ? 'var(--wpsubs-brand)' : 'var(--wpsubs-text-subtle)'; ?>;"></span>
@@ -79,9 +72,6 @@ $types = array(
 								<?php if ( ! empty( $type_def['badge'] ) ) : ?>
 									<span class="wpsubs-badge wpsubs-badge--muted" style="margin-left:2px;"><?php echo esc_html( $type_def['badge'] ); ?></span>
 								<?php endif; ?>
-								<?php if ( $locked ) : ?>
-									<span class="wpsubs-badge wpsubs-badge--pro"><?php esc_html_e( 'Pro', 'subscription' ); ?></span>
-								<?php endif; ?>
 							</span>
 							<span style="display:block;color:var(--wpsubs-text-muted);font-size:13px;word-break:break-word;"><?php echo esc_html( $type_def['desc'] ); ?></span>
 						</span>
@@ -89,11 +79,6 @@ $types = array(
 				<?php endforeach; ?>
 			</div>
 
-			<?php if ( ! $pro_active ) : ?>
-				<p style="color:var(--wpsubs-text-muted);font-size:12px;margin:12px 0 0;">
-					<?php esc_html_e( 'Recurring Delivery and Split Payment plans are available in Subscription Pro.', 'subscription' ); ?>
-				</p>
-			<?php endif; ?>
 		</div>
 		<div class="wpsubs-modal__footer">
 			<button type="button" class="wpsubs-btn wpsubs-btn--outline" data-wpsubs-modal-close><?php esc_html_e( 'Cancel', 'subscription' ); ?></button>

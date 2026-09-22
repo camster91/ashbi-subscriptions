@@ -1,4 +1,12 @@
 <?php
+/**
+ * Subscription post type and lifecycle status registration.
+ *
+ * @package SpringDevs\Subscription\Illuminate
+ */
+
+// The filename is part of the imported public class path.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
 
 namespace SpringDevs\Subscription\Illuminate;
 
@@ -75,32 +83,32 @@ class Post {
 		);
 
 		$args = array(
-			'label'                 => __( 'Subscriptions', 'subscription' ),
-			'labels'                => $labels,
-			'description'           => '',
-			'public'                => false,
-			'publicly_queryable'    => false,
-			'show_ui'               => true,
-			'delete_with_user'      => false,
-			// Subscription lifecycle records are payment-sensitive and must not use
+			'label'               => __( 'Subscriptions', 'subscription' ),
+			'labels'              => $labels,
+			'description'         => '',
+			'public'              => false,
+			'publicly_queryable'  => false,
+			'show_ui'             => true,
+			'delete_with_user'    => false,
+			// Subscription lifecycle records are payment-sensitive and must not use.
 			// WordPress's generic post REST controller/capabilities.
-			'show_in_rest'          => false,
-			'has_archive'           => false,
-			'show_in_menu'          => false,
-			'show_in_nav_menus'     => false,
-			'exclude_from_search'   => false,
-			'capability_type'       => 'post',
-			'map_meta_cap'          => true,
-			'capabilities'          => array(
+			'show_in_rest'        => false,
+			'has_archive'         => false,
+			'show_in_menu'        => false,
+			'show_in_nav_menus'   => false,
+			'exclude_from_search' => false,
+			'capability_type'     => 'post',
+			'map_meta_cap'        => true,
+			'capabilities'        => array(
 				'create_posts' => false,
 			),
-			'hierarchical'          => false,
-			'rewrite'               => array(
+			'hierarchical'        => false,
+			'rewrite'             => array(
 				'slug'       => 'subscrpt_order',
 				'with_front' => true,
 			),
-			'query_var'             => true,
-			'supports'              => false,
+			'query_var'           => true,
+			'supports'            => false,
 		);
 
 		$args = apply_filters( 'subscrpt_order_post_args', $args );
@@ -113,30 +121,29 @@ class Post {
 	 */
 	public function register_subscription_item_post_type() {
 		$args = array(
-			'label'                 => __( 'Subscription Items', 'subscription' ),
-			// 'labels'                => ,
-			'description'           => '',
-			'public'                => false,
-			'publicly_queryable'    => false,
-			'show_ui'               => false,
-			'delete_with_user'      => false,
-			'show_in_rest'          => false,
-			'has_archive'           => false,
-			'show_in_menu'          => false,
-			'show_in_nav_menus'     => false,
-			'exclude_from_search'   => false,
-			'capability_type'       => 'post',
-			'map_meta_cap'          => true,
-			'capabilities'          => array(
+			'label'               => __( 'Subscription Items', 'subscription' ),
+			'description'         => '',
+			'public'              => false,
+			'publicly_queryable'  => false,
+			'show_ui'             => false,
+			'delete_with_user'    => false,
+			'show_in_rest'        => false,
+			'has_archive'         => false,
+			'show_in_menu'        => false,
+			'show_in_nav_menus'   => false,
+			'exclude_from_search' => false,
+			'capability_type'     => 'post',
+			'map_meta_cap'        => true,
+			'capabilities'        => array(
 				'create_posts' => false,
 			),
-			'hierarchical'          => false,
-			'rewrite'               => array(
+			'hierarchical'        => false,
+			'rewrite'             => array(
 				'slug'       => 'subscription_item',
 				'with_front' => false,
 			),
-			'query_var'             => true,
-			'supports'              => false,
+			'query_var'           => true,
+			'supports'            => false,
 		);
 
 		$args = apply_filters( 'subscrpt_order_item_post_args', $args );

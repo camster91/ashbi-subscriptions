@@ -1,16 +1,15 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- This filename is part of the imported public compatibility surface.
 /**
- * Product-editor plan view (free).
+ * Product-editor plan view.
  *
  * Renders, on the product editor Subscription tab, the plan(s) this product is
- * connected to plus a connect control to attach it to a Recurring plan group at
+ * connected to plus a connect control to attach it to a plan group at
  * a per-product price. The classic `_subscrpt_*` meta inputs stay in the DOM
  * (hidden) behind a "Switch to classic settings" toggle. Writes go through the
  * wpsubscription/v1 REST API (see assets/js/admin/product-plans.js).
  *
- * Free mounts this for simple products; Pro also reuses render_toolbar() /
- * render_plan_view() / render_modals() for variable products (product-level
- * plan connection), with the per-variation classic fields behind the toggle.
+ * Ashbi mounts this for simple and variable products. Product-level relations
+ * act as inherited seeds and variation relations can override them.
  *
  * @package SpringDevs\Subscription\Admin\Product
  */
@@ -25,19 +24,17 @@ use SpringDevs\Subscription\Illuminate\Plans\PlanRepository;
 class Plans {
 
 	/**
-	 * Register the mount point used when Pro renders the Subscription panel.
+	 * Register the mount point used by compatible product editors.
 	 *
-	 * With Pro active, Pro's `Admin/Product/Simple` renders the panel and fires
-	 * `subscrpt_simple_plan_panel` at the top; free mounts its plan view there,
-	 * toggling against Pro's classic fields (`.subscrpt-classic-fields`). With
-	 * Pro inactive, free renders its own panel (see Admin\Product::subscription_forms).
+	 * A compatible product editor can fire `subscrpt_simple_plan_panel`; the
+	 * standalone Ashbi editor renders the same view directly.
 	 */
 	public function __construct() {
 		add_action( 'subscrpt_simple_plan_panel', array( $this, 'render_mount' ) );
 	}
 
 	/**
-	 * Mount the plan view inside Pro's Subscription panel.
+	 * Mount the plan view inside a compatible product editor panel.
 	 *
 	 * @param int $product_id Product being edited.
 	 *
@@ -63,17 +60,14 @@ class Plans {
 	/**
 	 * Render the Create-Plan-Group + Add-Selling-Plan modals once per page, so
 	 * merchants can build a new plan group + plan without leaving the product
-	 * editor. Pro-only: free's product editor is attach-only. The modals sit
+	 * editor. The modals sit
 	 * outside the [data-subscrpt-plan-view] region so an in-place refresh never
 	 * duplicates them. Driven by the shared plan-forms.js module.
 	 *
 	 * @return void
 	 */
 	public static function render_modals() {
-		if ( ! function_exists( 'subscrpt_pro_activated' ) || ! subscrpt_pro_activated() ) {
-			return;
-		}
-		// modal-term.php expects a $plan (id + type); product-plans.js rewrites
+		// modal-term.php expects a $plan (id + type); product-plans.js rewrites.
 		// the modal's group id/type before opening it for a freshly made group.
 		$plan = array(
 			'id'   => 0,
@@ -105,9 +99,9 @@ class Plans {
 		$is_variable = $product->is_type( 'variable' );
 		$product_id  = $product->get_id();
 
-		// Plans a context offers, in the same order (and with the same ids) the
+		// Plans a context offers, in the same order (and with the same ids) the.
 		// storefront resolver / generated link will use. One-time first when on.
-		// One-time uses the sentinel value "onetime" (JS omits subscrpt_plan_id for
+		// One-time uses the sentinel value "onetime" (JS omits subscrpt_plan_id for.
 		// it) so the adv-select still resolves a non-empty default label.
 		$build_plans = static function ( $vid, $one_time_enabled ) use ( $product_id ) {
 			$plans = array();
@@ -138,7 +132,7 @@ class Plans {
 				if ( empty( $subscrpt_plans ) ) {
 					continue;
 				}
-				// An "Any …" attribute stores an empty value; such a variation can't
+				// An "Any …" attribute stores an empty value; such a variation can't.
 				// be resolved by id alone, so the checkout-link endpoint can't add it.
 				$subscrpt_attrs   = $subscrpt_variation->get_variation_attributes();
 				$subscrpt_has_any = in_array( '', array_map( 'strval', $subscrpt_attrs ), true );
@@ -166,7 +160,7 @@ class Plans {
 			return;
 		}
 
-		// JS only needs the ids/attributes to compose the link; plans are rendered
+		// JS only needs the ids/attributes to compose the link; plans are rendered.
 		// as adv-selects below, so keep the blob slim.
 		$subscrpt_ctx_data = array();
 		foreach ( $contexts as $subscrpt_ctx ) {
@@ -177,9 +171,9 @@ class Plans {
 			);
 		}
 
-		// Checkout link: WooCommerce Blocks' native checkout-link endpoint, which
-		// empties the cart, adds `products=ID:QTY`, and redirects to checkout. It
-		// resolves via the pretty path `/checkout-link/` when permalinks are on,
+		// Checkout link: WooCommerce Blocks' native checkout-link endpoint, which.
+		// empties the cart, adds `products=ID:QTY`, and redirects to checkout. It.
+		// resolves via the pretty path `/checkout-link/` when permalinks are on,.
 		// or the registered `?checkout-link=true` query var when they are plain.
 		$subscrpt_checkout_base = get_option( 'permalink_structure' )
 			? home_url( 'checkout-link/' )
@@ -272,7 +266,7 @@ class Plans {
 						<span style="<?php echo esc_attr( $subscrpt_field_l ); ?>"><?php esc_html_e( 'Plan', 'subscription' ); ?></span>
 						<?php
 						foreach ( $contexts as $subscrpt_ctx ) :
-							// Separate one-time from recurring with a divider so the two
+							// Separate one-time from recurring with a divider so the two.
 							// read as distinct sets (one-time is always listed first).
 							$subscrpt_onetime   = array();
 							$subscrpt_recurring = array();
@@ -286,7 +280,7 @@ class Plans {
 							$subscrpt_plan_opts = $subscrpt_onetime;
 							// Divider between the one-time option and the recurring plans.
 							if ( ! empty( $subscrpt_onetime ) && ! empty( $subscrpt_recurring ) ) {
-								$subscrpt_plan_opts[] = [ 'divider' => true ];
+								$subscrpt_plan_opts[] = array( 'divider' => true );
 							}
 							foreach ( $subscrpt_recurring as $subscrpt_p ) {
 								$subscrpt_plan_opts[] = $subscrpt_p;
@@ -320,7 +314,7 @@ class Plans {
 								<span class="dashicons dashicons-admin-page" style="font-size:15px;width:15px;height:15px;line-height:1;"></span>
 							</button>
 						</div>
-						<?php // URL structure reference for the selected link type (JS toggles). ?>
+				<?php // URL structure reference for the selected link type (JS toggles). ?>
 						<span data-subscrpt-checkout-ref="cart" style="font-size:10.5px;line-height:1.5;color:var(--wpsubs-text-subtle,#8a8f98);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all;"><strong style="font-family:inherit;"><?php esc_html_e( 'Ref.', 'subscription' ); ?></strong> /?add-to-cart=PRODUCT_ID&amp;subscrpt_plan_id=PLAN_ID</span>
 						<span data-subscrpt-checkout-ref="checkout" hidden style="font-size:10.5px;line-height:1.5;color:var(--wpsubs-text-subtle,#8a8f98);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all;"><strong style="font-family:inherit;"><?php esc_html_e( 'Ref.', 'subscription' ); ?></strong> /checkout-link/?products=PRODUCT_ID:QTY&amp;subscrpt_plan_id=PLAN_ID</span>
 					</div>
@@ -358,9 +352,9 @@ class Plans {
 			return false;
 		}
 
-		// A product is "classic/legacy" only when it is enabled as a classic
-		// subscription (`_subscrpt_enabled`) but tied to no plan. `_subscrpt_timing_option`
-		// is written with a default on every product save, so it can't distinguish a
+		// A product is "classic/legacy" only when it is enabled as a classic.
+		// subscription (`_subscrpt_enabled`) but tied to no plan. `_subscrpt_timing_option`.
+		// is written with a default on every product save, so it can't distinguish a.
 		// real classic subscription from a plain product — never key on it here.
 		if ( $product->is_type( 'variable' ) ) {
 			$has_classic = false;
@@ -407,7 +401,7 @@ class Plans {
 		?>
 		<div data-subscrpt-plan-toolbar style="display:flex;align-items:center;gap:12px;margin:0 0 14px;flex-wrap:wrap;">
 			<strong style="margin-left:10px;font-size:13px;color:var(--wpsubs-text);"><?php esc_html_e( 'Ashbi Subscriptions', 'subscription' ); ?></strong>
-			<?php // Variable products enable per variation (toggle lives on each variation card); simple products enable at the product level here. ?>
+				<?php // Variable products enable per variation (toggle lives on each variation card); simple products enable at the product level here. ?>
 			<?php if ( ! ( $product && $product->is_type( 'variable' ) ) ) : ?>
 				<label class="wpsubs-settings-toggle-label" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--wpsubs-text-muted);" title="<?php esc_attr_e( 'Sell this product as a subscription', 'subscription' ); ?>">
 					<input type="checkbox" class="wpsubs-toggle" id="subscrpt_enable" name="subscrpt_enable" value="yes" <?php checked( $subscrpt_enabled ); ?> />
@@ -444,11 +438,8 @@ class Plans {
 		$connections = PlanRepository::get_product_connections( $product->get_id() );
 		$connected   = self::group_connections( $connections );
 		$available   = self::available_groups( array_keys( $connected ) );
-		// Pro adds "create plan group / plan" shortcuts here; free is attach-only.
-		$pro_active = function_exists( 'subscrpt_pro_activated' ) && subscrpt_pro_activated();
-
-		// One-time purchase (simple products): the product's native WooCommerce
-		// price + an enabled flag, rendered as a row after the plan rows (matching
+		// One-time purchase (simple products): the product's native WooCommerce.
+		// price + an enabled flag, rendered as a row after the plan rows (matching.
 		// the variable-product layout), not a separate card. Null hides the row.
 		$subscrpt_simple_ot = ( ! $product->is_type( 'variable' ) )
 			? array(
@@ -504,8 +495,8 @@ class Plans {
 							<div style="flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:8px;">
 								<strong style="font-size:13.5px;color:var(--wpsubs-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?php echo esc_html( $group['title'] ); ?></strong>
 								<?php
-								// No "Connected" badge: the card only exists when the product is
-								// connected, so the badge restated its own container. The link keeps
+								// No "Connected" badge: the card only exists when the product is.
+								// connected, so the badge restated its own container. The link keeps.
 								// its label instead — an icon alone did not say where it went.
 								?>
 								<a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-subscription-plans&view=detail&plan=' . (int) $subscrpt_gid ) ); ?>" target="_blank" rel="noopener" title="<?php esc_attr_e( 'Open this plan on the Plans screen', 'subscription' ); ?>" style="flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;font-size:12.5px;color:var(--wpsubs-text-muted);text-decoration:none;white-space:nowrap;">
@@ -515,7 +506,7 @@ class Plans {
 							</div>
 							<div style="flex:0 0 auto;display:flex;align-items:center;gap:8px;">
 								<?php if ( ! $product->is_type( 'variable' ) ) : ?>
-									<?php // Simple: one Edit/Save for the whole card. Variable edits per variation (buttons live on each variation sub-card). ?>
+										<?php // Simple: one Edit/Save for the whole card. Variable edits per variation (buttons live on each variation sub-card). ?>
 									<button type="button" class="wpsubs-btn wpsubs-btn--outline wpsubs-btn--sm" data-subscrpt-edit-prices>
 										<span class="dashicons dashicons-edit" style="font-size:14px;width:14px;height:14px;line-height:1;"></span>
 										<?php esc_html_e( 'Edit prices', 'subscription' ); ?>
@@ -557,7 +548,6 @@ class Plans {
 		<?php endif; ?>
 
 		<?php if ( empty( $available ) && empty( $connected ) ) : ?>
-			<?php if ( $pro_active ) : ?>
 				<div class="wpsubs-table-card" style="padding:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
 					<span style="flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:var(--wpsubs-radius,8px);background:var(--wpsubs-brand-light,#fff1eb);color:var(--wpsubs-brand,#ff4d00);">
 						<span class="dashicons dashicons-admin-links"></span>
@@ -571,12 +561,6 @@ class Plans {
 						<?php esc_html_e( 'New plan', 'subscription' ); ?>
 					</button>
 				</div>
-			<?php else : ?>
-				<p style="margin:0;font-size:13px;color:var(--wpsubs-text-muted);">
-					<?php esc_html_e( 'No plans available.', 'subscription' ); ?>
-					<a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-subscription-plans' ) ); ?>"><?php esc_html_e( 'Create a plan', 'subscription' ); ?></a>
-				</p>
-			<?php endif; ?>
 		<?php elseif ( ! empty( $available ) && empty( $connected ) ) : ?>
 			<div class="wpsubs-table-card" data-subscrpt-connect-card style="padding:14px;">
 				<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -606,12 +590,10 @@ class Plans {
 							)
 						);
 						?>
-						<?php if ( $pro_active ) : ?>
 							<button type="button" class="wpsubs-btn wpsubs-btn--outline wpsubs-btn--sm" data-wpsubs-modal-open="subscrpt-create-plan" title="<?php esc_attr_e( 'Create a new plan', 'subscription' ); ?>">
 								<span class="dashicons dashicons-plus-alt2" style="font-size:15px;width:15px;height:15px;line-height:1;"></span>
 								<?php esc_html_e( 'New', 'subscription' ); ?>
 							</button>
-						<?php endif; ?>
 					</div>
 				</div>
 
@@ -627,12 +609,10 @@ class Plans {
 									<?php esc_html_e( 'This plan has no durations yet. Add a duration before connecting this product.', 'subscription' ); ?>
 								</p>
 								<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;">
-									<?php if ( $pro_active ) : ?>
 										<button type="button" class="wpsubs-btn wpsubs-btn--primary wpsubs-btn--sm" data-subscrpt-create-plan-for="<?php echo esc_attr( $group['id'] ); ?>">
 											<span class="dashicons dashicons-plus-alt2" style="font-size:15px;width:15px;height:15px;line-height:1;"></span>
 											<?php esc_html_e( 'Create plan', 'subscription' ); ?>
 										</button>
-									<?php endif; ?>
 									<a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-subscription-plans&view=detail&plan=' . (int) $group['id'] ) ); ?>" class="wpsubs-btn wpsubs-btn--outline wpsubs-btn--sm" target="_blank" rel="noopener">
 										<span class="dashicons dashicons-external" style="font-size:14px;width:14px;height:14px;line-height:1;"></span>
 										<?php esc_html_e( 'Manage plans', 'subscription' ); ?>
@@ -775,7 +755,7 @@ class Plans {
 							<?php endif; ?>
 						</div>
 						<?php
-						// The gate clears the inline `display` to reveal, which falls back
+						// The gate clears the inline `display` to reveal, which falls back.
 						// to a div's `block` — so the flex row is a child, not this element.
 						?>
 						<div data-subscrpt-onetime-price style="padding:12px;border-top:1px solid var(--wpsubs-border,#e5e7eb);<?php echo $subscrpt_ot_on ? '' : 'display:none;'; ?>">
@@ -820,8 +800,8 @@ class Plans {
 				continue;
 			}
 
-			// Per-variation term map: the variation's own relations, falling back to
-			// the product-level seed (with a blank relation id so Save creates this
+			// Per-variation term map: the variation's own relations, falling back to.
+			// the product-level seed (with a blank relation id so Save creates this.
 			// variation's relation instead of editing the shared seed).
 			$subscrpt_vmap = array();
 			if ( ! $connect ) {
@@ -838,8 +818,8 @@ class Plans {
 				}
 			}
 
-			// One-time purchase is the variation's own native WooCommerce price
-			// (regular = one-time, sale = offer) + an enabled flag, saved with this
+			// One-time purchase is the variation's own native WooCommerce price.
+			// (regular = one-time, sale = offer) + an enabled flag, saved with this.
 			// variation's plan prices on Save.
 			$subscrpt_one_time = array(
 				'enabled' => 'yes' === $subscrpt_variation->get_meta( '_subscrpt_one_time_enabled' ),
@@ -847,8 +827,8 @@ class Plans {
 				'offer'   => (string) $subscrpt_variation->get_sale_price(),
 			);
 
-			// "Enable subscription" is per variation. Connecting a plan group turns
-			// it on by default (until saved off); the connect toggle starts checked
+			// "Enable subscription" is per variation. Connecting a plan group turns.
+			// it on by default (until saved off); the connect toggle starts checked.
 			// and Save persists the variation's _subscrpt_enabled meta.
 			$subscrpt_var_on = $connect ? true : subscrpt_is_subscription_enabled( $product->get_id(), $subscrpt_vid );
 			?>
@@ -857,7 +837,7 @@ class Plans {
 					<span class="dashicons dashicons-image-filter" style="flex:0 0 auto;font-size:15px;width:15px;height:15px;color:var(--wpsubs-text-subtle);"></span>
 					<strong style="font-size:12.5px;color:var(--wpsubs-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?php echo esc_html( self::variation_display_name( $subscrpt_variation, $product->get_name() ) ); ?></strong>
 					<label class="wpsubs-settings-toggle-label" style="flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--wpsubs-text-muted);" title="<?php esc_attr_e( 'Sell this variation as a subscription', 'subscription' ); ?>">
-						<input type="checkbox" class="wpsubs-toggle" data-subscrpt-var-enable <?php checked( $subscrpt_var_on ); ?> <?php disabled( ! $connect ); ?> />
+						<input type="checkbox" class="wpsubs-toggle" data-subscrpt-var-enable <?php checked( $subscrpt_var_on ); ?> />
 						<span class="wpsubs-toggle-ui" aria-hidden="true"></span>
 						<span><?php esc_html_e( 'Enable subscription', 'subscription' ); ?></span>
 					</label>
@@ -1029,7 +1009,7 @@ class Plans {
 			$by_group[ $gid ]['relation_ids'][] = (int) $row['relation_id'];
 			$by_group[ $gid ]['term_map_by_vid'][ $vid ][ (int) $row['plan_id'] ] = $entry;
 
-			// Product-level (vid 0) rows drive the simple-product table + the read
+			// Product-level (vid 0) rows drive the simple-product table + the read.
 			// summary chips; variation rows are consumed through term_map_by_vid.
 			if ( 0 === $vid ) {
 				$by_group[ $gid ]['terms'][]                           = array(
@@ -1048,22 +1028,16 @@ class Plans {
 	/**
 	 * Plan groups not already connected to this product.
 	 *
-	 * Free is Recurring-only, so it offers only Recurring groups; Pro unlocks
-	 * Subscribe & Save and Installments, so all plan types are selectable.
+	 * All Ashbi plan types are selectable in the standalone editor.
 	 *
 	 * @param array $connected_ids Group ids already connected.
 	 *
 	 * @return array<int,array> Each: id, title.
 	 */
 	protected static function available_groups( $connected_ids ) {
-		$pro_active = function_exists( 'subscrpt_pro_activated' ) && subscrpt_pro_activated();
-		$recurring  = PlanRepository::type_to_int( 'recurring' );
-		$available  = array();
+		$available = array();
 
 		foreach ( PlanRepository::get_groups() as $group ) {
-			if ( ! $pro_active && (int) $group['type'] !== $recurring ) {
-				continue;
-			}
 			if ( 'trash' === ( $group['status'] ?? '' ) ) {
 				continue;
 			}

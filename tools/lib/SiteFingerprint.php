@@ -5,6 +5,8 @@
  * @package AshbiSubscriptions
  */
 
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- The runbook and WP-CLI tools use this stable library path.
+
 namespace Ashbi\Subscriptions\Tools;
 
 use DateTimeInterface;
@@ -24,6 +26,7 @@ final class SiteFingerprint {
 		'subscrpt_plan',
 		'subscrpt_plan_relation',
 		'subscrpt_renewal_claim',
+		'subscrpt_recovery_event',
 		'subscrpt_order_relation',
 		'subscrpt_paypal_map',
 	);
@@ -32,7 +35,9 @@ final class SiteFingerprint {
 	 * Produce a stable keyed digest without exposing source values.
 	 *
 	 * @param array<int,mixed> $rows Sensitive rows.
+	 * @param string           $key  Secret comparison key.
 	 * @return array{count:int,digest:string,row_digests:string[]}
+	 * @throws InvalidArgumentException When the key or row cannot be processed.
 	 */
 	public static function digest_rows( array $rows, string $key ): array {
 		self::assert_key( $key );
@@ -59,9 +64,32 @@ final class SiteFingerprint {
 	}
 
 	/**
+	 * Normalize redundant per-column charset syntax emitted by MySQL restores.
+	 *
+	 * MySQL can add `CHARACTER SET` to a column definition when a table is
+	 * dumped and restored, even when it exactly matches the table default. That
+	 * is equivalent schema state and should not invalidate an exact rollback.
+	 *
+	 * @param string $schema SHOW CREATE TABLE output.
+	 * @return string Canonical schema output.
+	 */
+	public static function canonicalize_schema( string $schema ): string {
+		if ( ! preg_match( '/DEFAULT CHARSET=([^\s]+)\s+COLLATE=([^\s]+)/i', $schema, $defaults ) ) {
+			return $schema;
+		}
+
+		$pattern = '/ CHARACTER SET ' . preg_quote( $defaults[1], '/' ) . ' COLLATE ' . preg_quote( $defaults[2], '/' ) . '/i';
+		$normalized = preg_replace( $pattern, ' COLLATE ' . $defaults[2], $schema );
+
+		return is_string( $normalized ) ? $normalized : $schema;
+	}
+
+	/**
 	 * Authenticate the complete report so file replacement cannot pass silently.
 	 *
 	 * @param array<string,mixed> $report Report with or without report_mac.
+	 * @param string              $key    Secret comparison key.
+	 * @throws InvalidArgumentException When the key or report cannot be encoded.
 	 */
 	public static function seal_report( array $report, string $key ): string {
 		self::assert_key( $key );
@@ -79,7 +107,10 @@ final class SiteFingerprint {
 	 *
 	 * @param array<string,mixed> $before Pre-operation report.
 	 * @param array<string,mixed> $after Post-operation report.
+	 * @param string              $mode   activation or exact comparison mode.
+	 * @param string              $key    Secret comparison key.
 	 * @return string[] Human-readable mismatches.
+	 * @throws InvalidArgumentException When the key or mode is invalid.
 	 */
 	public static function compare( array $before, array $after, string $mode, string $key ): array {
 		self::assert_key( $key );
@@ -87,14 +118,20 @@ final class SiteFingerprint {
 			throw new InvalidArgumentException( 'Comparison mode must be activation or exact.' );
 		}
 		$errors = array();
-		foreach ( array( 'before' => $before, 'after' => $after ) as $label => $report ) {
+		foreach ( array(
+			'before' => $before,
+			'after' => $after,
+		) as $label => $report ) {
 			$errors = array_merge( $errors, self::validate_report( $report, ucfirst( $label ) ) );
 		}
 		if ( $errors ) {
 			return $errors;
 		}
 		$expected_key_id = substr( hash( 'sha256', $key ), 0, 16 );
-		foreach ( array( 'Before' => $before, 'After' => $after ) as $label => $report ) {
+		foreach ( array(
+			'Before' => $before,
+			'After' => $after,
+		) as $label => $report ) {
 			if ( ! hash_equals( $expected_key_id, $report['key_id'] ) ) {
 				$errors[] = "{$label} fingerprint key identifier does not match the supplied key.";
 			}
@@ -207,7 +244,12 @@ final class SiteFingerprint {
 		return $errors;
 	}
 
-	/** @param mixed $value Potential count/digest pair. */
+	/**
+	 * Determine whether a value contains a valid count and digest list.
+	 *
+	 * @param mixed $value Potential count/digest pair.
+	 * @return bool
+	 */
 	private static function is_valid_digest( $value ): bool {
 		return is_array( $value )
 			&& isset( $value['count'], $value['digest'], $value['row_digests'] )
@@ -216,11 +258,16 @@ final class SiteFingerprint {
 			&& is_string( $value['digest'] )
 			&& 1 === preg_match( '/^[a-f0-9]{64}$/', $value['digest'] )
 			&& is_array( $value['row_digests'] )
-			&& $value['count'] === count( $value['row_digests'] )
+			&& count( $value['row_digests'] ) === $value['count']
 			&& count( $value['row_digests'] ) === count( array_filter( $value['row_digests'], array( self::class, 'is_digest_string' ) ) );
 	}
 
-	/** @param mixed $value Potential SHA-256 digest. */
+	/**
+	 * Determine whether a value is a lowercase SHA-256 digest.
+	 *
+	 * @param mixed $value Potential SHA-256 digest.
+	 * @return bool
+	 */
 	private static function is_digest_string( $value ): bool {
 		return is_string( $value ) && 1 === preg_match( '/^[a-f0-9]{64}$/', $value );
 	}
@@ -246,14 +293,24 @@ final class SiteFingerprint {
 		return true;
 	}
 
-	/** Require a comparison key with an adequate security margin. */
+	/**
+	 * Require a comparison key with an adequate security margin.
+	 *
+	 * @param string $key Secret comparison key.
+	 * @throws InvalidArgumentException When the key is too short.
+	 */
 	private static function assert_key( string $key ): void {
 		if ( strlen( $key ) < 32 ) {
 			throw new InvalidArgumentException( 'Fingerprint key must contain at least 32 bytes.' );
 		}
 	}
 
-	/** @param mixed $value Arbitrary scalar, array, or data object. @return mixed */
+	/**
+	 * Canonicalize values before hashing so equivalent rows have stable digests.
+	 *
+	 * @param mixed $value Arbitrary scalar, array, or data object.
+	 * @return mixed
+	 */
 	private static function canonicalize( $value ) {
 		if ( $value instanceof DateTimeInterface ) {
 			return $value->format( 'Y-m-d\TH:i:s.uP' );

@@ -6,20 +6,25 @@
  * as thin wrappers around the canonical SUBSCRPT_* equivalents.
  *
  * This file is loaded immediately after the canonical constants and functions
- * are defined, so Pro plugin and any third-party code that depends on the old
- * names continues to work without modification.
+ * are defined, so existing installations and third-party extensions that use
+ * the public legacy identifiers continue to work without modification.
+ *
+ * The paid product's private classes are not part of this compatibility layer.
+ * Ashbi preserves the public GPL API and legacy procedural identifiers without
+ * claiming compatibility with proprietary paid-only implementations.
  *
  * @package Subscription
  */
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase
 
 // don't call the file directly.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-// ---------------------------------------------------------------------------
-// Legacy constants  (WP_SUBSCRIPTION_* → SUBSCRPT_*)
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------.
+// Legacy constants  (WP_SUBSCRIPTION_* → SUBSCRPT_*).
+// ---------------------------------------------------------------------------.
 // phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
 $subscrpt_legacy_constants = array(
 	'WP_SUBSCRIPTION_VERSION'   => SUBSCRPT_VERSION,
@@ -39,14 +44,19 @@ foreach ( $subscrpt_legacy_constants as $subscrpt_old_name => $subscrpt_new_valu
 unset( $subscrpt_legacy_constants, $subscrpt_old_name, $subscrpt_new_value );
 // phpcs:enable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
 
-// ---------------------------------------------------------------------------
-// Legacy functions  (wp_-prefixed → subscrpt_-prefixed)
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------.
+// Legacy functions  (wp_-prefixed → subscrpt_-prefixed).
+// ---------------------------------------------------------------------------.
 // phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedFunctionFound
 
-if ( ! function_exists( 'wp_subscrpt_write_log' ) ) {
+	if ( ! function_exists( 'wp_subscrpt_write_log' ) ) {
 	/**
+	 * Write a message through the canonical Ashbi logger.
+	 *
 	 * @deprecated Use subscrpt_write_log() instead.
+	 * @param mixed $message Message to log.
+	 * @param bool  $should_print Whether to print the message.
+	 * @return void
 	 */
 	function wp_subscrpt_write_log( $message, bool $should_print = false ): void {
 		_deprecated_function( 'wp_subscrpt_write_log', '1.9.2', 'subscrpt_write_log' );
@@ -56,7 +66,11 @@ if ( ! function_exists( 'wp_subscrpt_write_log' ) ) {
 
 if ( ! function_exists( 'wp_subscrpt_write_debug_log' ) ) {
 	/**
+	 * Write a debug message through the canonical Ashbi logger.
+	 *
 	 * @deprecated Use subscrpt_write_debug_log() instead.
+	 * @param mixed $log Debug value to log.
+	 * @return void
 	 */
 	function wp_subscrpt_write_debug_log( $log ): void {
 		_deprecated_function( 'wp_subscrpt_write_debug_log', '1.9.2', 'subscrpt_write_debug_log' );
@@ -67,7 +81,11 @@ if ( ! function_exists( 'wp_subscrpt_write_debug_log' ) ) {
 
 if ( ! function_exists( 'wp_subs_multiselect_field' ) ) {
 	/**
+	 * Render the legacy multiselect field.
+	 *
 	 * @deprecated Use subscrpt_multiselect_field() instead.
+	 * @param array $field Field configuration.
+	 * @return mixed Rendered field output.
 	 */
 	function wp_subs_multiselect_field( $field ) {
 		_deprecated_function( 'wp_subs_multiselect_field', '1.9.2', 'subscrpt_multiselect_field' );
@@ -78,7 +96,10 @@ if ( ! function_exists( 'wp_subs_multiselect_field' ) ) {
 
 if ( ! function_exists( 'wp_subscription_register_paypal_block' ) ) {
 	/**
+	 * Register the legacy PayPal block integration.
+	 *
 	 * @deprecated Use subscrpt_register_paypal_block() instead.
+	 * @return void
 	 */
 	function wp_subscription_register_paypal_block() {
 		_deprecated_function( 'wp_subscription_register_paypal_block', '1.9.2', 'subscrpt_register_paypal_block' );
@@ -89,9 +110,9 @@ if ( ! function_exists( 'wp_subscription_register_paypal_block' ) ) {
 
 // phpcs:enable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedFunctionFound
 
-// ---------------------------------------------------------------------------
-// Legacy filters  (deprecated hook names bridged onto canonical ones)
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------.
+// Legacy filters  (deprecated hook names bridged onto canonical ones).
+// ---------------------------------------------------------------------------.
 
 if ( ! function_exists( 'subscrpt_legacy_split_payment_next_due_date' ) ) {
 	/**
@@ -114,7 +135,7 @@ if ( ! function_exists( 'subscrpt_legacy_split_payment_next_due_date' ) ) {
 		if ( has_filter( 'subscrpt_split_payment_next_due_date' ) ) {
 			$next_date = apply_filters_deprecated(
 				'subscrpt_split_payment_next_due_date',
-				[ $next_date, $subscription_id, $recurr_timing, $type ],
+				array( $next_date, $subscription_id, $recurr_timing, $type ),
 				'1.11.0',
 				'subscrpt_subscription_next_date'
 			);

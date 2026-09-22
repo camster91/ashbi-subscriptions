@@ -5,6 +5,9 @@
  * @package SpringDevs\Subscription\Illuminate
  */
 
+// The filename is part of the imported public class path.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
+
 namespace SpringDevs\Subscription\Illuminate;
 
 use SpringDevs\Subscription\Illuminate\Gateways\Stripe\Stripe;
@@ -35,25 +38,25 @@ class Helper {
 			case 'days':
 				return $translate
 					? _n( 'day', 'days', $number, 'subscription' )
-					: ( (int) $number === 1 ? 'day' : 'days' );
+					: ( 1 === (int) $number ? 'day' : 'days' );
 
 			case 'week':
 			case 'weeks':
 				return $translate
 					? _n( 'week', 'weeks', $number, 'subscription' )
-					: ( (int) $number === 1 ? 'week' : 'weeks' );
+					: ( 1 === (int) $number ? 'week' : 'weeks' );
 
 			case 'month':
 			case 'months':
 				return $translate
 					? _n( 'month', 'months', $number, 'subscription' )
-					: ( (int) $number === 1 ? 'month' : 'months' );
+					: ( 1 === (int) $number ? 'month' : 'months' );
 
 			case 'year':
 			case 'years':
 				return $translate
 					? _n( 'year', 'years', $number, 'subscription' )
-					: ( (int) $number === 1 ? 'year' : 'years' );
+					: ( 1 === (int) $number ? 'year' : 'years' );
 
 			default:
 				return $typo;
@@ -72,6 +75,9 @@ class Helper {
 		$statuses = array(
 			'pending'      => __( 'Pending', 'subscription' ),
 			'active'       => __( 'Active', 'subscription' ),
+			'on_hold'      => __( 'On Hold', 'subscription' ),
+			// Legacy alias for records written before the canonical status was.
+			// registered as `on_hold`.
 			'on-hold'      => __( 'On Hold', 'subscription' ),
 			'expired'      => __( 'Expired', 'subscription' ),
 			'completed'    => __( 'Completed', 'subscription' ),
@@ -157,7 +163,7 @@ class Helper {
 		$final_args = wp_parse_args( $args, $default_args );
 
 		if ( isset( $args['author'] ) ) {
-			if ( $args['author'] === -1 ) {
+			if ( -1 === $args['author'] ) {
 				unset( $final_args['author'] );
 			} else {
 				$final_args['author'] = (int) $args['author'];
@@ -174,14 +180,14 @@ class Helper {
 			unset( $final_args['product_id'] );
 		}
 
-		// Fields check
+		// Fields check.
 		$only_ids = false;
-		if ( $final_args['fields'] === 'ids' || $final_args['return'] === 'ids' ) {
+		if ( 'ids' === $final_args['fields'] || 'ids' === $final_args['return'] ) {
 			$final_args['fields'] = 'all';
 			$only_ids             = true;
 		}
 
-		// Status check
+		// Status check.
 		$statuses                  = $final_args['post_status'];
 		$final_args['post_status'] = 'any';
 
@@ -190,26 +196,26 @@ class Helper {
 
 		// Fallback filtering.
 		// ? Sometime status filtering not works properly. So, we need to filter manually.
-		$filtered_subscriptions = [];
+		$filtered_subscriptions = array();
 
 		// Filter by status.
 		foreach ( $subscriptions as $subscription ) {
-			if ( ( is_array( $statuses ) && in_array( 'any', $statuses, true ) ) || $statuses === 'any' ) {
+			if ( ( is_array( $statuses ) && in_array( 'any', $statuses, true ) ) || 'any' === $statuses ) {
 				$filtered_subscriptions[] = $subscription;
 				continue;
 			}
 
-			if ( ( is_array( $statuses ) && in_array( $subscription->post_status, $statuses, true ) ) || $subscription->post_status === $statuses ) {
+			if ( ( is_array( $statuses ) && in_array( $subscription->post_status, $statuses, true ) ) || $statuses === $subscription->post_status ) {
 				$filtered_subscriptions[] = $subscription;
 			}
 		}
 
-		// Final filtering (only ids, post, or full data)
-		$subscriptions = [];
+		// Final filtering (only ids, post, or full data).
+		$subscriptions = array();
 		foreach ( $filtered_subscriptions as $subscription ) {
 			if ( $only_ids ) {
 				$subscriptions[] = $subscription->ID;
-			} elseif ( $final_args['return'] === 'subscription_data' ) {
+			} elseif ( 'subscription_data' === $final_args['return'] ) {
 				$subs_id           = $subscription->ID;
 				$subscription_data = self::get_subscription_data( $subs_id );
 				$subscriptions[]   = $subscription_data;
@@ -252,7 +258,7 @@ class Helper {
 	 * @return boolean
 	 */
 	public static function check_trial( int $product_id ): bool {
-		return ! self::subscription_exists( $product_id, array( 'expired', 'pending', 'active', 'on-hold', 'pe_cancelled', 'cancelled' ) );
+		return ! self::subscription_exists( $product_id, array( 'expired', 'pending', 'active', 'on_hold', 'on-hold', 'pe_cancelled', 'cancelled' ) );
 	}
 
 	/**
@@ -441,8 +447,8 @@ class Helper {
 
 		$subscription_product   = (int) get_post_meta( $subscription_id, '_subscrpt_product_id', true );
 		$subscription_variation = (int) get_post_meta( $subscription_id, '_subscrpt_variation_id', true );
-		$order_product           = (int) $order_item->get_product_id();
-		$order_variation         = (int) $order_item->get_variation_id();
+		$order_product          = (int) $order_item->get_product_id();
+		$order_variation        = (int) $order_item->get_variation_id();
 		$subscription_plan      = (int) get_post_meta( $subscription_id, '_subscrpt_plan_id', true );
 		$order_plan             = (int) $order_item->get_meta( '_subscrpt_plan_id' );
 		if ( $subscription_product !== $order_product ) {
@@ -550,7 +556,7 @@ class Helper {
 			$order->save();
 		}
 
-		// Check if this is a split payment subscription
+		// Check if this is a split payment subscription.
 		$payment_type  = function_exists( 'subscrpt_get_payment_type' ) ? subscrpt_get_payment_type( $subscription_id ) : 'recurring';
 		$max_payments  = function_exists( 'subscrpt_get_max_payments' ) ? subscrpt_get_max_payments( $subscription_id ) : 0;
 		$payments_made = function_exists( 'subscrpt_count_payments_made' ) ? subscrpt_count_payments_made( $subscription_id ) : 0;
@@ -563,7 +569,7 @@ class Helper {
 				/* translators: %1$s: order id, %2$d: payment number, %3$d: total payments */
 				__( 'Split payment installment %2$d of %3$d. Order %1$s created for subscription.', 'subscription' ),
 				$order_id,
-				$payments_made + 1, // +1 because this is a new renewal
+				$payments_made + 1, // +1 because this is a new renewal.
 				$max_payments
 			);
 			$activity_type = __( 'Split Payment - Renewal', 'subscription' );
@@ -578,7 +584,7 @@ class Helper {
 
 		$comment_id = wp_insert_comment(
 			array(
-				'comment_author'  => 'Subscription for WooCommerce',
+				'comment_author'  => 'Ashbi Subscriptions',
 				'comment_content' => $comment_content,
 				'comment_post_ID' => $subscription_id,
 				'comment_type'    => 'order_note',
@@ -587,7 +593,7 @@ class Helper {
 		update_comment_meta( $comment_id, '_subscrpt_activity', $activity_type );
 		update_comment_meta( $comment_id, '_subscrpt_activity_type', 'renewal_order' );
 
-		// Fire action when split payment is renewed
+		// Fire action when split payment is renewed.
 		do_action( 'subscrpt_split_payment_renewed', $subscription_id, $order_id, $order_item_id );
 
 		return true;
@@ -606,19 +612,30 @@ class Helper {
 		global $wpdb;
 		$history_table = $wpdb->prefix . 'subscrpt_order_relation';
 
-		// Prepare split payment arguments
+		// Plan checkout snapshots override mutable product meta. This is what lets.
+		// a plan term carry its own installment count, payment type and charge into.
+		// the subscription without writing plan pricing onto the WooCommerce product.
+		$plan_terms      = $order_item->get_meta( '_subscrpt_meta' );
+		$plan_terms      = is_array( $plan_terms ) ? $plan_terms : array();
+		$plan_payment    = (string) $order_item->get_meta( '_subscrpt_payment_type' );
+		$plan_max        = (int) $order_item->get_meta( '_subscrpt_max_no_payment' );
+		$plan_price      = (float) $order_item->get_meta( '_subscrpt_plan_price' );
+		$plan_total      = (float) $order_item->get_meta( '_subscrpt_plan_total' );
+		$plan_signup_fee = (float) $order_item->get_meta( '_subscrpt_signup_fee' );
+
+		// Prepare split payment arguments.
 		$split_payment_args = array(
 			'product_id'    => $product->get_id(),
 			'order_id'      => $order_item->get_order_id(),
 			'order_item_id' => $order_item->get_id(),
 			'post_status'   => $post_status,
-			'max_payments'  => $product->get_meta( '_subscrpt_max_no_payment' ),
-			'timing_per'    => $product->get_meta( '_subscrpt_timing_per' ),
-			'timing_option' => $product->get_meta( '_subscrpt_timing_option' ),
-			'price'         => $product->get_price(),
+			'max_payments'  => $plan_max > 0 ? $plan_max : $product->get_meta( '_subscrpt_max_no_payment' ),
+			'timing_per'    => ! empty( $plan_terms['time'] ) ? (int) $plan_terms['time'] : $product->get_meta( '_subscrpt_timing_per' ),
+			'timing_option' => ! empty( $plan_terms['type'] ) ? (string) $plan_terms['type'] : $product->get_meta( '_subscrpt_timing_option' ),
+			'price'         => $plan_price > 0 ? $plan_price : $product->get_price(),
 		);
 
-		// Allow modification of split payment arguments
+		// Allow modification of split payment arguments.
 		$split_payment_args = apply_filters( 'subscrpt_split_payment_args', $split_payment_args, $order_item, $product );
 
 		// Own the subscription from the order's customer, not the current user.
@@ -637,10 +654,10 @@ class Helper {
 				'post_title' => "Subscription #{$subscription_id}",
 			)
 		);
-		// Check if this is a split payment subscription
-		$payment_type = $product->get_meta( '_subscrpt_payment_type' );
+		// Check if this is a split payment subscription.
+		$payment_type = $plan_payment ? $plan_payment : $product->get_meta( '_subscrpt_payment_type' );
 		$payment_type = $payment_type ? $payment_type : 'recurring';
-		$max_payments = $product->get_meta( '_subscrpt_max_no_payment' );
+		$max_payments = $plan_max > 0 ? $plan_max : $product->get_meta( '_subscrpt_max_no_payment' );
 
 		$comment_content = '';
 		$activity_type   = '';
@@ -664,7 +681,7 @@ class Helper {
 
 		$comment_id = wp_insert_comment(
 			array(
-				'comment_author'  => 'Subscription for WooCommerce',
+				'comment_author'  => 'Ashbi Subscriptions',
 				'comment_content' => $comment_content,
 				'comment_post_ID' => $subscription_id,
 				'comment_type'    => 'order_note',
@@ -674,6 +691,16 @@ class Helper {
 		update_comment_meta( $comment_id, '_subscrpt_activity_type', 'subs_created' );
 
 		update_post_meta( $subscription_id, '_subscrpt_product_id', $product->get_id() );
+		update_post_meta( $subscription_id, '_subscrpt_payment_type', $payment_type );
+		if ( $max_payments ) {
+			update_post_meta( $subscription_id, '_subscrpt_max_no_payment', (int) $max_payments );
+		}
+		if ( $plan_signup_fee > 0 ) {
+			update_post_meta( $subscription_id, '_subscrpt_signup_fee', $plan_signup_fee );
+		}
+		if ( $plan_total > 0 ) {
+			update_post_meta( $subscription_id, '_subscrpt_split_total', $plan_total );
+		}
 
 		$wpdb->insert(
 			$history_table,
@@ -685,7 +712,7 @@ class Helper {
 			)
 		);
 
-		// Fire action when split payment plan is created
+		// Fire action when split payment plan is created.
 		do_action( 'subscrpt_split_payment_created', $subscription_id, $split_payment_args, $order_item );
 
 		return $subscription_id;
@@ -723,7 +750,7 @@ class Helper {
 			return $empty;
 		}
 
-		// Memoized per cart state: recurring totals are read several times per request, and
+		// Memoized per cart state: recurring totals are read several times per request, and.
 		// replaying coupons re-runs coupon validation, which hits the database.
 		static $cache = array();
 
@@ -752,8 +779,8 @@ class Helper {
 			/**
 			 * Filters whether a coupon's discount also applies to subscription renewals.
 			 *
-			 * The free plugin has no recurring-coupon concept, so discounts apply to the
-			 * first payment only unless an extension — the pro plugin — says otherwise.
+			 * Core exposes recurring-coupon filters. Integrations can opt a coupon into
+			 * renewals and define its payment limit without changing checkout code.
 			 *
 			 * @param bool       $is_recurring  Whether the discount recurs. Default false.
 			 * @param \WC_Coupon $coupon        Coupon object.
@@ -775,7 +802,7 @@ class Helper {
 			 */
 			$limit = (int) apply_filters( 'subscrpt_coupon_recurring_limit', 0, $coupon, $cart_item_key );
 
-			// A limit of one covers the initial payment only, so it never reaches a renewal —
+			// A limit of one covers the initial payment only, so it never reaches a renewal —.
 			// whatever the coupon is flagged as, its effect here is a one-time discount.
 			if ( 1 === $limit ) {
 				$result['non_recurring'] += $amount;
@@ -818,7 +845,7 @@ class Helper {
 		$quantity = (int) $cart_item['quantity'];
 		$per_cost = (float) ( $cart_item['subscription']['per_cost'] ?? 0 );
 
-		$full_total = (float) wc_get_price_including_tax( $product, [ 'qty' => $quantity ] );
+		$full_total = (float) wc_get_price_including_tax( $product, array( 'qty' => $quantity ) );
 		$discounts  = self::get_cart_item_coupon_discounts( $cart_item_key );
 
 		// Same basis WC_Discounts used, so the discount and the basis are directly comparable.
@@ -853,7 +880,7 @@ class Helper {
 	 * Resolve the discount that still applies to a subscription's future renewals.
 	 *
 	 * Only coupons flagged as recurring survive into renewal orders, and only while their
-	 * recurring limit holds — this mirrors the skip conditions in the pro plugin's
+	 * recurring limit holds — this mirrors the skip conditions used when the
 	 * `Coupon::maybe_add_coupon_to_renewal_order()`, so what is displayed matches what the
 	 * next renewal order will actually be charged.
 	 *
@@ -875,7 +902,7 @@ class Helper {
 			'exhausted' => false,
 		);
 
-		// Memoized per request: list views and the single view each resolve the same
+		// Memoized per request: list views and the single view each resolve the same.
 		// subscription two or three times, and a coupon'd subscription costs a query.
 		static $cache = array();
 
@@ -905,7 +932,7 @@ class Helper {
 		 * Position the next renewal will take in this subscription's order sequence.
 		 *
 		 * Note this is deliberately one more than the current order count, and so is NOT the
-		 * same expression pro's Coupon::maybe_add_coupon_to_renewal_order() evaluates: that
+		 * same renewal-position expression the order builder evaluates: that
 		 * runs after the new order's relation row is already inserted, so its count includes
 		 * the order being created. Both mean "is this order still within the limit".
 		 */
@@ -1102,9 +1129,9 @@ class Helper {
 		$recurrs = array();
 		foreach ( $cart_items as $key => $cart_item ) {
 			$product = $cart_item['data'];
-			if ( $product->is_type( 'simple' ) && isset( $cart_item['subscription'] ) ) {
+			if ( isset( $cart_item['subscription'] ) ) {
 				$cart_subscription = $cart_item['subscription'];
-				// Cadence word must respect the frequency (plan items store the raw
+				// Cadence word must respect the frequency (plan items store the raw.
 				// plural interval, e.g. "months"): singular for 1, plural + count above.
 				$sub_time   = max( 1, (int) ( $cart_subscription['time'] ?? 1 ) );
 				$type       = ( 1 === $sub_time ? '' : $sub_time . ' ' ) . ucfirst( self::get_typos( $sub_time, $cart_subscription['type'] ) );
@@ -1120,9 +1147,11 @@ class Helper {
 						'max_no_payment'  => ! empty( $cart_item['subscrpt_max_no_payment'] )
 							? (int) $cart_item['subscrpt_max_no_payment']
 							: $cart_item['data']->get_meta( '_subscrpt_max_no_payment' ),
-						// Exact plan total for split items (the entered price the split is
+						// Exact plan total for split items (the entered price the split is.
 						// divided from); null for classic split items which have no plan total.
-						'split_total'     => isset( $cart_item['subscrpt_split_total'] ) ? (float) $cart_item['subscrpt_split_total'] : null,
+						'split_total'     => isset( $cart_item['subscrpt_split_total'] )
+							? (float) $cart_item['subscrpt_split_total']
+							: ( isset( $cart_item['subscrpt_plan_total'] ) ? (float) $cart_item['subscrpt_plan_total'] : null ),
 						'quantity'        => (int) $cart_item['quantity'],
 					)
 				);
@@ -1160,11 +1189,11 @@ class Helper {
 	}
 
 	/**
-	 * Create renewal order when subscription expired. [wip]
+	 * Create a renewal order when a subscription is due.
 	 *
 	 * @param  int $subscription_id Subscription ID.
 	 * @return false|\WC_Order Renewal order object or false on failure.
-	 * @throws \Throwable Order construction or extension failure.
+	 * @throws \UnexpectedValueException Renewal order filter returned an invalid value.
 	 */
 	public static function create_renewal_order( $subscription_id ) {
 		if ( subscrpt_renewal_is_migration_blocked( (int) $subscription_id ) ) {
@@ -1176,7 +1205,7 @@ class Helper {
 		if ( subscrpt_is_max_payments_reached( $subscription_id ) ) {
 			subscrpt_finalize_split_payment_completion( $subscription_id );
 
-			error_log( "WPS: Maximum payment limit reached for subscription #{$subscription_id}. No renewal order created." );
+			subscrpt_write_log( "Maximum payment limit reached for subscription #{$subscription_id}. No renewal order created." );
 			return false;
 		}
 
@@ -1207,12 +1236,12 @@ class Helper {
 			return false;
 		}
 
-		$order_item         = $old_order->get_item( $order_item_id );
+		$order_item = $old_order->get_item( $order_item_id );
 		if ( ! $order_item instanceof \WC_Order_Item_Product ) {
 			subscrpt_write_log( "Renewal source item not found for subscription #{$subscription_id}." );
 			return false;
 		}
-		$subscription_price = (float) get_post_meta( $subscription_id, '_subscrpt_price', true );
+		$subscription_price = self::get_subscription_total( $subscription_id );
 		$qty                = $order_item->get_quantity();
 
 		// Subtract tax from per-unit subscription price if prices include tax. WC_Order will calculate tax on line total.
@@ -1253,7 +1282,7 @@ class Helper {
 			return false;
 		}
 
-		// Recover an order whose relation and period metadata were persisted before
+		// Recover an order whose relation and period metadata were persisted before.
 		// a worker died while finalizing the durable claim.
 		foreach ( self::get_related_orders( (int) $subscription_id ) as $related_order ) {
 			if ( 'renew' !== ( $related_order->type ?? '' ) ) {
@@ -1284,7 +1313,7 @@ class Helper {
 		$new_order        = false;
 		try {
 			// Create and fully prepare the order before publishing it as canonical.
-			$new_order_data = self::create_new_order_for_renewal( $old_order, $order_item, $product_args );
+			$new_order_data = self::create_new_order_for_renewal( $old_order, $order_item, $product_args, (int) $subscription_id );
 			if ( ! $new_order_data ) {
 				RenewalClaim::release( (int) $subscription_id, $claim['period_key'], $claim['token'] );
 				subscrpt_write_log( "Failed to create renewal order. [ Subscription ID: {$subscription_id} ]" );
@@ -1377,6 +1406,151 @@ class Helper {
 	}
 
 	/**
+	 * Create a customer-paid renewal order before the current period is due.
+	 *
+	 * Early renewal consumes the next stored billing period. The order is kept
+	 * separate from the canonical subscription order until payment is verified;
+	 * this prevents an abandoned checkout from changing access or billing dates.
+	 * Repeated requests for the same due-date anchor return the existing order.
+	 *
+	 * @param int $subscription_id Subscription ID.
+	 * @return false|\WC_Order Pending or already-paid early renewal order.
+	 * @throws \UnexpectedValueException Early renewal order filter returned an invalid value.
+	 */
+	public static function create_early_renewal_order( $subscription_id ) {
+		$subscription_id = (int) $subscription_id;
+		if ( ! $subscription_id || 'active' !== get_post_status( $subscription_id ) ) {
+			return false;
+		}
+		if ( ! in_array( get_option( 'subscrpt_early_renew', '1' ), array( 1, '1', true, 'yes' ), true ) ) {
+			return false;
+		}
+		if ( function_exists( 'subscrpt_renewal_is_migration_blocked' ) && subscrpt_renewal_is_migration_blocked( $subscription_id ) ) {
+			subscrpt_write_log( 'Early renewal blocked until legacy open orders are reconciled.' );
+			return false;
+		}
+		if ( subscrpt_is_max_payments_reached( $subscription_id ) ) {
+			return false;
+		}
+
+		$period_anchor = (int) get_post_meta( $subscription_id, '_subscrpt_next_date', true );
+		if ( $period_anchor <= time() ) {
+			return false;
+		}
+
+		global $wpdb;
+		$lock_name = 'ashbi_subscrpt_early_' . $subscription_id . '_' . $period_anchor;
+		if ( 1 !== (int) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 5)', $lock_name ) ) ) {
+			subscrpt_write_log( "Could not acquire early renewal lock for subscription #{$subscription_id}." );
+			return false;
+		}
+
+		try {
+			foreach ( self::get_related_orders( $subscription_id ) as $relation ) {
+				if ( 'early-renew' !== (string) ( $relation->type ?? '' ) ) {
+					continue;
+				}
+				$existing = wc_get_order( (int) ( $relation->order_id ?? 0 ) );
+				if ( ! $existing || in_array( $existing->get_status(), array( 'cancelled', 'refunded' ), true ) ) {
+					continue;
+				}
+				if ( (int) $existing->get_meta( '_subscrpt_early_renewal_anchor' ) === $period_anchor ) {
+					return $existing;
+				}
+			}
+
+			$order_item_id = (int) get_post_meta( $subscription_id, '_subscrpt_order_item_id', true );
+			$order_id      = $order_item_id ? (int) wc_get_order_id_by_order_item_id( $order_item_id ) : 0;
+			$old_order     = self::check_order_for_renewal( $order_id );
+			if ( ! $old_order ) {
+				foreach ( self::get_related_orders( $subscription_id ) as $relation ) {
+					if ( ! in_array( (string) ( $relation->type ?? '' ), array( 'new', 'renew', 'early-renew' ), true ) ) {
+						continue;
+					}
+					$candidate = wc_get_order( (int) ( $relation->order_id ?? 0 ) );
+					if ( $candidate && 'completed' === $candidate->get_status() ) {
+						$old_order     = $candidate;
+						$order_item_id = (int) ( $relation->order_item_id ?? 0 );
+						break;
+					}
+				}
+			}
+
+			if ( ! $old_order ) {
+				subscrpt_write_log( "Old order not found for early renewal. [ Subscription ID: {$subscription_id} ]" );
+				return false;
+			}
+			$order_item = $old_order->get_item( $order_item_id );
+			if ( ! $order_item instanceof \WC_Order_Item_Product || ! $order_item->get_product() ) {
+				subscrpt_write_log( "Early renewal source item not found for subscription #{$subscription_id}." );
+				return false;
+			}
+
+			$subscription_price = self::get_subscription_total( $subscription_id );
+			if ( wc_prices_include_tax() ) {
+				$product             = $order_item->get_product();
+				$tax_rates           = \WC_Tax::get_rates( $product ? $product->get_tax_class() : '' );
+				$taxes               = \WC_Tax::calc_inclusive_tax( $subscription_price, $tax_rates );
+				$subscription_price -= array_sum( $taxes );
+			}
+			$line_total     = $subscription_price * $order_item->get_quantity();
+			$product_args   = array(
+				'name'     => $order_item->get_name(),
+				'subtotal' => $line_total,
+				'total'    => $line_total,
+			);
+			$new_order_data = self::create_new_order_for_renewal( $old_order, $order_item, $product_args, $subscription_id );
+			if ( ! $new_order_data ) {
+				return false;
+			}
+			$new_order   = $new_order_data['order'];
+			$new_item_id = (int) $new_order_data['order_item_id'];
+			$renewal_key = 'early-' . $subscription_id . '-' . $period_anchor;
+
+			self::clone_order_metadata( $new_order, $old_order );
+			$filtered_order = apply_filters( 'subscrpt_before_saving_renewal_order', $new_order, $old_order, $subscription_id );
+			if ( ! $filtered_order instanceof \WC_Order ) {
+				throw new \UnexpectedValueException( 'Early renewal order filter must return a WC_Order.' );
+			}
+			$new_order = $filtered_order;
+			$new_order->update_meta_data( '_subscrpt_early_renewal_anchor', $period_anchor );
+			$new_order->update_meta_data( '_subscrpt_renewal_period_key', $renewal_key );
+			$new_order->update_meta_data( '_subscrpt_renewal_type', 'early-renew' );
+			$new_order->calculate_totals();
+			$new_order->save();
+
+			if ( ! self::create_renewal_history( $subscription_id, $new_order->get_id(), $new_item_id, 'early-renew' ) ) {
+				$new_order->set_status( 'cancelled', __( 'Early renewal order cancelled because its subscription relation could not be recorded.', 'subscription' ) );
+				$new_order->save();
+				return false;
+			}
+			update_post_meta( $subscription_id, '_subscrpt_early_renewal_order_id', $new_order->get_id() );
+			update_post_meta( $subscription_id, '_subscrpt_early_renewal_anchor', $period_anchor );
+
+			if ( ! is_admin() && function_exists( 'wc_add_notice' ) && WC()->session ) {
+				/* translators: %d: early renewal order ID. */
+				$message = sprintf( __( 'Early renewal order #%d created. Please complete payment to extend your subscription.', 'subscription' ), $new_order->get_id() );
+				wc_add_notice( $message, 'success' );
+			}
+
+			return $new_order;
+		} catch ( \Throwable $error ) {
+			if ( isset( $new_order ) && $new_order instanceof \WC_Order ) {
+				try {
+					$new_order->set_status( 'cancelled', __( 'Early renewal order cancelled after an incomplete creation attempt.', 'subscription' ) );
+					$new_order->save();
+				} catch ( \Throwable $cleanup_error ) {
+					subscrpt_write_log( "Could not cancel incomplete early renewal order #{$new_order->get_id()}: {$cleanup_error->getMessage()}" );
+				}
+			}
+			subscrpt_write_log( "Early renewal order creation failed for subscription #{$subscription_id}: {$error->getMessage()}" );
+			return false;
+		} finally {
+			$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock_name ) );
+		}
+	}
+
+	/**
 	 * Restore subscription pointers and safely resume a canonical renewal order.
 	 *
 	 * The database lock prevents concurrent PHP workers from dispatching the same
@@ -1444,7 +1618,7 @@ class Helper {
 			RenewalClaim::mark_payment_complete( $subscription_id, (int) $renewal_order->get_id() );
 		}
 
-		return $renewal_order ?: false;
+		return $renewal_order ? $renewal_order : false;
 	}
 
 	/**
@@ -1454,7 +1628,23 @@ class Helper {
 	 * @return float
 	 */
 	public static function get_subscription_total( $subscription_id ) {
-		return (float) get_post_meta( $subscription_id, '_subscrpt_price', true );
+		$subscription_price = (float) get_post_meta( $subscription_id, '_subscrpt_price', true );
+		$payment_type       = function_exists( 'subscrpt_get_payment_type' ) ? subscrpt_get_payment_type( $subscription_id ) : 'recurring';
+		$max_payments       = function_exists( 'subscrpt_get_max_payments' ) ? (int) subscrpt_get_max_payments( $subscription_id ) : 0;
+		$split_total        = (float) get_post_meta( $subscription_id, '_subscrpt_plan_total', true );
+		if ( ! $split_total ) {
+			$split_total = (float) get_post_meta( $subscription_id, '_subscrpt_split_total', true );
+		}
+
+		if ( 'split_payment' === $payment_type && $max_payments > 0 && $split_total > 0 && function_exists( 'subscrpt_split_installment_amount' ) ) {
+			$payments_made = function_exists( 'subscrpt_count_payments_made' ) ? subscrpt_count_payments_made( $subscription_id ) : 0;
+			$next_amount   = subscrpt_split_installment_amount( $split_total, $max_payments, $payments_made );
+			if ( $next_amount > 0 ) {
+				return $next_amount;
+			}
+		}
+
+		return $subscription_price;
 	}
 
 	/**
@@ -1478,14 +1668,25 @@ class Helper {
 		return self::get_subscription_status( $subscription_id ) === $status;
 	}
 
+	// Parameter retained for the public helper signature and future subscription-specific checks.
+	// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Public compatibility parameter.
 	/**
 	 * Check if subscription needs payment.
 	 *
 	 * @param int $subscription_id Subscription ID.
-	 * @return bool
+	 * @return bool True when the subscription can still require payment.
 	 */
 	public static function subscription_needs_payment( $subscription_id ) {
-		return true; // Always true for now
+		$status = self::get_subscription_status( (int) $subscription_id );
+
+		if ( ! is_string( $status ) || '' === $status ) {
+			return false;
+		}
+
+		// Fail closed for terminal or non-subscription records. Expired records are
+		// intentionally included because the customer-facing renewal flow can still
+		// create a paid manual renewal for them.
+		return ! in_array( $status, array( 'cancelled', 'completed', 'trash', 'draft' ), true );
 	}
 
 	/**
@@ -1590,20 +1791,100 @@ class Helper {
 	 * Pause subscription.
 	 *
 	 * @param int $subscription_id Subscription ID.
-	 * @return void
+	 * @return bool
 	 */
 	public static function pause_subscription( $subscription_id ) {
-		Action::status( 'on-hold', $subscription_id );
+		if ( 'active' !== get_post_status( $subscription_id ) ) {
+			return false;
+		}
+
+		// Distinguish a customer-requested pause from a payment-failure hold so.
+		// the resume action can never bypass the renewal recovery ladder.
+		update_post_meta( $subscription_id, '_subscrpt_hold_reason', 'manual' );
+		Action::status( 'on_hold', $subscription_id );
+		return true;
 	}
 
 	/**
 	 * Resume subscription.
 	 *
 	 * @param int $subscription_id Subscription ID.
-	 * @return void
+	 * @return bool
 	 */
 	public static function resume_subscription( $subscription_id ) {
+		if ( 'on_hold' !== get_post_status( $subscription_id ) || 'manual' !== get_post_meta( $subscription_id, '_subscrpt_hold_reason', true ) ) {
+			return false;
+		}
+
+		delete_post_meta( $subscription_id, '_subscrpt_hold_reason' );
 		Action::status( 'active', $subscription_id );
+		return true;
+	}
+
+	/**
+	 * Calculate the access end date for a finite split-payment subscription.
+	 *
+	 * The calculation uses the subscription's checkout snapshot first. It is
+	 * intentionally kept in the core helper so account pages, admin details,
+	 * and integrations agree even when the product's current plan has changed.
+	 *
+	 * @param int $subscription_id Subscription ID.
+	 * @return string Formatted date, or an empty string for lifetime access.
+	 */
+	public static function get_split_access_end_date_string( int $subscription_id ): string {
+		$max_payments = get_post_meta( $subscription_id, '_subscrpt_max_no_payment', true );
+		if ( ! $max_payments ) {
+			$max_payments = function_exists( 'subscrpt_get_max_payments' ) ? subscrpt_get_max_payments( $subscription_id ) : 0;
+		}
+		if ( (int) $max_payments <= 0 ) {
+			return '';
+		}
+
+		$access_ends = get_post_meta( $subscription_id, '_subscrpt_access_ends_timing', true );
+		if ( ! $access_ends ) {
+			$access_ends = get_post_meta( $subscription_id, '_subscrpt_access_ends', true );
+		}
+		$plan_data = get_post_meta( $subscription_id, '_subscrpt_plan_data', true );
+		$plan_data = is_array( $plan_data ) ? $plan_data : array();
+		if ( ! $access_ends && ! empty( $plan_data['access_ends'] ) ) {
+			$access_ends = (string) $plan_data['access_ends'];
+		}
+		if ( ! $access_ends ) {
+			$access_ends = 'after_full_duration';
+		}
+		if ( 'lifetime' === $access_ends ) {
+			return '';
+		}
+
+		$start = (int) get_post_meta( $subscription_id, '_subscrpt_start_date', true );
+		if ( $start <= 0 ) {
+			return '';
+		}
+
+		$amount = (int) $max_payments;
+		$unit   = (string) get_post_meta( $subscription_id, '_subscrpt_timing_option', true );
+		$unit   = trim( $unit, " \t\n\r\0\x0B" );
+		$unit   = rtrim( strtolower( $unit ), 's' );
+
+		if ( 'custom' === $access_ends || 'custom_duration' === $access_ends ) {
+			$custom_amount = get_post_meta( $subscription_id, '_subscrpt_custom_access_duration_time', true );
+			$custom_unit   = get_post_meta( $subscription_id, '_subscrpt_custom_access_duration_type', true );
+			$amount        = max( 1, (int) ( $custom_amount ? $custom_amount : ( $plan_data['access_custom_value'] ?? 1 ) ) );
+			$unit          = (string) ( $custom_unit ? $custom_unit : ( $plan_data['access_custom_interval'] ?? 'month' ) );
+			$unit          = rtrim( strtolower( $unit ), 's' );
+		} elseif ( 'full_duration' !== $access_ends && 'after_full_duration' !== $access_ends ) {
+			return '';
+		}
+
+		if ( ! in_array( $unit, array( 'day', 'week', 'month', 'year' ), true ) ) {
+			$unit = 'month';
+		}
+
+		$timezone = wp_timezone();
+		$date     = ( new \DateTimeImmutable( '@' . $start ) )->setTimezone( $timezone );
+		$date     = $date->modify( '+' . $amount . ' ' . $unit );
+
+		return wp_date( get_option( 'date_format' ), $date->getTimestamp() );
 	}
 
 	/**
@@ -1618,7 +1899,7 @@ class Helper {
 			Action::status( 'active', $subscription_id );
 		}
 
-		// Allow payment gateways to add their own comments/notes
+		// Allow payment gateways to add their own comments/notes.
 		do_action( 'subscrpt_subscription_payment_completed', $subscription_id, $payment_id );
 	}
 
@@ -1669,22 +1950,33 @@ class Helper {
 	/**
 	 * Create history for renewal.
 	 *
-	 * @param int $subscription_id Subscription Id.
-	 * @param int $new_order_id New Order Id.
-	 * @param int $new_order_item_id New Order Item Id.
+	 * @param int    $subscription_id Subscription Id.
+	 * @param int    $new_order_id New Order Id.
+	 * @param int    $new_order_item_id New Order Item Id.
+	 * @param string $history_type Relation type.
 	 *
 	 * @return bool True when the relation and audit note were recorded.
 	 */
-	public static function create_renewal_history( $subscription_id, $new_order_id, $new_order_item_id ) {
+	public static function create_renewal_history( $subscription_id, $new_order_id, $new_order_item_id, string $history_type = 'renew' ) {
 		global $wpdb;
 		$history_table = $wpdb->prefix . 'subscrpt_order_relation';
+		$history_type  = in_array( $history_type, array( 'renew', 'early-renew' ), true ) ? $history_type : 'renew';
+		$existing      = $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT id FROM %i WHERE subscription_id = %d AND order_id = %d AND type = %s LIMIT 1',
+				array( $history_table, $subscription_id, $new_order_id, $history_type )
+			)
+		);
+		if ( $existing ) {
+			return true;
+		}
 		$inserted = $wpdb->insert(
 			$history_table,
 			array(
 				'subscription_id' => $subscription_id,
 				'order_id'        => $new_order_id,
 				'order_item_id'   => $new_order_item_id,
-				'type'            => 'renew',
+				'type'            => $history_type,
 			)
 		);
 		if ( false === $inserted ) {
@@ -1693,14 +1985,19 @@ class Helper {
 
 		$comment_id = wp_insert_comment(
 			array(
-				'comment_author'  => 'Subscription for WooCommerce',
-				'comment_content' => sprintf( 'Subscription Renewal order successfully created. Order #%s', $new_order_id ),
+				'comment_author'  => 'Ashbi Subscriptions',
+				'comment_content' => sprintf(
+					'early-renew' === $history_type
+						? 'Early renewal order successfully created. Order #%s'
+						: 'Subscription Renewal order successfully created. Order #%s',
+					$new_order_id
+				),
 				'comment_post_ID' => $subscription_id,
 				'comment_type'    => 'order_note',
 			)
 		);
-		update_comment_meta( $comment_id, '_subscrpt_activity', 'Renewal Order' );
-		update_comment_meta( $comment_id, '_subscrpt_activity_type', 'renewal_order' );
+		update_comment_meta( $comment_id, '_subscrpt_activity', 'early-renew' === $history_type ? 'Early Renewal Order' : 'Renewal Order' );
+		update_comment_meta( $comment_id, '_subscrpt_activity_type', 'early-renew' === $history_type ? 'early_renewal_order' : 'renewal_order' );
 
 		return true;
 	}
@@ -1727,7 +2024,7 @@ class Helper {
 
 		$chk_product_id = $variation_id ? $variation_id : $product_id;
 
-		$status = get_post_status( $subscription_id ); // pending, active, cancelled, pe_cancelled, expired
+		$status = get_post_status( $subscription_id ); // pending, active, cancelled, pe_cancelled, expired.
 		$price  = get_post_meta( $subscription_id, '_subscrpt_price', true );
 
 		$signup_fee = get_post_meta( $subscription_id, '_subscrpt_signup_fee', true );
@@ -1760,7 +2057,6 @@ class Helper {
 		$is_auto_renew = ! empty( $is_auto_renew ) ? $is_auto_renew : subscrpt_is_auto_renew_enabled();
 
 		$default_grace_period = (int) get_option( 'subscrpt_default_payment_grace_period', '7' );
-		$default_grace_period = subscrpt_pro_activated() ? $default_grace_period : 0;
 		$grace_end_datetime   = $next_datetime + ( $default_grace_period * DAY_IN_SECONDS );
 		$grace_end_date       = gmdate( DATE_RFC2822, $grace_end_datetime );
 		$grace_remaining_days = ceil( max( 0, $grace_end_datetime - time() ) / DAY_IN_SECONDS );
@@ -1859,24 +2155,102 @@ class Helper {
 	}
 
 	/**
+	 * Carry eligible recurring coupon discounts onto a renewal order.
+	 *
+	 * Coupon lines are copied as order-level discount lines rather than reapplied through
+	 * the cart. This keeps the renewal deterministic after the original coupon's product
+	 * rules or expiry state changes, while the recurring filters and payment limit remain
+	 * the source of truth for whether the discount is still allowed.
+	 *
+	 * @param \WC_Order              $new_order       Renewal order being prepared.
+	 * @param \WC_Order              $old_order       Completed order containing coupon lines.
+	 * @param \WC_Order_Item_Product $order_item      Source subscription product line.
+	 * @param int                    $new_order_item_id Renewal product item ID.
+	 * @param int                    $subscription_id   Subscription ID.
+	 * @return void
+	 */
+	private static function add_recurring_coupons_to_renewal_order( \WC_Order $new_order, \WC_Order $old_order, \WC_Order_Item_Product $order_item, int $new_order_item_id, int $subscription_id = 0 ) {
+		$next_order_position    = $subscription_id > 0
+			? count( self::get_related_orders( $subscription_id ) ) + 1
+			: 1;
+		$source_subtotal        = (float) $order_item->get_subtotal();
+		$renewal_subtotal       = $subscription_id > 0
+			? (float) self::get_subscription_total( $subscription_id ) * max( 1, (int) $order_item->get_quantity() )
+			: $source_subtotal;
+		$price_ratio            = $source_subtotal > 0 && $renewal_subtotal > 0
+			? $renewal_subtotal / $source_subtotal
+			: 1.0;
+		$recurring_discount     = 0.0;
+		$recurring_discount_tax = 0.0;
+
+		foreach ( $old_order->get_items( 'coupon' ) as $coupon_line ) {
+			$code = (string) $coupon_line->get_code();
+			if ( '' === $code ) {
+				continue;
+			}
+
+			$coupon = new \WC_Coupon( $code );
+			/** This filter is documented in includes/Illuminate/Helper.php. */
+			if ( ! apply_filters( 'subscrpt_coupon_is_recurring', false, $coupon, '' ) ) {
+				continue;
+			}
+
+			/** This filter is documented in includes/Illuminate/Helper.php. */
+			$limit = (int) apply_filters( 'subscrpt_coupon_recurring_limit', 0, $coupon, '' );
+			if ( $limit > 0 && $next_order_position > $limit ) {
+				continue;
+			}
+
+			$discount = (float) $coupon_line->get_discount() * $price_ratio;
+			if ( $discount <= 0 ) {
+				continue;
+			}
+
+			$discount_tax = (float) $coupon_line->get_discount_tax() * $price_ratio;
+			$new_order->add_coupon(
+				$code,
+				wc_format_decimal( $discount ),
+				wc_format_decimal( $discount_tax )
+			);
+			$recurring_discount     += $discount;
+			$recurring_discount_tax += $discount_tax;
+		}
+
+		if ( $recurring_discount > 0 ) {
+			$renewal_item = $new_order->get_item( $new_order_item_id, false );
+			if ( $renewal_item instanceof \WC_Order_Item_Product ) {
+				$renewal_item->set_total(
+					max( 0, (float) $renewal_item->get_subtotal() - $recurring_discount )
+				);
+				$renewal_item->set_total_tax(
+					max( 0, (float) $renewal_item->get_subtotal_tax() - $recurring_discount_tax )
+				);
+				$renewal_item->save();
+			}
+		}
+	}
+
+	/**
 	 * Create new order for renewal.
 	 *
 	 * @param \WC_Order              $old_order Old Order Object.
 	 * @param \WC_Order_Item_Product $order_item Old Order Item Object.
 	 * @param array                  $product_args Product args for add product.
+	 * @param int                    $subscription_id Subscription ID.
 	 *
 	 * @return array|false
 	 */
-	public static function create_new_order_for_renewal( \WC_Order $old_order, \WC_Order_Item_Product $order_item, array $product_args ) {
+	public static function create_new_order_for_renewal( \WC_Order $old_order, \WC_Order_Item_Product $order_item, array $product_args, int $subscription_id = 0 ) {
 		$product      = $order_item->get_product();
 		$user_id      = $old_order->get_user_id();
-		$product_meta = apply_filters( 'subscrpt_renewal_item_meta', wc_get_order_item_meta( $order_item->get_id(), '_subscrpt_meta', true ), $product, $order_item );
-		$product_args = apply_filters( 'subscrpt_renewal_product_args', $product_args, $product, $order_item );
+		$product_meta = apply_filters( 'subscrpt_renewal_item_meta', wc_get_order_item_meta( $order_item->get_id(), '_subscrpt_meta', true ), $product, $order_item, $subscription_id );
+		$product_args = apply_filters( 'subscrpt_renewal_product_args', $product_args, $product, $order_item, $subscription_id );
 		if ( ! $product || ! $product_args ) {
 			return false;
 		}
+		$product_meta = is_array( $product_meta ) ? $product_meta : array();
 
-		$new_order    = wc_create_order(
+		$new_order = wc_create_order(
 			array(
 				'customer_id' => $user_id,
 				'status'      => 'pending',
@@ -1900,11 +2274,34 @@ class Helper {
 			$new_order_item_id,
 			'_subscrpt_meta',
 			array(
-				'time'  => $product_meta['time'],
-				'type'  => $product_meta['type'],
+				'time'  => (int) ( $product_meta['time'] ?? 1 ),
+				'type'  => (string) ( $product_meta['type'] ?? 'months' ),
 				'trial' => null,
 			)
 		);
+		self::add_recurring_coupons_to_renewal_order( $new_order, $old_order, $order_item, $new_order_item_id, $subscription_id );
+
+		// Carry the immutable plan/variation snapshot onto the renewal line. The.
+		// subscription post remains the source of truth, but retaining the line.
+		// snapshot makes later reconciliation and HPOS order inspection complete.
+		foreach ( array(
+			'_subscrpt_plan_id',
+			'_subscrpt_plan_group_id',
+			'_subscrpt_plan_price',
+			'_subscrpt_plan_total',
+			'_subscrpt_payment_type',
+			'_subscrpt_max_no_payment',
+			'_subscrpt_signup_fee',
+			'_subscrpt_billing_length',
+			'_subscrpt_plan_data',
+			'_subscrpt_plan_terms',
+			'_subscrpt_variation_id',
+		) as $meta_key ) {
+			$meta_value = $order_item->get_meta( $meta_key, true );
+			if ( '' !== $meta_value && null !== $meta_value ) {
+				wc_update_order_item_meta( $new_order_item_id, $meta_key, $meta_value );
+			}
+		}
 
 		// Add debug log.
 		subscrpt_write_debug_log( "Renewal order #{$new_order->get_id()} created for old order #{$old_order->get_id()}" );
@@ -1924,7 +2321,10 @@ class Helper {
 	 */
 	public static function check_order_for_renewal( $old_order_id ) {
 		$old_order = wc_get_order( $old_order_id );
-		if ( ! $old_order || 'completed' !== $old_order->get_status() ) {
+		// Physical-goods orders commonly remain `processing` after payment. Both
+		// processing and completed are WooCommerce paid states and can safely seed
+		// a renewal; pending, failed, cancelled, and refunded orders cannot.
+		if ( ! $old_order || ! $old_order->has_status( array( 'processing', 'completed' ) ) ) {
 			if ( ! is_admin() && function_exists( 'wc_add_notice' ) && WC()->session ) {
 				return wc_add_notice( __( 'Subscription renewal isn\'t possible due to previous order not completed or deletion.', 'subscription' ), 'error' );
 			}
@@ -1972,10 +2372,10 @@ class Helper {
 		$shipping_address_1 = ! empty( $order->get_shipping_address_1() ) ? $order->get_shipping_address_1() : $customer->get_shipping_address_1();
 		$shipping_address_2 = ! empty( $order->get_shipping_address_2() ) ? $order->get_shipping_address_2() : $customer->get_shipping_address_2();
 
-		$order_meta = [
+		$order_meta = array(
 			'customer_id' => $order->get_customer_id(),
 			'email'       => $email,
-			'billing'     => [
+			'billing'     => array(
 				'first_name' => $billing_first_name,
 				'last_name'  => $billing_last_name,
 				'email'      => $billing_email,
@@ -1987,8 +2387,8 @@ class Helper {
 				'postcode'   => $billing_postcode,
 				'address_1'  => $billing_address_1,
 				'address_2'  => $billing_address_2,
-			],
-			'shipping'    => [
+			),
+			'shipping'    => array(
 				'first_name' => $shipping_first_name,
 				'last_name'  => $shipping_last_name,
 				'phone'      => $shipping_phone,
@@ -1999,8 +2399,8 @@ class Helper {
 				'postcode'   => $shipping_postcode,
 				'address_1'  => $shipping_address_1,
 				'address_2'  => $shipping_address_2,
-			],
-		];
+			),
+		);
 
 		return $order_meta;
 	}

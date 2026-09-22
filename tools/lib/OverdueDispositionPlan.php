@@ -5,6 +5,8 @@
  * @package AshbiSubscriptions
  */
 
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- The CLI tooling uses this stable library path.
+
 namespace Ashbi\Subscriptions\Tools;
 
 use InvalidArgumentException;
@@ -15,7 +17,11 @@ use InvalidArgumentException;
 final class OverdueDispositionPlan {
 	public const SCHEMA_VERSION = 2;
 
-	/** @var string[] */
+	/**
+	 * Operator dispositions supported by the worksheet.
+	 *
+	 * @var string[]
+	 */
 	private const DISPOSITIONS = array(
 		'advance_without_charge',
 		'controlled_retry',
@@ -24,7 +30,11 @@ final class OverdueDispositionPlan {
 		'retain_for_investigation',
 	);
 
-	/** @var string[] */
+	/**
+	 * Evidence fields protected by the source checksum.
+	 *
+	 * @var string[]
+	 */
 	private const EVIDENCE_FIELDS = array(
 		'subscription_id',
 		'status',
@@ -39,7 +49,11 @@ final class OverdueDispositionPlan {
 		'max_payments_reached',
 	);
 
-	/** @return string[] */
+	/**
+	 * Return the supported operator dispositions.
+	 *
+	 * @return string[]
+	 */
 	public static function dispositions(): array {
 		return self::DISPOSITIONS;
 	}
@@ -48,11 +62,13 @@ final class OverdueDispositionPlan {
 	 * Hash source evidence only; operator fields and derived age are editable.
 	 *
 	 * @param array<string,mixed> $record Worksheet record.
+	 * @throws InvalidArgumentException When source evidence is incomplete.
 	 */
 	public static function evidence_checksum( array $record ): string {
 		$evidence = array();
 		foreach ( self::EVIDENCE_FIELDS as $field ) {
 			if ( ! array_key_exists( $field, $record ) ) {
+				// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- This is a CLI/operator exception message, not HTML output.
 				throw new InvalidArgumentException( "Missing evidence field: {$field}." );
 			}
 			$evidence[ $field ] = $record[ $field ];
@@ -64,13 +80,15 @@ final class OverdueDispositionPlan {
 	/**
 	 * Validate a complete worksheet and return its exact-plan confirmation hash.
 	 *
-	 * @param array<string,mixed> $worksheet Worksheet payload.
+	 * @param array<string,mixed> $worksheet          Worksheet payload.
+	 * @param string              $expected_site_url Explicitly expected site URL.
+	 * @throws InvalidArgumentException When the worksheet is invalid.
 	 */
 	public static function validate( array $worksheet, string $expected_site_url ): string {
 		if ( self::SCHEMA_VERSION !== ( $worksheet['schema_version'] ?? null ) ) {
 			throw new InvalidArgumentException( 'Worksheet schema must be exactly version 2.' );
 		}
-		if ( '' === $expected_site_url || $expected_site_url !== ( $worksheet['site_url'] ?? null ) ) {
+		if ( '' === $expected_site_url || ( $worksheet['site_url'] ?? null ) !== $expected_site_url ) {
 			throw new InvalidArgumentException( 'Worksheet site URL does not match the explicitly expected site URL.' );
 		}
 		if ( self::DISPOSITIONS !== ( $worksheet['allowed_dispositions'] ?? null ) ) {
@@ -95,18 +113,22 @@ final class OverdueDispositionPlan {
 			$seen[ $id ] = true;
 			$checksum = $record['evidence_checksum'] ?? null;
 			if ( ! is_string( $checksum ) || ! hash_equals( self::evidence_checksum( $record ), $checksum ) ) {
-				throw new InvalidArgumentException( "Evidence checksum failed for subscription #{$id}." );
+					// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- This is a CLI/operator exception message, not HTML output.
+					throw new InvalidArgumentException( "Evidence checksum failed for subscription #{$id}." );
 			}
 			$disposition = $record['operator_disposition'] ?? null;
 			if ( ! is_string( $disposition ) || ! in_array( $disposition, self::DISPOSITIONS, true ) ) {
-				throw new InvalidArgumentException( "Subscription #{$id} needs one allowed operator disposition." );
+					// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- This is a CLI/operator exception message, not HTML output.
+					throw new InvalidArgumentException( "Subscription #{$id} needs one allowed operator disposition." );
 			}
 			if ( 'advance_without_charge' === $disposition ) {
 				if ( ! empty( $record['open_renewal_orders'] ) ) {
-					throw new InvalidArgumentException( "Subscription #{$id} has an open renewal order and cannot be advanced." );
+						// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- This is a CLI/operator exception message, not HTML output.
+						throw new InvalidArgumentException( "Subscription #{$id} has an open renewal order and cannot be advanced." );
 				}
 				if ( ! empty( $record['max_payments_reached'] ) ) {
-					throw new InvalidArgumentException( "Subscription #{$id} reached its payment limit and cannot be advanced." );
+						// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- This is a CLI/operator exception message, not HTML output.
+						throw new InvalidArgumentException( "Subscription #{$id} reached its payment limit and cannot be advanced." );
 				}
 				self::recurrence_string( $record );
 			}
@@ -116,17 +138,26 @@ final class OverdueDispositionPlan {
 	}
 
 	/**
+	 * Confirm that source evidence still matches the reviewed worksheet.
+	 *
 	 * @param array<string,mixed> $worksheet_record Reviewed record.
-	 * @param array<string,mixed> $current_record Current server evidence.
+	 * @param array<string,mixed> $current_record   Current server evidence.
+	 * @throws InvalidArgumentException When source evidence has changed.
 	 */
 	public static function assert_current( array $worksheet_record, array $current_record ): void {
 		$id = (int) ( $worksheet_record['subscription_id'] ?? 0 );
 		if ( ! hash_equals( self::evidence_checksum( $worksheet_record ), self::evidence_checksum( $current_record ) ) ) {
+			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- This is a CLI/operator exception message, not HTML output.
 			throw new InvalidArgumentException( "Source evidence changed for subscription #{$id}; generate and review a new worksheet." );
 		}
 	}
 
-	/** @param array<string,mixed> $record Worksheet record. */
+	/**
+	 * Return the validated recurrence string for a worksheet record.
+	 *
+	 * @param array<string,mixed> $record Worksheet record.
+	 * @throws InvalidArgumentException When recurrence evidence is invalid.
+	 */
 	public static function recurrence_string( array $record ): string {
 		$recurrence = $record['recurrence'] ?? null;
 		if ( ! is_array( $recurrence ) ) {
@@ -144,7 +175,10 @@ final class OverdueDispositionPlan {
 	/**
 	 * Step an old anchor forward without creating an order or invoking a gateway.
 	 *
+	 * @param int      $anchor  Initial billing anchor.
+	 * @param int      $now     Current timestamp.
 	 * @param callable $advance Receives current anchor and returns one later anchor.
+	 * @throws InvalidArgumentException When the recurrence does not advance safely.
 	 */
 	public static function future_anchor( int $anchor, int $now, callable $advance ): int {
 		if ( $anchor <= 0 ) {
@@ -165,7 +199,13 @@ final class OverdueDispositionPlan {
 		return $current;
 	}
 
-	/** @param mixed $value Value to encode. */
+	/**
+	 * Encode worksheet data deterministically.
+	 *
+	 * @param mixed $value Value to encode.
+	 * @return string
+	 * @throws InvalidArgumentException When the value cannot be encoded.
+	 */
 	private static function encode( $value ): string {
 		$encoded = json_encode( $value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
 		if ( ! is_string( $encoded ) ) {

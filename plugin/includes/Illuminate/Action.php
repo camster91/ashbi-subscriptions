@@ -1,4 +1,12 @@
 <?php
+/**
+ * Subscription lifecycle status helpers.
+ *
+ * @package SpringDevs\Subscription\Illuminate
+ */
+
+// Legacy class path is part of the public compatibility contract.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
 
 namespace SpringDevs\Subscription\Illuminate;
 
@@ -17,8 +25,8 @@ class Action {
 	 * @param bool   $write_comment Write comment?.
 	 */
 	public static function status( string $status, int $subscription_id, bool $write_comment = true ) {
-		// A split-payment subscription whose final installment is paid is terminal:
-		// never (re)activate it. Any renewal-payment path that tries to set it active
+		// A split-payment subscription whose final installment is paid is terminal:.
+		// never (re)activate it. Any renewal-payment path that tries to set it active.
 		// after completion is coerced to `completed` so the status can't flip back.
 		if (
 			'active' === $status
@@ -46,11 +54,13 @@ class Action {
 			self::write_comment( $status, $subscription_id );
 		}
 
-		// Trigger status change action
+		// Trigger status change action.
 		do_action( 'subscrpt_subscription_status_changed', $subscription_id, $old_status, $status );
 
-		// Trigger resumption event if subscription is being activated from cancelled or pending cancellation
-		if ( $status === 'active' && in_array( $old_status, array( 'cancelled', 'pe_cancelled' ) ) ) {
+		// Trigger resumption event if subscription is being activated from a state.
+		// that suspended access. `on_hold` is the registered subscription status;.
+		// keep the legacy hyphenated value here for old records only.
+		if ( 'active' === $status && in_array( $old_status, array( 'cancelled', 'pe_cancelled', 'on_hold', 'on-hold' ), true ) ) {
 			do_action( 'subscrpt_subscription_resumed', $subscription_id, $old_status );
 		}
 	}
@@ -73,6 +83,7 @@ class Action {
 				return self::cancelled( $subscription_id );
 			case 'pe_cancelled':
 				return self::pe_cancelled( $subscription_id );
+			case 'on_hold':
 			case 'on-hold':
 				return self::on_hold( $subscription_id );
 			case 'completed':
@@ -94,7 +105,7 @@ class Action {
 	private static function record_activity( int $subscription_id, string $content, string $activity, string $activity_type ): bool {
 		$comment_id = wp_insert_comment(
 			array(
-				'comment_author'  => 'Subscription for WooCommerce',
+				'comment_author'  => 'Ashbi Subscriptions',
 				'comment_content' => $content,
 				'comment_post_ID' => $subscription_id,
 				'comment_type'    => 'order_note',
@@ -178,7 +189,7 @@ class Action {
 		do_action( 'subscrpt_subscription_cancelled_email_notification', $subscription_id );
 		do_action( 'subscrpt_subscription_cancelled', $subscription_id );
 
-		// Fire split payment cancelled action
+		// Fire split payment cancelled action.
 		do_action( 'subscrpt_split_payment_cancelled', $subscription_id );
 		return true;
 	}
@@ -207,9 +218,9 @@ class Action {
 			return false;
 		}
 
-		// WC_Email classes only exist once the mailer has been built, and they
-		// attach their own listeners from their constructors. Without this, an
-		// email listening for a pending cancellation is simply not registered yet
+		// WC_Email classes only exist once the mailer has been built, and they.
+		// attach their own listeners from their constructors. Without this, an.
+		// email listening for a pending cancellation is simply not registered yet.
 		// when the action fires - the same reason cancelled() calls it.
 		WC()->mailer();
 

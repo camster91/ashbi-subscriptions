@@ -44,6 +44,12 @@ Deliverables:
 - Retry policy, grace periods, dunning notifications, and audit events.
 - Versioned REST API for monitoring and support diagnostics.
 
+The first read-only support diagnostics route is now implemented at
+`/wp-json/wpsubscription/v1/diagnostics`; it is aggregate-only and protected by
+`manage_woocommerce`. The local disposable WordPress/WooCommerce integration
+check exercises the route and its privacy boundary. Gateway sandbox and
+crash-window validation remain release gates.
+
 Exit criteria: repeated sandbox renewals, duplicate/out-of-order webhook tests,
 refund tests, DST tests, and disaster recovery pass.
 
@@ -64,7 +70,7 @@ Deliverables:
 
 - MRR, churn, cohort, revenue-at-risk, retry, and recovery reporting.
 - Recurring coupons, cancellation reasons, recovery campaigns, and win-back attribution.
-- Privacy-safe export and retention controls.
+- Privacy-safe aggregate report export and bounded recovery-event retention controls.
 
 Exit criteria: metric definitions reconcile to WooCommerce orders and gateway events.
 

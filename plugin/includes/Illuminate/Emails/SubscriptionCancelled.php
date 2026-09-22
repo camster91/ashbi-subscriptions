@@ -1,4 +1,9 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- This filename is part of the imported public compatibility surface.
+/**
+ * Customer email sent when a subscription is cancelled.
+ *
+ * @package SpringDevs\Subscription\Illuminate\Emails
+ */
 
 namespace SpringDevs\Subscription\Illuminate\Emails;
 

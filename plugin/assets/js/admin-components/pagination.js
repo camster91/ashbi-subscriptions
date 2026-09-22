@@ -19,7 +19,7 @@
  *   data-wpsubs-pager-scope (on the pager OR an ancestor) — a CSS selector for
  *   the container holding the rows to paginate. Defaults to the closest <table>
  *   inside the pager's card. Rows are direct children matched by `row_selector`
- *   on the scope element (default 'tbody tr'). Pro's non-table layouts can
+ *   on the scope element (default 'tbody tr'). Non-table layouts can
  *   override both with data attributes.
  *
  * Events fired on the pager root (bubbles):

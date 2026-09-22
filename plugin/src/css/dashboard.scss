@@ -1,11 +1,10 @@
 /**
  * Dashboard styles.
  *
- * @wordpress/components carries the card, button and header chrome. What is
- * written here is what core has no component for — stat tiles, a status
+ * WordPress core carries the standard card, button and header chrome. What is
+ * written here is the Ashbi-specific presentation — stat tiles, a status
  * banner, a progress checklist and the bottom card row — kept in WordPress's
- * own type scale and greys so they sit beside the components rather than
- * competing with them.
+ * own type scale and greys so the screen remains native to wp-admin.
  */
 
 $border: #e0e0e0;

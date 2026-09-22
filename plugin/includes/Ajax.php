@@ -1,4 +1,11 @@
 <?php
+/**
+ * Admin AJAX handlers.
+ *
+ * @package SpringDevs\Subscription
+ */
+
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- Legacy class filename is part of the public plugin compatibility contract.
 
 namespace SpringDevs\Subscription;
 
@@ -77,7 +84,7 @@ class Ajax {
 			$api->name . ' ' . $api->version
 		);
 		$nonce = 'install-plugin_' . $plugin;
-		$url   = 'update.php?action=install-plugin&plugin=' . urlencode( $plugin );
+		$url   = 'update.php?action=install-plugin&plugin=' . rawurlencode( $plugin );
 
 		$upgrader = new \Plugin_Upgrader( new \Plugin_Installer_Skin( compact( 'title', 'url', 'nonce', 'plugin', 'api' ) ) );
 		$result   = $upgrader->install( $api->download_link );
@@ -98,11 +105,16 @@ class Ajax {
 	 * Active WooComerce Plugin.
 	 */
 	public function activate_woocommerce_plugin() {
-		// add Deprecated notice
+		// add Deprecated notice.
 		_deprecated_function( 'Ajax::activate_woocommerce_plugin', '1.5.3', 'Ajax::wps_subscription_activate_woocommerce_plugin' );
-		return $this->wps_subscription_activate_woocommerce_plugin();
+		$this->wps_subscription_activate_woocommerce_plugin();
 	}
 
+	/**
+	 * Activate WooCommerce through the dependency-management flow.
+	 *
+	 * @return void
+	 */
 	public function wps_subscription_activate_woocommerce_plugin() {
 		if ( false === check_ajax_referer( 'subscrpt_activate_woocommerce_plugin', 'nonce', false ) ) {
 			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'subscription' ) ), 403 );

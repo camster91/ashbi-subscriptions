@@ -4,11 +4,13 @@
  *
  * This is intentionally runnable before WordPress/PHPUnit infrastructure is
  * available. Runtime integration tests will supplement it, not replace it.
+ *
+ * @package AshbiSubscriptions\Tests
  */
 
-$root   = dirname( __DIR__ );
-$plugin = $root . '/plugin';
-$errors = array();
+$root                  = dirname( __DIR__ );
+$ashbi_plugin_directory = $root . '/plugin';
+$compatibility_errors  = array();
 
 /**
  * Record a failed assertion.
@@ -18,9 +20,9 @@ $errors = array();
  * @return void
  */
 function ashbi_assert( $condition, $message ) {
-	global $errors;
+	global $compatibility_errors;
 	if ( ! $condition ) {
-		$errors[] = $message;
+		$compatibility_errors[] = $message;
 	}
 }
 
@@ -31,40 +33,40 @@ function ashbi_assert( $condition, $message ) {
  * @return string
  */
 function ashbi_read( $path ) {
-	global $errors;
+	global $compatibility_errors;
 	if ( ! is_file( $path ) ) {
-		$errors[] = 'Missing required file: ' . $path;
+		$compatibility_errors[] = 'Missing required file: ' . $path;
 		return '';
 	}
 
 	$contents = file_get_contents( $path );
 	if ( false === $contents ) {
-		$errors[] = 'Unable to read required file: ' . $path;
+		$compatibility_errors[] = 'Unable to read required file: ' . $path;
 		return '';
 	}
 
 	return $contents;
 }
 
-$bootstrap = ashbi_read( $plugin . '/subscription.php' );
-$composer  = json_decode( ashbi_read( $plugin . '/composer.json' ), true );
-$installer = ashbi_read( $plugin . '/includes/Installer.php' );
-$post      = ashbi_read( $plugin . '/includes/Illuminate/Post.php' );
+$bootstrap    = ashbi_read( $ashbi_plugin_directory . '/subscription.php' );
+$composer    = json_decode( ashbi_read( $ashbi_plugin_directory . '/composer.json' ), true );
+$installer   = ashbi_read( $ashbi_plugin_directory . '/includes/Installer.php' );
+$post_source = ashbi_read( $ashbi_plugin_directory . '/includes/Illuminate/Post.php' );
 
 ashbi_assert( false !== strpos( $bootstrap, 'License: GPLv2 or later' ), 'Plugin header must retain GPLv2-or-later.' );
 ashbi_assert( is_array( $composer ) && 'GPL-2.0-or-later' === ( $composer['license'] ?? null ), 'Composer license must remain GPL-2.0-or-later.' );
-ashbi_assert( is_file( $plugin . '/vendor/autoload.php' ), 'Bundled autoloader is required by the production ZIP.' );
-ashbi_assert( ! is_dir( $plugin . '/subscription-pro' ), 'Pro source must never be imported.' );
+ashbi_assert( is_file( $ashbi_plugin_directory . '/vendor/autoload.php' ), 'Bundled autoloader is required by the production ZIP.' );
+ashbi_assert( ! is_dir( $ashbi_plugin_directory . '/subscription-pro' ), 'Pro source must never be imported.' );
 
-ashbi_assert( false !== strpos( $post, "register_post_type( 'subscrpt_order'" ), 'Legacy subscrpt_order post type must remain registered.' );
-ashbi_assert( false !== strpos( $post, "register_post_type( 'subscrpt_order_item'" ), 'Legacy subscrpt_order_item post type must remain registered.' );
+ashbi_assert( false !== strpos( $post_source, "register_post_type( 'subscrpt_order'" ), 'Legacy subscrpt_order post type must remain registered.' );
+ashbi_assert( false !== strpos( $post_source, "register_post_type( 'subscrpt_order_item'" ), 'Legacy subscrpt_order_item post type must remain registered.' );
 ashbi_assert( false !== strpos( $installer, "'subscrpt_order_relation'" ), 'Legacy relation table name must remain compatible.' );
 ashbi_assert( false !== strpos( $installer, "'subscrpt_renewal_claim'" ), 'Atomic renewal claim table must be installed additively.' );
 ashbi_assert( false !== strpos( $installer, 'backfill_open_renewal_claims' ), 'Open legacy renewal orders must be claimed during migration.' );
 
 $source = '';
 $files  = new RecursiveIteratorIterator(
-	new RecursiveDirectoryIterator( $plugin . '/includes', FilesystemIterator::SKIP_DOTS )
+	new RecursiveDirectoryIterator( $ashbi_plugin_directory . '/includes', FilesystemIterator::SKIP_DOTS )
 );
 foreach ( $files as $file ) {
 	if ( $file->isFile() && 'php' === strtolower( $file->getExtension() ) ) {
@@ -104,8 +106,8 @@ ashbi_assert( false === strpos( $source, 'catch ( Exception ' ), 'Namespaced cod
 ashbi_assert( false === strpos( $source, '$variation_id = $variation_id;' ), 'Manual renewal must not discard the stored variation ID.' );
 ashbi_assert( false === strpos( $source, '$product_data->' ), 'PayPal product creation must not dereference undefined product data.' );
 
-if ( $errors ) {
-	fwrite( STDERR, "Compatibility contract failed:\n- " . implode( "\n- ", $errors ) . "\n" );
+if ( $compatibility_errors ) {
+	fwrite( STDERR, "Compatibility contract failed:\n- " . implode( "\n- ", $compatibility_errors ) . "\n" );
 	exit( 1 );
 }
 

@@ -5,6 +5,9 @@
  * @package SpringDevs\Subscription\Admin
  */
 
+// This filename is part of the imported public compatibility surface.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
+
 namespace SpringDevs\Subscription\Admin;
 
 use SpringDevs\Subscription\Illuminate\Plans\PlanRepository;
@@ -80,12 +83,7 @@ class Dashboard {
 			true
 		);
 
-		/*
-		 * WordPress ships the stylesheet for @wordpress/components separately
-		 * from the script. Without this the components render as unstyled
-		 * markup — which is why plugins that skip it end up reinventing every
-		 * button in their own CSS.
-		 */
+		/* WordPress core supplies the standard component chrome used by this screen. */
 		wp_enqueue_style( 'wp-components' );
 
 		wp_enqueue_style(
@@ -95,7 +93,7 @@ class Dashboard {
 			$asset['version']
 		);
 
-		// The build emits dashboard-rtl.css alongside dashboard.css; this is
+		// The build emits dashboard-rtl.css alongside dashboard.css; this is.
 		// what makes WordPress pick it up for right-to-left locales.
 		wp_style_add_data( self::HANDLE, 'rtl', 'replace' );
 
@@ -124,7 +122,6 @@ class Dashboard {
 			'health' => $this->get_health( $counts, $setup ),
 			'build'  => $this->get_build_cards(),
 			'footer' => $this->get_footer_links(),
-			'isPro'  => subscrpt_pro_activated(),
 		);
 	}
 
@@ -141,7 +138,7 @@ class Dashboard {
 		$on_hold = (int) ( $counts['on_hold'] ?? 0 );
 		$failed  = Stats::count_failed_renewals_since( 24 );
 
-		// This month rather than a rolling window: the list filters by calendar
+		// This month rather than a rolling window: the list filters by calendar.
 		// month, and a figure that opens the list must match the rows it shows.
 		$this_month = new \DateTimeImmutable( 'now', wp_timezone() );
 
@@ -216,8 +213,6 @@ class Dashboard {
 				: number_format_i18n( $total, 2 ),
 			'empty'   => $total <= 0,
 			'url'     => admin_url( 'admin.php?page=wp-subscription-stats' ),
-			// Mark preview-only reporting as unavailable in this distribution.
-			'pro'     => ! subscrpt_pro_activated(),
 		);
 	}
 
@@ -284,7 +279,7 @@ class Dashboard {
 			'items'    => $items,
 			'done'     => $done,
 			'total'    => count( $items ),
-			'complete' => $done === count( $items ),
+			'complete' => count( $items ) === $done,
 			'gateway'  => $this->has_enabled_gateway() ? null : array(
 				'title'  => __( 'No payment gateway enabled', 'subscription' ),
 				'text'   => __( 'Customers cannot pay for subscriptions yet.', 'subscription' ),
@@ -375,8 +370,6 @@ class Dashboard {
 	 * @return array<int,array<string,mixed>>
 	 */
 	private function get_build_cards(): array {
-		$is_pro = subscrpt_pro_activated();
-
 		return array(
 			array(
 				'tone'    => 'insight',
@@ -388,7 +381,6 @@ class Dashboard {
 					'label' => __( 'View reports', 'subscription' ),
 					'url'   => admin_url( 'admin.php?page=wp-subscription-stats' ),
 				),
-				'pro'     => ! $is_pro,
 			),
 			array(
 				'tone'    => 'setup',
@@ -401,29 +393,17 @@ class Dashboard {
 					'url'   => admin_url( 'admin.php?page=wp-subscription-integrations' ),
 				),
 			),
-			$is_pro
-				? array(
-					'tone'    => 'extend',
-					'icon'    => 'shield',
-					'eyebrow' => __( 'Extend', 'subscription' ),
-					'title'   => __( 'Subscription health', 'subscription' ),
-					'text'    => __( 'Find and recover subscriptions that need rescuing.', 'subscription' ),
-					'link'    => array(
-						'label' => __( 'Open health', 'subscription' ),
-						'url'   => admin_url( 'admin.php?page=wp-subscription-health' ),
-					),
-				)
-				: array(
-					'tone'    => 'extend',
-					'icon'    => 'shield',
-					'eyebrow' => __( 'Extend', 'subscription' ),
-					'title'   => __( 'Additional operations tools', 'subscription' ),
-					'text'    => __( 'This optional feature set is not included in the current build.', 'subscription' ),
-					'link'    => array(
-						'label' => __( 'Read local guidance', 'subscription' ),
-						'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
-					),
+			array(
+				'tone'    => 'extend',
+				'icon'    => 'shield',
+				'eyebrow' => __( 'Operations', 'subscription' ),
+				'title'   => __( 'Subscription health', 'subscription' ),
+				'text'    => __( 'Find and review subscriptions that need attention.', 'subscription' ),
+				'link'    => array(
+					'label' => __( 'Open health', 'subscription' ),
+					'url'   => admin_url( 'admin.php?page=wp-subscription-health' ),
 				),
+			),
 		);
 	}
 

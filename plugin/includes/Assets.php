@@ -5,6 +5,8 @@
  * @package SpringDevs\Subscription
  */
 
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- Legacy class filename is part of the public plugin compatibility contract.
+
 namespace SpringDevs\Subscription;
 
 /**
@@ -130,7 +132,7 @@ class Assets {
 			);
 
 		// Admin UI components, one file each for readability (assets/js/admin-components/).
-		// Each attaches its API to `window` and auto-inits; they are registered as
+		// Each attaches its API to `window` and auto-inits; they are registered as.
 		// individual scripts and bundled behind the `subscrpt_admin_components` handle.
 		$components      = array();
 		$component_files = array( 'adv-select', 'tag-select', 'editlist', 'modal', 'tabs', 'accordion', 'pagination', 'toast', 'save' );
@@ -155,7 +157,7 @@ class Assets {
 				'in_footer' => true,
 			),
 			'subscrpt_plan_forms_js'    => array(
-				// Shared plan-group + selling-plan modal logic, used by both the
+				// Shared plan-group + selling-plan modal logic, used by both the.
 				// Plans admin screen and the product-editor Subscription tab.
 				'src'       => $plugin_js_assets_path . 'admin/plan-forms.js',
 				'deps'      => array( 'subscrpt_admin_components' ),
@@ -185,8 +187,8 @@ class Assets {
 	public function get_styles() {
 		$plugin_css_assets_path = SUBSCRPT_ASSETS . '/css/';
 
-		// Admin UI component styles, split by section for readability
-		// (assets/css/admin-components/). Loaded in this order behind the
+		// Admin UI component styles, split by section for readability.
+		// (assets/css/admin-components/). Loaded in this order behind the.
 		// `subscrpt_admin_components` handle; `tokens` must stay first.
 		$component_styles = array();
 		$component_files  = array(
@@ -245,7 +247,7 @@ class Assets {
 	 */
 	public function enqueue_admin_components( $hook ) {
 		$is_main_page = 'toplevel_page_wp-subscription' === $hook;
-		$is_subs_page = 0 === strpos( $hook, 'wpsubscription_page' ) || 0 === strpos( $hook, 'wp-subscription_page' );
+		$is_subs_page = 0 === strpos( $hook, 'wpsubscription_page' ) || 0 === strpos( $hook, 'wp-subscription_page' ) || 0 === strpos( $hook, 'ashbi-subscriptions_page_' );
 
 		if ( $is_main_page || $is_subs_page ) {
 			wp_enqueue_style( 'subscrpt_admin_components' );
@@ -259,6 +261,6 @@ class Assets {
 	 * Source: https://cdn.jsdelivr.net/npm/chart.js
 	 */
 	public static function enqueue_chart_js() {
-		wp_enqueue_script( 'subscrpt-ext-lib-chartjs', SUBSCRPT_ASSETS . '/js/chart.js', [], SUBSCRPT_VERSION, true );
+		wp_enqueue_script( 'subscrpt-ext-lib-chartjs', SUBSCRPT_ASSETS . '/js/chart.js', array(), SUBSCRPT_VERSION, true );
 	}
 }

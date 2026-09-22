@@ -1,6 +1,16 @@
 <?php
+/**
+ * Subscription settings registration and admin rendering.
+ *
+ * @package SpringDevs\Subscription\Admin
+ */
+
+// The filename is part of the imported public class path.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
 
 namespace SpringDevs\Subscription\Admin;
+
+use SpringDevs\Subscription\Illuminate\RoleManagement;
 
 /**
  * Class Settings
@@ -13,7 +23,7 @@ class Settings {
 	 *
 	 * @var array
 	 */
-	public $settings_fields = [];
+	public $settings_fields = array();
 
 	/**
 	 * Initialize the class.
@@ -44,7 +54,7 @@ class Settings {
 			__( 'Settings', 'subscription' ),
 			'manage_options',
 			'wp-subscription-settings',
-			[ $this, 'settings_content' ]
+			array( $this, 'settings_content' )
 		);
 	}
 
@@ -52,53 +62,49 @@ class Settings {
 	 * Initialize settings fields.
 	 */
 	public function initiate_settings_fields() {
-		global $wp_roles;
-		$roles = [];
-		foreach ( ( $wp_roles->roles ?? [] ) as $role_key => $role ) {
-			$roles[ $role_key ] = $role['name'];
-		}
+		$roles = RoleManagement::get_allowed_customer_roles();
 
 		// Setting fields.
-		$settings_fields = [
-			[
+		$settings_fields = array(
+			array(
 				'type'       => 'heading',
 				'group'      => 'renewals',
 				'priority'   => 0,
-				'field_data' => [
+				'field_data' => array(
 					'title' => __( 'Renewals', 'subscription' ),
-				],
-			],
-			[
+				),
+			),
+			array(
 				'type'       => 'select',
 				'group'      => 'renewals',
 				'priority'   => 1,
-				'field_data' => [
+				'field_data' => array(
 					'id'          => 'wp_subscription_renewal_process',
 					'title'       => __( 'Renewal Process', 'subscription' ),
 					'description' => __( 'How renewal process will be done after Subscription Expired.', 'subscription' ),
-					'options'     => [
+					'options'     => array(
 						'auto'   => __( 'Automatic', 'subscription' ),
 						'manual' => __( 'Manual', 'subscription' ),
-					],
+					),
 					'selected'    => esc_attr( subscrpt_get_renewal_process() ),
-				],
-			],
-			[
+				),
+			),
+			array(
 				'type'       => 'input',
 				'group'      => 'renewals',
 				'priority'   => 2,
-				'field_data' => [
+				'field_data' => array(
 					'id'          => 'wp_subscription_manual_renew_cart_notice',
 					'title'       => __( 'Renewal Cart Notice', 'subscription' ),
 					'description' => __( 'Display Notice when Renewal Subscription product add to cart. Only available for Manual Renewal Process.', 'subscription' ),
 					'value'       => esc_attr( subscrpt_get_manual_renew_cart_notice() ),
-				],
-			],
-			[
+				),
+			),
+			array(
 				'type'       => 'toggle',
 				'group'      => 'renewals',
 				'priority'   => 3,
-				'field_data' => [
+				'field_data' => array(
 					'id'          => 'wp_subscription_stripe_auto_renew',
 					'title'       => __( 'Stripe Auto Renewal', 'subscription' ),
 					'label'       => __( 'Accept Stripe Auto Renewals', 'subscription' ),
@@ -110,46 +116,46 @@ class Settings {
 					),
 					'value'       => '1',
 					'checked'     => '1' === get_option( 'wp_subscription_stripe_auto_renew', '1' ),
-				],
-			],
-			[
+				),
+			),
+			array(
 				'type'       => 'toggle',
 				'group'      => 'renewals',
 				'priority'   => 4,
-				'field_data' => [
+				'field_data' => array(
 					'id'          => 'wp_subscription_auto_renewal_toggle',
 					'title'       => __( 'Auto Renewal Toggle', 'subscription' ),
 					'label'       => __( 'Display the auto renewal toggle', 'subscription' ),
 					'description' => __( 'Allow customers to turn on and off automatic renewals from their Subscription details page', 'subscription' ),
 					'value'       => '1',
 					'checked'     => '1' === get_option( 'wp_subscription_auto_renewal_toggle', '1' ),
-				],
-			],
-			[
+				),
+			),
+			array(
 				'type'       => 'select',
 				'group'      => 'role_based_settings',
 				'priority'   => 2,
-				'field_data' => [
+				'field_data' => array(
 					'id'          => 'wp_subscription_active_role',
 					'title'       => __( 'Subscriber Default Role', 'subscription' ),
 					'description' => __( 'When a subscription is activated, either manually or after a successful purchase, new users will be assigned this role.', 'subscription' ),
 					'options'     => $roles,
 					'selected'    => esc_attr( get_option( 'wp_subscription_active_role', 'subscriber' ) ),
-				],
-			],
-			[
+				),
+			),
+			array(
 				'type'       => 'select',
 				'group'      => 'role_based_settings',
 				'priority'   => 3,
-				'field_data' => [
+				'field_data' => array(
 					'id'          => 'wp_subscription_unactive_role',
 					'title'       => __( 'Subscriber Inactive Role', 'subscription' ),
 					'description' => __( "If a subscriber's subscription is manually cancelled or expires, they will be assigned this role.", 'subscription' ),
 					'options'     => $roles,
 					'selected'    => esc_attr( get_option( 'wp_subscription_unactive_role', 'customer' ) ),
-				],
-			],
-		];
+				),
+			),
+		);
 
 		// Allow other modules to add/modify settings fields.
 		$settings_fields = apply_filters( 'subscrpt_settings_fields', $settings_fields );
@@ -170,7 +176,7 @@ class Settings {
 			'wp_subscription_renewal_process',
 			array(
 				'type'              => 'string',
-				'sanitize_callback' => 'sanitize_text_field',
+				'sanitize_callback' => array( RoleManagement::class, 'sanitize_customer_role' ),
 			)
 		);
 		register_setting(
@@ -186,7 +192,7 @@ class Settings {
 			'wp_subscription_active_role',
 			array(
 				'type'              => 'string',
-				'sanitize_callback' => 'sanitize_text_field',
+				'sanitize_callback' => array( RoleManagement::class, 'sanitize_customer_role' ),
 			)
 		);
 		register_setting(
@@ -261,8 +267,8 @@ class Settings {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only section selection, validated against the list above.
 		$requested = isset( $_GET['cat'] ) ? sanitize_key( wp_unslash( $_GET['cat'] ) ) : '';
 
-		// `all` stacks every section on one page; a known section opens just that
-		// one. With nothing requested (or something invalid), open the first
+		// `all` stacks every section on one page; a known section opens just that.
+		// one. With nothing requested (or something invalid), open the first.
 		// section rather than the stacked "All Settings" view.
 		if ( 'all' === $requested || in_array( $requested, $cats, true ) ) {
 			return $requested;
@@ -277,11 +283,11 @@ class Settings {
 	 * @param string $hook The current admin page hook.
 	 */
 	public function enqueue_wc_admin_styles( $hook ) {
-		// Only load on our settings page
+		// Only load on our settings page.
 		if ( isset( $_GET['post_type'] ) && strpos( sanitize_text_field( wp_unslash( $_GET['post_type'] ) ), 'subscrpt_order' ) !== false ) {
-			// WooCommerce admin styles
+			// WooCommerce admin styles.
 			wp_enqueue_style( 'woocommerce_admin_styles', WC()->plugin_url() . '/assets/css/admin.css', array(), SUBSCRPT_VERSION );
-			// Optional: WooCommerce enhanced select2
+			// Optional: WooCommerce enhanced select2.
 			wp_enqueue_style( 'woocommerce_admin_select2', WC()->plugin_url() . '/assets/css/select2.css', array(), SUBSCRPT_VERSION );
 			wp_enqueue_script( 'select2' );
 		}

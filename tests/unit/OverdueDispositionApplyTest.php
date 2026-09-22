@@ -1,9 +1,21 @@
 <?php
+/**
+ * Verify the overdue-disposition CLI fixture contract.
+ *
+ * @package AshbiSubscriptions\Tests
+ */
 
 use PHPUnit\Framework\TestCase;
 
+/** Verify the no-charge overdue disposition workflow. */
 final class OverdueDispositionApplyTest extends TestCase {
-	/** @return array<string,mixed> */
+	/**
+	 * Run the isolated overdue-disposition fixture.
+	 *
+	 * @param string $mode     Fixture execution mode.
+	 * @param string $scenario Fixture data scenario.
+	 * @return array<string,mixed>
+	 */
 	private function runFixture( string $mode, string $scenario = 'normal' ): array {
 		$command = sprintf(
 			'ASHBI_FIXTURE_MODE=%s ASHBI_FIXTURE_SCENARIO=%s %s %s',
@@ -12,8 +24,8 @@ final class OverdueDispositionApplyTest extends TestCase {
 			escapeshellarg( PHP_BINARY ),
 			escapeshellarg( dirname( __DIR__ ) . '/fixtures/run-overdue-apply.php' )
 		);
-		$output = array();
-		$exit   = 0;
+		$output  = array();
+		$exit    = 0;
 		exec( $command, $output, $exit );
 		$this->assertSame( 0, $exit );
 		$result = json_decode( implode( "\n", $output ), true );
@@ -21,6 +33,7 @@ final class OverdueDispositionApplyTest extends TestCase {
 		return $result;
 	}
 
+	/** Verify dry-run mode does not mutate the fixture state. */
 	public function test_dry_run_changes_nothing(): void {
 		$result = $this->runFixture( 'dry-run' );
 		$this->assertNull( $result['error'] );
@@ -29,6 +42,7 @@ final class OverdueDispositionApplyTest extends TestCase {
 		$this->assertArrayNotHasKey( '_subscrpt_no_charge_disposition_digest', $result['meta'] );
 	}
 
+	/** Verify applying a disposition advances only the selected record. */
 	public function test_apply_advances_without_order_and_preserves_unrelated_hold(): void {
 		$result = $this->runFixture( 'apply' );
 		$this->assertNull( $result['error'] );
@@ -39,6 +53,7 @@ final class OverdueDispositionApplyTest extends TestCase {
 		$this->assertSame( array( 99 ), $result['options']['subscrpt_renewal_migration_blocked'] );
 	}
 
+	/** Verify an existing operator hold remains attached after application. */
 	public function test_apply_does_not_remove_a_preexisting_hold_on_advanced_record(): void {
 		$result = $this->runFixture( 'apply', 'preexisting' );
 		$this->assertNull( $result['error'] );

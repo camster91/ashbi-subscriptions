@@ -94,11 +94,31 @@ $header_desc_html = implode( '<span class="subscrpt-detail-head__sep">·</span>'
 
 $rows = is_array( $rows ) ? $rows : array();
 
-// Top summary tiles — pulled from the info rows so Pro's filtered values stay
+// State-first summary: repeat the visible status in the first metric so an
+// operator can assess the subscription before scanning values and history.
+$status_summary_tile = array(
+	'label' => __( 'Subscription Status', 'subscription' ),
+	'value' => $header_badge,
+);
+
+$state_notice = array();
+if ( $next_payment_date && ! $is_grace_period ) {
+	$state_notice = array(
+		'title'       => __( 'Upcoming renewal', 'subscription' ),
+		'description' => sprintf(
+			/* translators: %s: next scheduled payment date. */
+			__( 'Next payment is scheduled for %s.', 'subscription' ),
+			$next_payment_date
+		),
+		'modifier'    => 'active' === $subscrpt_status ? 'active' : 'neutral',
+	);
+}
+
+// Top summary tiles — pulled from the info rows so extension-filtered values stay.
 // in sync. Their keys are marked used so they are not repeated below.
 $summary_tiles = array();
 if ( $order && isset( $subscription_data['price'] ) && '' !== $subscription_data['price'] ) {
-	// Build the recurring price from structured data so the price and period can
+	// Build the recurring price from structured data so the price and period can.
 	// be styled separately (price prominent, "/ period" small and muted).
 	$timing_per    = (int) ( $subscription_data['schedule']['timing_per'] ?? 1 );
 	$timing_option = $subscription_data['schedule']['timing_option'] ?? '';
@@ -152,8 +172,8 @@ if ( isset( $rows['total_payments'] ) ) {
 	);
 }
 
-// Group the remaining info rows into cards. Unmapped keys — including rows added
-// through the subscrpt_admin_info_rows filter (Pro) — fall into "Additional
+// Group the remaining info rows into cards. Unmapped keys — including rows added.
+// through the subscrpt_admin_info_rows filter (Pro) — fall into "Additional.
 // Details" so nothing is dropped. Status is shown as the header badge.
 $used_keys = array(
 	'cost'           => true,
@@ -195,8 +215,8 @@ $build_sections = function ( array $map ) use ( $rows, &$used_keys ) {
 	return $out;
 };
 
-// Payment Method renders next to the Plan card (main column). Shows the gateway
-// icon + title only — no key/value table. Extra rows (e.g. Stripe auto renewal)
+// Payment Method renders next to the Plan card (main column). Shows the gateway.
+// icon + title only — no key/value table. Extra rows (e.g. Stripe auto renewal).
 // keep their kv layout beneath.
 $used_keys['payment_method']      = true;
 $used_keys['stripe_auto_renewal'] = true;
@@ -209,8 +229,8 @@ if ( $order ) {
 	$gateway_obj  = isset( $gateways[ $gateway_id ] ) ? $gateways[ $gateway_id ] : null;
 	$payment_icon = $gateway_obj ? $gateway_obj->get_icon() : '';
 
-	// Resolve which plugin registered this gateway (e.g. several Stripe methods
-	// all come from "WooCommerce Stripe Gateway"). Map the gateway class file to
+	// Resolve which plugin registered this gateway (e.g. several Stripe methods.
+	// all come from "WooCommerce Stripe Gateway"). Map the gateway class file to.
 	// its plugin folder, then read that plugin's header Name.
 	if ( $gateway_obj ) {
 		try {
@@ -233,7 +253,7 @@ if ( $order ) {
 		}
 	}
 }
-// Payment Method card is always shown; the title falls back to '-' when no
+// Payment Method card is always shown; the title falls back to '-' when no.
 // gateway is resolved.
 $has_payment = true;
 
@@ -280,8 +300,8 @@ foreach ( array_keys( $related_rows ) as $related_index ) {
 	$related_rows[ $related_index ]['seq'] = $related_count - $related_index;
 }
 
-// Reusable per-page + date toolbar for the paginated tables. Uses the admin
-// advanced-select component; the date options are injected client-side from the
+// Reusable per-page + date toolbar for the paginated tables. Uses the admin.
+// advanced-select component; the date options are injected client-side from the.
 // table's date column.
 $subscrpt_render_table_tools = function () {
 	?>
@@ -333,6 +353,20 @@ $subscrpt_details_ctx = array(
 	'order_item'        => $order_item,
 	'status'            => $subscrpt_status,
 );
+
+// Core lifecycle events are stored as private WooCommerce-style order notes.
+// Read them directly so the standalone build retains an auditable history even.
+// when no optional extension is installed.
+$subscrpt_activities = get_comments(
+	array(
+		'post_id' => $subscription_id,
+		'type'    => 'order_note',
+		'status'  => 'approve',
+		'number'  => 100,
+		'orderby' => 'comment_date_gmt',
+		'order'   => 'DESC',
+	)
+);
 ?>
 <div class="wp-subscription-admin-content list-page subscrpt-subs-details">
 
@@ -342,6 +376,16 @@ $subscrpt_details_ctx = array(
 		<div class="subscrpt-detail-head__desc"><?php echo wp_kses_post( $header_desc_html ); ?></div>
 		<div class="subscrpt-detail-head__divider"></div>
 	</div>
+
+	<?php if ( ! empty( $state_notice ) ) : ?>
+		<div class="subscrpt-state-notice subscrpt-state-notice--<?php echo esc_attr( $state_notice['modifier'] ); ?>" role="status">
+			<span class="dashicons dashicons-calendar-alt subscrpt-state-notice__icon" aria-hidden="true"></span>
+			<div>
+				<strong><?php echo esc_html( $state_notice['title'] ); ?></strong>
+				<p><?php echo esc_html( $state_notice['description'] ); ?></p>
+			</div>
+		</div>
+	<?php endif; ?>
 
 	<div class="subscrpt-detail-grid">
 
@@ -362,7 +406,7 @@ $subscrpt_details_ctx = array(
 			<!-- Summary strip -->
 			<?php if ( ! empty( $summary_tiles ) ) : ?>
 				<div class="subscrpt-summary">
-					<?php foreach ( $summary_tiles as $tile ) : ?>
+					<?php foreach ( array_merge( array( $status_summary_tile ), $summary_tiles ) as $tile ) : ?>
 						<div class="subscrpt-summary__tile">
 							<span class="subscrpt-summary__label"><?php echo esc_html( $tile['label'] ); ?></span>
 							<span class="subscrpt-summary__value"><?php echo wp_kses_post( $tile['value'] ); ?></span>
@@ -528,17 +572,17 @@ $subscrpt_details_ctx = array(
 						</thead>
 						<tbody>
 							<?php
-							// Map WC order statuses onto the shared subscription badge
+							// Map WC order statuses onto the shared subscription badge.
 							// modifiers so they get the same bg/border/color treatment.
 							$order_badge_map = array(
-								'completed'  => 'active',         // green
-								'pending'    => 'pending',        // blue
-								'processing' => 'pending-cancel', // yellow
-								'on-hold'    => 'pending-cancel', // yellow
-								'failed'     => 'expired',        // red
-								'refunded'   => 'expired',        // red
-								'trash'      => 'trash',          // red
-								'cancelled'  => 'cancelled',      // gray
+								'completed'  => 'active',         // green.
+								'pending'    => 'pending',        // blue.
+								'processing' => 'pending-cancel', // yellow.
+								'on-hold'    => 'pending-cancel', // yellow.
+								'failed'     => 'expired',        // red.
+								'refunded'   => 'expired',        // red.
+								'trash'      => 'trash',          // red.
+								'cancelled'  => 'cancelled',      // gray.
 							);
 							foreach ( $related_rows as $related ) :
 								$related_order  = $related['order'];
@@ -575,7 +619,7 @@ $subscrpt_details_ctx = array(
 							'item_count'  => $related_total,
 							'link_mode'   => 'cb',
 							'class'       => 'subscrpt-pager',
-							// translators: %1$s: first item number, %2$s: last item number, %3$s: total items
+							// translators: %1$s: first item number, %2$s: last item number, %3$s: total items.
 							'info_format' => __( 'Showing %1$s–%2$s of %3$s related orders', 'subscription' ),
 							'context'     => 'subscription-details-related-orders',
 						)
@@ -587,55 +631,49 @@ $subscrpt_details_ctx = array(
 			</div>
 
 			<!-- Activities card -->
-			<?php $subscrpt_pro_on = function_exists( 'subscrpt_pro_activated' ) && subscrpt_pro_activated(); ?>
 			<div class="subscrpt-card" data-subscrpt-paginate data-per-page="10" data-date-col="2">
 				<div class="subscrpt-card__head subscrpt-card__head--toolbar">
 					<span class="subscrpt-card__title"><?php esc_html_e( 'Subscription Activities', 'subscription' ); ?></span>
-					<?php if ( $subscrpt_pro_on ) : ?>
-						<?php $subscrpt_render_table_tools(); ?>
-					<?php endif; ?>
+					<?php $subscrpt_render_table_tools(); ?>
 				</div>
-				<?php if ( $subscrpt_pro_on ) : ?>
-					<div class="subscrpt-activities">
-						<?php
-						/**
-						 * Fires inside the subscription details activities card.
-						 *
-						 * An optional extension may render the activity table here.
-						 *
-						 * @param int $subscription_id Subscription post ID.
-						 */
-						do_action( 'subscrpt_order_activities', $subscription_id );
-						?>
-					</div>
-					<?php
-					// Activities pager. Total pages are unknown at render time (an extension
-					// injects the rows); WPSubsPager recomputes on init via render().
-					wpsubs_render_pager(
-						array(
-							'current'     => 1,
-							'total'       => 1,
-							'info'        => true,
-							'per_page'    => 10,
-							'item_count'  => 0,
-							'link_mode'   => 'cb',
-							'class'       => 'subscrpt-pager',
-							// translators: %1$s: first item number, %2$s: last item number, %3$s: total items
-							'info_format' => __( 'Showing %1$s–%2$s of %3$s activities', 'subscription' ),
-							'context'     => 'subscription-details-activities',
-						)
-					);
-					?>
-				<?php else : ?>
-					<div class="subscrpt-card__body">
-						<div class="subscrpt-upgrade-banner">
-							<div>
-								<strong><?php esc_html_e( 'Activity history is unavailable', 'subscription' ); ?></strong>
-								<p><?php esc_html_e( 'This optional feature is not included in the current build.', 'subscription' ); ?></p>
-							</div>
-						</div>
-					</div>
-				<?php endif; ?>
+				<div class="subscrpt-activities">
+					<table class="wpsubs-table">
+						<thead><tr><th><?php esc_html_e( 'Activity', 'subscription' ); ?></th><th><?php esc_html_e( 'Details', 'subscription' ); ?></th><th><?php esc_html_e( 'Date', 'subscription' ); ?></th></tr></thead>
+						<tbody>
+							<?php if ( empty( $subscrpt_activities ) ) : ?>
+								<tr><td colspan="3" class="subscrpt-muted"><?php esc_html_e( 'No activity recorded yet.', 'subscription' ); ?></td></tr>
+							<?php else : ?>
+								<?php foreach ( $subscrpt_activities as $subscrpt_activity ) : ?>
+									<?php
+									$activity_label = get_comment_meta( $subscrpt_activity->comment_ID, '_subscrpt_activity', true );
+									$activity_date  = strtotime( $subscrpt_activity->comment_date_gmt . ' UTC' );
+									?>
+									<tr>
+										<td><strong><?php echo esc_html( $activity_label ? $activity_label : __( 'Subscription update', 'subscription' ) ); ?></strong></td>
+										<td><?php echo esc_html( $subscrpt_activity->comment_content ); ?></td>
+										<td><?php echo $activity_date ? esc_html( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $activity_date ) ) : '&mdash;'; ?></td>
+									</tr>
+								<?php endforeach; ?>
+							<?php endif; ?>
+						</tbody>
+					</table>
+				</div>
+				<?php
+				wpsubs_render_pager(
+					array(
+						'current'     => 1,
+						'total'       => max( 1, (int) ceil( count( $subscrpt_activities ) / 10 ) ),
+						'info'        => true,
+						'per_page'    => 10,
+						'item_count'  => count( $subscrpt_activities ),
+						'link_mode'   => 'cb',
+						'class'       => 'subscrpt-pager',
+						// translators: %1$s: first item number, %2$s: last item number, %3$s: total items.
+						'info_format' => __( 'Showing %1$s–%2$s of %3$s activities', 'subscription' ),
+						'context'     => 'subscription-details-activities',
+					)
+				);
+				?>
 			</div>
 
 			<?php
@@ -667,8 +705,12 @@ $subscrpt_details_ctx = array(
 
 			<!-- Status action card -->
 			<div class="subscrpt-card subscrpt-card--overflow">
-				<div class="subscrpt-card__head"><?php esc_html_e( 'Subscription Action', 'subscription' ); ?></div>
+				<div class="subscrpt-card__head"><?php esc_html_e( 'Manage Subscription', 'subscription' ); ?></div>
 				<div class="subscrpt-card__body">
+					<div class="subscrpt-action-state">
+						<span class="subscrpt-action-state__label"><?php esc_html_e( 'Current status', 'subscription' ); ?></span>
+						<?php echo wp_kses_post( $header_badge ); ?>
+					</div>
 					<?php if ( ! empty( $actions ) ) : ?>
 						<form method="post" action="<?php echo esc_url( $form_action ); ?>" class="subscrpt-action-form">
 							<?php wp_nonce_field( 'subscrpt_order_action_nonce', 'subscrpt_order_action_nonce_field' ); ?>
@@ -676,10 +718,15 @@ $subscrpt_details_ctx = array(
 							$action_options = array();
 							foreach ( $actions as $action_slug ) {
 								if ( isset( $actions_data[ $action_slug ] ) ) {
-									$action_options[] = array(
+									$action_option = array(
 										'value' => $actions_data[ $action_slug ]['value'],
 										'label' => $actions_data[ $action_slug ]['label'],
 									);
+									if ( 'cancelled' === $actions_data[ $action_slug ]['value'] ) {
+										$action_option['danger']  = true;
+										$action_option['confirm'] = __( 'Cancel this subscription? This changes its renewal status.', 'subscription' );
+									}
+									$action_options[] = $action_option;
 								}
 							}
 							wpsubs_render_adv_select(
@@ -699,6 +746,23 @@ $subscrpt_details_ctx = array(
 					<?php else : ?>
 						<p class="subscrpt-muted"><?php esc_html_e( 'No actions available for this status.', 'subscription' ); ?></p>
 					<?php endif; ?>
+				</div>
+			</div>
+
+			<!-- Per-subscription renewal price override -->
+			<div class="subscrpt-card">
+				<div class="subscrpt-card__head"><?php esc_html_e( 'Renewal Price', 'subscription' ); ?></div>
+				<div class="subscrpt-card__body">
+					<?php $custom_renewal_price = get_post_meta( $subscription_id, '_subscrpt_custom_renewal_price', true ); ?>
+					<form method="post" action="<?php echo esc_url( $form_action ); ?>" class="subscrpt-action-form">
+						<?php wp_nonce_field( 'subscrpt_custom_renewal_price_' . $subscription_id, 'subscrpt_custom_renewal_price_nonce' ); ?>
+						<label for="subscrpt-custom-renewal-price" class="subscrpt-muted"><?php esc_html_e( 'Optional amount charged on future renewals', 'subscription' ); ?></label>
+						<input id="subscrpt-custom-renewal-price" name="subscrpt_custom_renewal_price" type="number" min="0" step="0.01" value="<?php echo esc_attr( $custom_renewal_price ); ?>" style="width:100%;margin-top:7px;" />
+						<p class="description"><?php esc_html_e( 'Leave blank to use the store renewal setting.', 'subscription' ); ?></p>
+						<button type="submit" name="subscrpt_save_renewal_price" value="1" class="wpsubs-btn wpsubs-btn--secondary" style="width:100%;justify-content:center;margin-top:8px;">
+							<?php esc_html_e( 'Save Renewal Price', 'subscription' ); ?>
+						</button>
+					</form>
 				</div>
 			</div>
 
@@ -794,6 +858,25 @@ $subscrpt_details_ctx = array(
 }
 .subscrpt-detail-head__sep { color: var(--wpsubs-text-subtle); }
 .subscrpt-detail-head__divider { border-top: 1px dashed #d0d3d7; }
+
+/* State-first operational notice. This supplements, rather than replaces, the
+	full history and action controls below it. */
+.subscrpt-state-notice {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	padding: 13px 16px;
+	margin-bottom: 20px;
+	border: 1px solid var(--wpsubs-border);
+	border-radius: var(--wpsubs-radius);
+	background: var(--wpsubs-surface);
+	color: var(--wpsubs-text);
+}
+.subscrpt-state-notice--active { background: #f0fdf4; border-color: #bbf7d0; }
+.subscrpt-state-notice__icon { flex: 0 0 auto; width: 20px; height: 20px; font-size: 20px; color: #15803d; }
+.subscrpt-state-notice--neutral .subscrpt-state-notice__icon { color: var(--wpsubs-text-muted); }
+.subscrpt-state-notice strong { display: block; font-size: 13px; line-height: 1.4; }
+.subscrpt-state-notice p { margin: 2px 0 0; color: var(--wpsubs-text-muted); font-size: 13px; line-height: 1.4; }
 
 /* Summary metric strip */
 .subscrpt-summary {
@@ -1048,20 +1131,9 @@ $subscrpt_details_ctx = array(
 .subscrpt-customer-line a:hover { text-decoration: underline; }
 
 .subscrpt-subs-details .subscrpt-muted { color: var(--wpsubs-text-muted); font-size: 13px; margin: 0; }
+.subscrpt-action-state { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--wpsubs-border); }
+.subscrpt-action-state__label { color: var(--wpsubs-text-muted); font-size: 12px; }
 .subscrpt-action-form .wpsubs-adv-select { width: 100%; }
 .subscrpt-action-form .wpsubs-adv-select__trigger { width: 100%; }
 
-.subscrpt-upgrade-banner {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 16px;
-	flex-wrap: wrap;
-	padding: 16px;
-	border: 1px solid var(--wpsubs-brand);
-	border-radius: var(--wpsubs-radius-sm);
-	background: var(--wpsubs-brand-light);
-}
-.subscrpt-upgrade-banner strong { color: var(--wpsubs-text); font-size: 14px; }
-.subscrpt-upgrade-banner p { margin: 4px 0 0; font-size: 13px; color: var(--wpsubs-text-muted); }
 </style>

@@ -1,4 +1,4 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase -- This filename is part of the imported public compatibility surface.
 /**
  * Shared email behaviour for subscription mails.
  *

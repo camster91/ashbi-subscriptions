@@ -1,9 +1,17 @@
 <?php
+/**
+ * Verify privacy-safe fleet audit reduction.
+ *
+ * @package AshbiSubscriptions\Tests
+ */
 
 use PHPUnit\Framework\TestCase;
 
+/** Verify aggregate audit output is bounded and schema-safe. */
 final class SiteAuditSummaryTest extends TestCase {
 	/**
+	 * Run the standalone audit summarizer with fabricated input.
+	 *
 	 * @param array $payload Audit payload.
 	 * @return array{exit:int,stdout:string,stderr:string}
 	 */
@@ -34,22 +42,35 @@ final class SiteAuditSummaryTest extends TestCase {
 		);
 	}
 
+	/** Verify unexpected nested fields are dropped and categories are aggregated. */
 	public function test_reducer_drops_unexpected_nested_fields_and_aggregates_unknown_categories(): void {
 		$result = $this->runSummary(
 			array(
 				'schema_version' => 2,
-				'site' => array( 'url' => 'https://client.example' ),
-				'subscriptions' => array(
-					'overdue_active' => 3,
+				'site'           => array( 'url' => 'https://client.example' ),
+				'subscriptions'  => array(
+					'overdue_active'         => 3,
 					'overdue_reconciliation' => array(
-						'total' => 3,
-						'due_age_buckets' => array( '8_30_days' => '2', 'customer_123' => 99 ),
-						'auto_renew' => array( 'enabled' => 2, 'email@example.test' => 1 ),
-						'payment_failure_history' => array( 'recorded' => 1 ),
-						'latest_paid_gateway' => array( 'stripe' => 2, 'secret_custom_gateway' => 1 ),
-						'last_paid_age_buckets' => array( '31_90_days' => 3 ),
-						'open_renewal_order_statuses' => array( 'pending' => 1, 'order_987' => 2 ),
-						'raw_records' => array( array( 'customer_email' => 'email@example.test' ) ),
+						'total'                       => 3,
+						'due_age_buckets'             => array(
+							'8_30_days'    => '2',
+							'customer_123' => 99,
+						),
+						'auto_renew'                  => array(
+							'enabled'            => 2,
+							'email@example.test' => 1,
+						),
+						'payment_failure_history'     => array( 'recorded' => 1 ),
+						'latest_paid_gateway'         => array(
+							'stripe'                => 2,
+							'secret_custom_gateway' => 1,
+						),
+						'last_paid_age_buckets'       => array( '31_90_days' => 3 ),
+						'open_renewal_order_statuses' => array(
+							'pending'   => 1,
+							'order_987' => 2,
+						),
+						'raw_records'                 => array( array( 'customer_email' => 'email@example.test' ) ),
 					),
 				),
 			)
@@ -66,6 +87,7 @@ final class SiteAuditSummaryTest extends TestCase {
 		self::assertSame( 2, $decoded['overdue_reconciliation']['open_renewal_order_statuses']['other'] );
 	}
 
+	/** Verify an unknown audit schema fails closed. */
 	public function test_reducer_rejects_unknown_schema_versions(): void {
 		$result = $this->runSummary( array( 'schema_version' => 3 ) );
 

@@ -1,4 +1,9 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- This filename is part of the imported public compatibility surface.
+/**
+ * Status-change email sent to administrators.
+ *
+ * @package SpringDevs\Subscription\Illuminate\Emails
+ */
 
 namespace SpringDevs\Subscription\Illuminate\Emails;
 

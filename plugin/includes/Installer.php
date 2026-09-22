@@ -1,4 +1,12 @@
 <?php
+/**
+ * Subscription database installer and upgrade routines.
+ *
+ * @package SpringDevs\Subscription
+ */
+
+// The filename is part of the imported public class path.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
 
 namespace SpringDevs\Subscription;
 
@@ -17,7 +25,7 @@ class Installer {
 	 *
 	 * @var string
 	 */
-	const DB_VERSION = '1.4.0';
+	const DB_VERSION = '1.5.0';
 
 	/**
 	 * Run the installer
@@ -90,6 +98,7 @@ class Installer {
 		$this->create_histories_table();
 		$this->create_stats_snapshot_table();
 		$this->create_cancellation_feedback_table();
+		$this->create_recovery_events_table();
 		$this->create_plan_group_table();
 		$this->create_plan_table();
 		$this->create_plan_relation_table();
@@ -138,7 +147,7 @@ class Installer {
 		foreach ( $rows as $row ) {
 			$subscription_id = (int) $row->subscription_id;
 			$order_id        = (int) $row->order_id;
-			$order = wc_get_order( $order_id );
+			$order           = wc_get_order( $order_id );
 			if ( ! $order || ! in_array( $order->get_status(), array( 'pending', 'failed', 'on-hold' ), true ) ) {
 				continue;
 			}
@@ -147,11 +156,11 @@ class Installer {
 
 		$blocked = array();
 		foreach ( $open_orders as $subscription_id => $orders ) {
-			$period_anchor = (int) get_post_meta( $subscription_id, '_subscrpt_next_date', true );
-			$order         = 1 === count( $orders ) ? reset( $orders ) : false;
-			$date_created  = $order ? $order->get_date_created() : false;
-			$created_at    = $date_created ? $date_created->getTimestamp() : 0;
-			$unambiguous   = $order && $period_anchor > 0 && $created_at >= ( $period_anchor - DAY_IN_SECONDS );
+			$period_anchor   = (int) get_post_meta( $subscription_id, '_subscrpt_next_date', true );
+			$order           = 1 === count( $orders ) ? reset( $orders ) : false;
+			$date_created    = $order ? $order->get_date_created() : false;
+			$created_at      = $date_created ? $date_created->getTimestamp() : 0;
+			$unambiguous     = $order && $period_anchor > 0 && $created_at >= ( $period_anchor - DAY_IN_SECONDS );
 			$stripe_customer = $order ? (string) $order->get_meta( '_stripe_customer_id' ) : '';
 			$stripe_intent   = $order ? (string) $order->get_meta( '_stripe_intent_id' ) : '';
 			$is_stripe       = $order && (
@@ -159,8 +168,8 @@ class Installer {
 				|| '' !== $stripe_customer
 			);
 			if ( $is_stripe && ( '' === $stripe_customer || 0 !== strpos( $stripe_intent, 'pi_' ) ) ) {
-				// A pre-migration worker may have created a remote PaymentIntent before
-				// saving its ID. Without both historical values, automatic redispatch
+				// A pre-migration worker may have created a remote PaymentIntent before.
+				// saving its ID. Without both historical values, automatic redispatch.
 				// cannot conclusively rule out a charge under a prior customer.
 				$unambiguous = false;
 			}
@@ -171,7 +180,7 @@ class Installer {
 				if ( $is_stripe ) {
 					$order->update_meta_data( '_subscrpt_stripe_renewal_customer', $stripe_customer );
 				}
-				$order->save();
+				$order->save_meta_data();
 				$persisted_order = wc_get_order( $order->get_id() );
 				if (
 					! $persisted_order
@@ -181,7 +190,7 @@ class Installer {
 					$blocked[] = (int) $subscription_id;
 					$order->update_meta_data( '_subscrpt_renewal_quarantined', 1 );
 					$order->add_order_note( __( 'Payment blocked because the canonical renewal identity could not be persisted during migration. Reconcile this order before accepting payment.', 'subscription' ) );
-					$order->save();
+					$order->save_meta_data();
 					subscrpt_write_log( "Renewal migration blocked for subscription #{$subscription_id}; canonical order metadata could not be persisted." );
 				}
 				continue;
@@ -195,7 +204,7 @@ class Installer {
 
 				$open_order->update_meta_data( '_subscrpt_renewal_quarantined', 1 );
 				$open_order->add_order_note( __( 'Payment blocked during Ashbi Subscriptions migration because the renewal period is ambiguous. Reconcile this order before accepting payment.', 'subscription' ) );
-				$open_order->save();
+				$open_order->save_meta_data();
 			}
 			subscrpt_write_log( "Renewal migration blocked for subscription #{$subscription_id}; open orders require reconciliation." );
 		}
@@ -396,6 +405,41 @@ class Installer {
                       `comment` TEXT NULL,
                       `created_at` DATETIME NOT NULL,
                       PRIMARY KEY (`id`),
+                      KEY `subscription_id` (`subscription_id`),
+                      KEY `created_at` (`created_at`)
+                    ) $charset_collate";
+
+		dbDelta( $schema );
+	}
+
+	/**
+	 * Create the local recovery-campaign event ledger.
+	 *
+	 * Events are keyed so repeated AJAX requests, webhook deliveries, and order
+	 * callbacks cannot double-count a campaign outcome. Aggregate report queries
+	 * never select customer IDs, comments, or offer contents.
+	 *
+	 * @return void
+	 */
+	public function create_recovery_events_table() {
+		global $wpdb;
+
+		$charset_collate = $wpdb->get_charset_collate();
+		$table_name      = $wpdb->prefix . 'subscrpt_recovery_event';
+
+		$schema = "CREATE TABLE IF NOT EXISTS `{$table_name}` (
+                      `id` BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+                      `event_key` VARCHAR(191) NOT NULL,
+                      `subscription_id` BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
+                      `customer_id` BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
+                      `order_id` BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
+                      `campaign_key` VARCHAR(80) NOT NULL DEFAULT '',
+                      `event_type` VARCHAR(40) NOT NULL DEFAULT '',
+                      `offer_code` VARCHAR(100) NOT NULL DEFAULT '',
+                      `created_at` DATETIME NOT NULL,
+                      PRIMARY KEY (`id`),
+                      UNIQUE KEY `event_key` (`event_key`),
+                      KEY `campaign_event` (`campaign_key`,`event_type`),
                       KEY `subscription_id` (`subscription_id`),
                       KEY `created_at` (`created_at`)
                     ) $charset_collate";

@@ -5,6 +5,8 @@
  * @package SpringDevs\Subscription
  */
 
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- Legacy class filename is part of the public plugin compatibility contract.
+
 namespace SpringDevs\Subscription;
 
 use SpringDevs\Subscription\Frontend\ActionController;
@@ -14,6 +16,7 @@ use SpringDevs\Subscription\Frontend\MyAccount;
 use SpringDevs\Subscription\Frontend\Order as FrontendOrder;
 use SpringDevs\Subscription\Frontend\Plans;
 use SpringDevs\Subscription\Frontend\Product;
+use SpringDevs\Subscription\Frontend\PaymentMethodController;
 
 /**
  * Frontend handler class
@@ -25,15 +28,13 @@ class Frontend {
 	 */
 	public function __construct() {
 		new Product();
-		// Pro ships a superset storefront plan UI (multi-plan selector, per-variation
-		// swap) on the same hooks, so free's single-line display runs only when Pro is
-		// absent — otherwise the two would double-render.
-		if ( ! subscrpt_pro_activated() ) {
-			new Plans();
-		}
+		// Ashbi owns the storefront plan UI, including multi-plan selectors and.
+		// per-variation terms. It is not delegated to the legacy paid plugin.
+		new Plans();
 		new Cart();
 		new FrontendOrder();
 		new ActionController();
+		new PaymentMethodController();
 		new MyAccount();
 		new Downloadable();
 	}

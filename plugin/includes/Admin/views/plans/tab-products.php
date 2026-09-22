@@ -2,9 +2,9 @@
 /**
  * Plan detail - Products tab.
  *
- * Lists the products attached to this plan group. In free this is read-only:
- * products are connected from their own editor. With Pro active, an "Add
- * Products" bulk picker is available here.
+ * Lists and manages the products attached to this plan group. Product
+ * relations and prices are owned by Ashbi's plan API throughout the
+ * standalone build.
  *
  * @var array $plan Plan (PlanPresenter shape).
  *
@@ -15,7 +15,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-$pro_active = function_exists( 'subscrpt_pro_activated' ) && subscrpt_pro_activated();
 // Products can only be attached once the plan group has at least one term.
 $has_terms = ! empty( $plan['terms'] );
 ?>
@@ -46,7 +45,7 @@ $has_terms = ! empty( $plan['terms'] );
 		 * When $one_time is provided, a "One-time purchase" row is appended: its
 		 * price is the product's/variation's native WooCommerce price and the
 		 * card's single Save persists both the plan relations and the one-time
-		 * native price. Pro-gated (read-only + Pro badge when Pro is inactive).
+		 * native price.
 		 *
 		 * @param array      $rows     Price rows (term / regular / offer / …).
 		 * @param array|null $one_time One-time data: enabled, regular, offer.
@@ -114,8 +113,8 @@ $has_terms = ! empty( $plan['terms'] );
 								</span>
 							</td>
 						<?php
-						// Two independent conditions, so two wrappers: the outer is the card's
-						// read/edit cycle, the inner is the toggle. One element carrying both
+						// Two independent conditions, so two wrappers: the outer is the card's.
+						// read/edit cycle, the inner is the toggle. One element carrying both.
 						// would have them fight over `display`.
 						$subscrpt_ot_hidden = $subscrpt_ot_on ? '' : ' style="display:none;"';
 						?>
@@ -173,8 +172,7 @@ $has_terms = ! empty( $plan['terms'] );
 		/**
 		 * Render a simple product's one-time purchase card (its own toggle + Save).
 		 * One-time is product-specific: the price is the product’s native
-		 * WooCommerce price (regular = one-time, sale = offer). Pro-gated: disabled
-		 * with a Pro badge when Pro is inactive. Variable products use the
+		 * WooCommerce price (regular = one-time, sale = offer). Variable products use the
 		 * per-variation one-time row inside render_rows().
 		 *
 		 * @param array $product Product entry (PlanPresenter shape).
@@ -284,11 +282,9 @@ $has_terms = ! empty( $plan['terms'] );
 									<?php esc_html_e( 'Preview product', 'subscription' ); ?>
 								</a>
 							<?php endif; ?>
-							<?php if ( $pro_active ) : ?>
-								<button type="button" class="wpsubs-btn wpsubs-btn--outline wpsubs-btn--sm wpsubs-btn--danger" data-subscrpt-remove-product="<?php echo esc_attr( $product['id'] ); ?>">
-									<?php esc_html_e( 'Remove', 'subscription' ); ?>
-								</button>
-							<?php endif; ?>
+							<button type="button" class="wpsubs-btn wpsubs-btn--outline wpsubs-btn--sm wpsubs-btn--danger" data-subscrpt-remove-product="<?php echo esc_attr( $product['id'] ); ?>">
+								<?php esc_html_e( 'Remove', 'subscription' ); ?>
+							</button>
 						</div>
 					</div>
 
@@ -302,11 +298,9 @@ $has_terms = ! empty( $plan['terms'] );
 											<strong style="font-size:13px;color:var(--wpsubs-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?php echo esc_html( $variation['name'] ); ?></strong>
 											<span class="wpsubs-toolbar__spacer"></span>
 											<?php $subscrpt_price_actions(); ?>
-											<?php if ( $pro_active ) : ?>
-												<button type="button" class="wpsubs-btn wpsubs-btn--outline wpsubs-btn--sm wpsubs-btn--danger" data-subscrpt-remove-variation data-oid="<?php echo esc_attr( $product['id'] ); ?>" data-vid="<?php echo esc_attr( $variation['vid'] ); ?>">
-													<?php esc_html_e( 'Remove', 'subscription' ); ?>
-												</button>
-											<?php endif; ?>
+							<button type="button" class="wpsubs-btn wpsubs-btn--outline wpsubs-btn--sm wpsubs-btn--danger" data-subscrpt-remove-variation data-oid="<?php echo esc_attr( $product['id'] ); ?>" data-vid="<?php echo esc_attr( $variation['vid'] ); ?>">
+									<?php esc_html_e( 'Remove', 'subscription' ); ?>
+							</button>
 										</div>
 										<?php
 										$subscrpt_render_rows(

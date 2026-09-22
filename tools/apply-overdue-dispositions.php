@@ -29,7 +29,12 @@ require_once __DIR__ . '/lib/overdue-evidence.php';
 
 use Ashbi\Subscriptions\Tools\OverdueDispositionPlan;
 
-/** @param mixed $ids Candidate IDs. @return int[] */
+/**
+ * Normalize candidate subscription IDs.
+ *
+ * @param mixed $ids Candidate IDs.
+ * @return int[] Normalized IDs.
+ */
 function ashbi_disposition_ids( $ids ): array {
 	if ( ! is_array( $ids ) ) {
 		return array();
@@ -39,7 +44,13 @@ function ashbi_disposition_ids( $ids ): array {
 	return $ids;
 }
 
-/** @param int[] $ids Exact option value. */
+/**
+ * Persist and verify an exact option ID list.
+ *
+ * @param string $option Option name.
+ * @param int[]  $ids    Exact option value.
+ * @return bool Whether the stored value matches.
+ */
 function ashbi_disposition_write_ids( string $option, array $ids ): bool {
 	$ids = ashbi_disposition_ids( $ids );
 	if ( empty( $ids ) ) {
@@ -47,7 +58,7 @@ function ashbi_disposition_write_ids( string $option, array $ids ): bool {
 		return false === get_option( $option, false );
 	}
 	update_option( $option, $ids, false );
-	return $ids === ashbi_disposition_ids( get_option( $option, array() ) );
+	return ashbi_disposition_ids( get_option( $option, array() ) ) === $ids;
 }
 
 /** Rebuild the fail-closed active union from source-owned inventories. */
@@ -64,7 +75,7 @@ try {
 	if ( '' === $worksheet_path || ! is_file( $worksheet_path ) || ! is_readable( $worksheet_path ) ) {
 		throw new RuntimeException( 'ASHBI_DISPOSITION_WORKSHEET must name a readable server-local file.' );
 	}
-	if ( '' === $expected_site || $expected_site !== site_url() ) {
+	if ( '' === $expected_site || site_url() !== $expected_site ) {
 		throw new RuntimeException( 'ASHBI_EXPECTED_SITE_URL must exactly match the current WordPress site URL.' );
 	}
 	$raw       = file_get_contents( $worksheet_path );
@@ -82,28 +93,28 @@ try {
 	$advance = array();
 	$held    = array();
 	foreach ( $worksheet['records'] as $record ) {
-		$id = (int) $record['subscription_id'];
-		if ( ! in_array( $id, $overdue, true ) ) {
-			throw new RuntimeException( "Subscription #{$id} is not in the source-owned overdue quarantine." );
+		$subscription_id = (int) $record['subscription_id'];
+		if ( ! in_array( $subscription_id, $overdue, true ) ) {
+			throw new RuntimeException( "Subscription #{$subscription_id} is not in the source-owned overdue quarantine." );
 		}
-		$current = ashbi_overdue_evidence_record( $id, $now );
+		$current = ashbi_overdue_evidence_record( $subscription_id, $now );
 		if ( null === $current ) {
-			throw new RuntimeException( "Subscription #{$id} no longer exists." );
+			throw new RuntimeException( "Subscription #{$subscription_id} no longer exists." );
 		}
 		OverdueDispositionPlan::assert_current( $record, $current );
 		if ( 'advance_without_charge' === $record['operator_disposition'] ) {
-			$recurrence = OverdueDispositionPlan::recurrence_string( $record );
-			$anchor     = strtotime( (string) $record['next_date_utc'] );
-			$next       = OverdueDispositionPlan::future_anchor(
+			$recurrence     = OverdueDispositionPlan::recurrence_string( $record );
+			$anchor         = strtotime( (string) $record['next_date_utc'] );
+			$next           = OverdueDispositionPlan::future_anchor(
 				(int) $anchor,
 				$now,
 				static function ( int $from ) use ( $recurrence ): int {
 					return (int) sdevs_wp_strtotime( $recurrence, $from );
 				}
 			);
-			$advance[ $id ] = $next;
+			$advance[ $subscription_id ] = $next;
 		} else {
-			$held[] = $id;
+			$held[] = $subscription_id;
 		}
 	}
 
@@ -112,8 +123,8 @@ try {
 	WP_CLI::line( 'Will remain quarantined: ' . count( $held ) . '.' );
 	WP_CLI::line( 'Confirmation digest: ' . $digest );
 
-	$mode = (string) getenv( 'ASHBI_DISPOSITION_MODE' );
-	if ( 'apply-no-charge' !== $mode ) {
+	$disposition_mode = (string) getenv( 'ASHBI_DISPOSITION_MODE' );
+	if ( 'apply-no-charge' !== $disposition_mode ) {
 		WP_CLI::success( 'Dry-run only; no data changed.' );
 		return;
 	}
@@ -133,14 +144,14 @@ try {
 		throw new RuntimeException( 'Could not establish and verify the pre-apply operator hold.' );
 	}
 
-	foreach ( $advance as $id => $next ) {
-		update_post_meta( $id, '_subscrpt_next_date', $next );
-		if ( $next !== (int) get_post_meta( $id, '_subscrpt_next_date', true ) ) {
-			throw new RuntimeException( "Could not verify the advanced date for subscription #{$id}; all records remain held." );
+	foreach ( $advance as $subscription_id => $next ) {
+		update_post_meta( $subscription_id, '_subscrpt_next_date', $next );
+		if ( (int) get_post_meta( $subscription_id, '_subscrpt_next_date', true ) !== $next ) {
+			throw new RuntimeException( "Could not verify the advanced date for subscription #{$subscription_id}; all records remain held." );
 		}
-		update_post_meta( $id, '_subscrpt_no_charge_disposition_digest', $digest );
-		if ( ! hash_equals( $digest, (string) get_post_meta( $id, '_subscrpt_no_charge_disposition_digest', true ) ) ) {
-			throw new RuntimeException( "Could not verify the disposition audit marker for subscription #{$id}; all records remain held." );
+		update_post_meta( $subscription_id, '_subscrpt_no_charge_disposition_digest', $digest );
+		if ( ! hash_equals( $digest, (string) get_post_meta( $subscription_id, '_subscrpt_no_charge_disposition_digest', true ) ) ) {
+			throw new RuntimeException( "Could not verify the disposition audit marker for subscription #{$subscription_id}; all records remain held." );
 		}
 	}
 

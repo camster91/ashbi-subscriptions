@@ -55,7 +55,7 @@ $reconciliation = isset( $data['subscriptions']['overdue_reconciliation'] ) && i
 	? $data['subscriptions']['overdue_reconciliation']
 	: array();
 
-$age_buckets = array( '0_7_days', '8_30_days', '31_90_days', '91_365_days', 'over_365_days' );
+$age_buckets         = array( '0_7_days', '8_30_days', '31_90_days', '91_365_days', 'over_365_days' );
 $safe_reconciliation = array(
 	'total'                       => max( 0, (int) ( $reconciliation['total'] ?? 0 ) ),
 	'due_age_buckets'             => ashbi_project_audit_buckets( $reconciliation['due_age_buckets'] ?? array(), $age_buckets ),

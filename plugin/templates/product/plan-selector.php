@@ -3,28 +3,29 @@
  * Storefront plan selector — shared base template.
  *
  * A radio card per plan group; a group's terms render as buttons beneath its
- * billing note; the chosen plan-term id posts via the hidden field. This is the
- * base template shipped by the free plugin and reused by Pro — the discount
- * badge and the One-Time card only render when Pro supplies that data (a `badge`
- * on a group / a group of type `one_time`); free never sets them.
+ * billing note; the chosen plan-term id posts via the hidden field. Variable
+ * products additionally carry all variation contexts in a JSON attribute so
+ * the browser can switch terms after WooCommerce resolves a variation.
  *
  * Override by copying to <your_theme>/subscription/product/plan-selector.php
  *
- * @var array $groups Plan groups (id, type, label, price, old_price, badge, terms[]).
+ * @var array $groups   Plan groups (id, type, label, price, old_price, badge, terms[]).
+ * @var array $contexts Variation contexts (variation_id, groups).
  *
  * @package SpringDevs\Subscription
  */
 
 defined( 'ABSPATH' ) || exit;
 
-// The first card is pre-selected; seed the posted plan id from its first term
+// The first card is pre-selected; seed the posted plan id from its first term.
 // so the submitted value always matches the visible selection (One-Time = empty).
 $default_plan_id = '';
 if ( ! empty( $groups[0]['terms'] ) ) {
 	$default_plan_id = $groups[0]['terms'][0]['id'];
 }
 ?>
-<div class="subscrpt-buybox" data-subscrpt-buybox>
+<?php $subscrpt_is_variable = ! empty( $contexts[0]['variation_id'] ); ?>
+<div class="subscrpt-buybox" data-subscrpt-buybox data-subscrpt-variable="<?php echo $subscrpt_is_variable ? '1' : '0'; ?>" data-subscrpt-plan-contexts="<?php echo esc_attr( wp_json_encode( $contexts ?? array() ) ); ?>">
 	<input type="hidden" name="subscrpt_plan_id" value="<?php echo esc_attr( $default_plan_id ); ?>" data-subscrpt-plan-id />
 	<?php foreach ( $groups as $index => $group ) : ?>
 		<?php

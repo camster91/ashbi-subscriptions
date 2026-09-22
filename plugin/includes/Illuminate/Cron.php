@@ -1,5 +1,8 @@
 <?php
 
+// PSR-4 class filename is retained for the public cron compatibility path.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
+
 namespace SpringDevs\Subscription\Illuminate;
 
 /**
@@ -13,11 +16,11 @@ class Cron {
 	 * Initialize the class.
 	 */
 	public function __construct() {
-		add_action( 'subscrpt_hourly_cron', [ $this, 'hourly_cron_task' ] );
+		add_action( 'subscrpt_hourly_cron', array( $this, 'hourly_cron_task' ) );
 
 		// ? Dev Note: This is a backward compatibility measure. Remove following action and maybe_reschedule_cron() method after 1 Jan, 2027.
 		// Safety net: if the old WP-Cron event fires before migration clears it, still process subscriptions.
-		add_action( 'subscrpt_daily_cron', [ $this, 'hourly_cron_task' ] );
+		add_action( 'subscrpt_daily_cron', array( $this, 'hourly_cron_task' ) );
 		$this->maybe_reschedule_cron();
 	}
 
@@ -67,37 +70,43 @@ class Cron {
 	 * {@see Cancellation}, not here.
 	 */
 	public function update_subscription_statusses() {
-		$args = [
+		$args = array(
 			'post_type'   => 'subscrpt_order',
-			'post_status' => [ 'active' ],
+			'post_status' => array( 'active' ),
 			'fields'      => 'ids',
-			'meta_query'  => [
+			// `get_posts()` otherwise defaults to five rows, leaving legitimate
+			// renewals after the first batch for a later hourly run.
+			'posts_per_page' => -1,
+			'no_found_rows'  => true,
+			'orderby'        => 'ID',
+			'order'          => 'ASC',
+			'meta_query'  => array(
 				'relation' => 'OR',
-				[
+				array(
 					'key'     => '_subscrpt_next_date',
 					'value'   => time(),
 					'compare' => '<=',
-				],
-				[
+				),
+				array(
 					'relation' => 'AND',
-					[
+					array(
 						'key'     => '_subscrpt_trial',
 						'value'   => null,
 						'compare' => '!=',
-					],
-					[
+					),
+					array(
 						'key'     => '_subscrpt_start_date',
 						'value'   => time(),
 						'compare' => '<=',
-					],
-				],
-			],
-		];
+					),
+				),
+			),
+		);
 
 		$expired_subscriptions = get_posts( $args );
 
 		if ( $expired_subscriptions && count( $expired_subscriptions ) > 0 ) {
-			// Initialize WooCommerce mailer before processing
+			// Initialize WooCommerce mailer before processing.
 			if ( function_exists( 'WC' ) && WC()->mailer() ) {
 				foreach ( $expired_subscriptions as $subscription ) {
 					if ( function_exists( 'subscrpt_renewal_is_migration_blocked' ) && subscrpt_renewal_is_migration_blocked( (int) $subscription ) ) {

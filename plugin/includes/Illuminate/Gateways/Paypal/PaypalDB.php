@@ -5,6 +5,9 @@
  * @package SpringDevs\Subscription\Illuminate\Gateways\Paypal
  */
 
+// PSR-4 class filename is retained for the public gateway compatibility path.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
+
 namespace SpringDevs\Subscription\Illuminate\Gateways\Paypal;
 
 /**
@@ -77,12 +80,12 @@ class PaypalDB {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$wpdb->replace(
 			$table,
-			[
+			array(
 				'paypal_id'       => $paypal_id,
 				'order_id'        => $order_id,
 				'subscription_id' => $subscription_id,
-			],
-			[ '%s', '%d', '%d' ]
+			),
+			array( '%s', '%d', '%d' )
 		);
 
 		// Invalidate read caches for this paypal_id.

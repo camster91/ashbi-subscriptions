@@ -1,4 +1,4 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- This filename is part of the imported public compatibility surface.
 /**
  * Plan presenter - maps PlanRepository rows to the admin template shape.
  *
@@ -83,7 +83,7 @@ class PlanPresenter {
 	protected static function products( $tree, $type_key ) {
 		$by_product = array();
 
-		// First pass: register each connected product + index its relations by
+		// First pass: register each connected product + index its relations by.
 		// [vid][plan_id] (vid 0 = the product-level / seed connection).
 		foreach ( $tree['plans'] as $plan ) {
 			foreach ( $plan['relations'] as $relation ) {
@@ -125,8 +125,8 @@ class PlanPresenter {
 			$rel = $entry['_rel'];
 
 			if ( $entry['is_variable'] ) {
-				// One card per real variation. Each (variation × plan) price uses
-				// the variation's own relation, falling back to the product-level
+				// One card per real variation. Each (variation × plan) price uses.
+				// the variation's own relation, falling back to the product-level.
 				// (vid 0) seed; editing seeds a per-variation relation.
 				$product  = function_exists( 'wc_get_product' ) ? wc_get_product( $oid ) : null;
 				$children = $product ? $product->get_children() : array();
@@ -227,8 +227,8 @@ class PlanPresenter {
 		$discount_type  = $data['discount_type'] ?? 'percentage';
 		$discount_value = isset( $data['discount_value'] ) ? (string) $data['discount_value'] : '0';
 
-		// A real offer exists only when the effective price is below the regular
-		// (an explicit sale price or a discount). Without one, offer_price() equals
+		// A real offer exists only when the effective price is below the regular.
+		// (an explicit sale price or a discount). Without one, offer_price() equals.
 		// the regular price, so the display must not repeat it in the offer column.
 		$offer_num = self::offer_price( $regular, $selling, $discount_type, $discount_value );
 		$has_offer = '' !== $regular && $offer_num < (float) $regular;

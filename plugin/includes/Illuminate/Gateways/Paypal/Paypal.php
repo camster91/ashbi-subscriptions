@@ -1,9 +1,16 @@
 <?php
+/**
+ * PayPal gateway integration for subscription payments and reconciliation.
+ *
+ * @package SpringDevs\Subscription\Illuminate\Gateways
+ */
+
+// PSR-4 class filename is retained for the public gateway compatibility path.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
 
 namespace SpringDevs\Subscription\Illuminate\Gateways\Paypal;
 
 use Exception;
-use PHPUnit\TextUI\Help;
 use SpringDevs\Subscription\Illuminate\Action;
 use SpringDevs\Subscription\Illuminate\Helper;
 use SpringDevs\Subscription\Illuminate\Subscription\Subscription;
@@ -69,8 +76,10 @@ class Paypal extends \WC_Payment_Gateway {
 		$this->has_fields         = false;
 		$this->method_title       = __( 'PayPal for Ashbi Subscriptions', 'subscription' );
 		$this->method_description = __( 'Accept recurring subscription payments through PayPal.', 'subscription' );
-		$this->supports           = [ 'products', 'subscriptions', 'refunds' ];
-		$this->icon               = apply_filters( 'wp_subscription_paypal_icon', SUBSCRPT_URL . '/assets/images/integrations/paypal.svg' );
+		$this->supports           = array( 'products', 'subscriptions', 'refunds' );
+		// Do not distribute or reference a provider logo. Integrators may still.
+		// supply their own licensed artwork through the legacy filter.
+		$this->icon = apply_filters( 'wp_subscription_paypal_icon', '' );
 
 		// Load the settings.
 		$this->init_form_fields();
@@ -136,20 +145,20 @@ class Paypal extends \WC_Payment_Gateway {
 	 * Initialize actions for the gateway.
 	 */
 	protected function init_actions() {
-		add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, [ $this, 'process_admin_options' ] );
+		add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, array( $this, 'process_admin_options' ) );
 
 		// Process order after payment.
-		add_action( 'woocommerce_thankyou', [ $this, 'order_received_page' ] );
+		add_action( 'woocommerce_thankyou', array( $this, 'order_received_page' ) );
 
 		// Hide gateway if no wp_subscription products are available.
-		add_filter( 'woocommerce_available_payment_gateways', [ $this,'remove_wp_subs_paypal_gateway' ] );
+		add_filter( 'woocommerce_available_payment_gateways', array( $this, 'remove_wp_subs_paypal_gateway' ) );
 
 		// WooCommerce webhook.
-		add_action( 'woocommerce_api_' . $this->id, [ $this, 'process_webhook' ] );
+		add_action( 'woocommerce_api_' . $this->id, array( $this, 'process_webhook' ) );
 
 		// Cancel subscription.
-		add_action( 'subscrpt_subscription_expired', [ $this, 'handle_subscription_cancellation' ] );
-		add_action( 'subscrpt_subscription_cancelled', [ $this, 'handle_subscription_cancellation' ] );
+		add_action( 'subscrpt_subscription_expired', array( $this, 'handle_subscription_cancellation' ) );
+		add_action( 'subscrpt_subscription_cancelled', array( $this, 'handle_subscription_cancellation' ) );
 	}
 
 	/**
@@ -157,16 +166,16 @@ class Paypal extends \WC_Payment_Gateway {
 	 */
 	public function init_form_fields() {
 		// Gateway settings styles.
-		wp_enqueue_style( 'wp-subscription-gateway-settings', SUBSCRPT_ASSETS . '/css/gateway.css', [], SUBSCRPT_VERSION, 'all' );
+		wp_enqueue_style( 'wp-subscription-gateway-settings', SUBSCRPT_ASSETS . '/css/gateway.css', array(), SUBSCRPT_VERSION, 'all' );
 
 		// Settings JS.
-		wp_enqueue_script( 'wp-subscription-gateway-settings-script', SUBSCRPT_ASSETS . '/js/gateway.js', [ 'jquery' ], SUBSCRPT_VERSION, true );
+		wp_enqueue_script( 'wp-subscription-gateway-settings-script', SUBSCRPT_ASSETS . '/js/gateway.js', array( 'jquery' ), SUBSCRPT_VERSION, true );
 
 		// Live/Sandbox toggle script.
-		wp_enqueue_script( 'wp-subscription-gateway-settings-toggle-script', SUBSCRPT_ASSETS . '/js/gateway_options_toggler.js', [ 'jquery' ], SUBSCRPT_VERSION, true );
+		wp_enqueue_script( 'wp-subscription-gateway-settings-toggle-script', SUBSCRPT_ASSETS . '/js/gateway_options_toggler.js', array( 'jquery' ), SUBSCRPT_VERSION, true );
 
-		$this->form_fields = [
-			'enabled'                    => [
+		$this->form_fields = array(
+			'enabled'                    => array(
 				'title'       => __( 'Enable/Disable', 'subscription' ),
 				'type'        => 'checkbox',
 				'label'       => __( 'Enable PayPal for Ashbi Subscriptions', 'subscription' ),
@@ -174,8 +183,8 @@ class Paypal extends \WC_Payment_Gateway {
 				'description' => __( 'Enable or disable the PayPal subscription payment gateway.', 'subscription' ),
 				'desc_tip'    => true,
 				'class'       => 'wpsubs-toggle',
-			],
-			'testmode'                   => [
+			),
+			'testmode'                   => array(
 				'title'       => __( 'Test Mode', 'subscription' ),
 				'type'        => 'checkbox',
 				'label'       => __( 'Enable PayPal Sandbox', 'subscription' ),
@@ -183,38 +192,38 @@ class Paypal extends \WC_Payment_Gateway {
 				'description' => __( 'PayPal sandbox can be used to test payments without using real money.', 'subscription' ),
 				'desc_tip'    => true,
 				'class'       => 'wpsubs-toggle',
-			],
+			),
 
-			'title'                      => [
+			'title'                      => array(
 				'title'       => __( 'Title', 'subscription' ),
 				'type'        => 'text',
 				'description' => __( 'This controls the title which the user sees during checkout.', 'subscription' ),
 				'default'     => __( 'PayPal', 'subscription' ),
 				'desc_tip'    => true,
-			],
-			'description'                => [
+			),
+			'description'                => array(
 				'title'       => __( 'Description', 'subscription' ),
 				'type'        => 'textarea',
 				'description' => __( 'This controls the description which the user sees during checkout.', 'subscription' ),
 				'default'     => __( 'Pay via PayPal; you can pay with your credit card if you do not have a PayPal account.', 'subscription' ),
 				'desc_tip'    => true,
 				'css'         => 'width: 400px; height: 75px;',
-			],
+			),
 
-			'paypal_creds_title'         => [
+			'paypal_creds_title'         => array(
 				'title'       => __( 'PayPal Credentials', 'subscription' ),
 				'type'        => 'title',
 				'description' => '',
 				'class'       => 'wpsubs-paypal-live-creds',
-			],
-			'paypal_sandbox_creds_title' => [
+			),
+			'paypal_sandbox_creds_title' => array(
 				'title'       => __( 'PayPal Sandbox Credentials', 'subscription' ),
 				'type'        => 'title',
 				'description' => '',
 				'class'       => 'wpsubs-paypal-sandbox-creds',
-			],
+			),
 
-			'paypal_creds_desc'          => [
+			'paypal_creds_desc'          => array(
 				'title'       => '',
 				'type'        => 'title',
 				'description' => sprintf(
@@ -223,76 +232,76 @@ class Paypal extends \WC_Payment_Gateway {
 					'https://developer.paypal.com',
 					'https://developer.paypal.com/dashboard/applications'
 				),
-			],
-			'email'                      => [
+			),
+			'email'                      => array(
 				'title'       => __( 'Email', 'subscription' ),
 				'type'        => 'email',
 				'description' => __( 'PayPal Email Address (used to receive payments)', 'subscription' ),
 				'default'     => '',
 				'desc_tip'    => true,
-			],
+			),
 
 			// Live Credentials.
-			'client_id'                  => [
+			'client_id'                  => array(
 				'title'       => __( 'Client ID', 'subscription' ),
 				'type'        => 'password',
 				'description' => __( 'Enter your PayPal Client ID copied from PayPal Apps & Credentials.', 'subscription' ),
 				'default'     => '',
 				'desc_tip'    => true,
 				'class'       => 'wpsubs-paypal-live-creds',
-			],
-			'client_secret'              => [
+			),
+			'client_secret'              => array(
 				'title'       => __( 'Secret', 'subscription' ),
 				'type'        => 'password',
 				'description' => __( 'Enter your PayPal Secret copied from PayPal Apps & Credentials.', 'subscription' ),
 				'default'     => '',
 				'desc_tip'    => true,
 				'class'       => 'wpsubs-paypal-live-creds',
-			],
-			'webhook_id'                 => [
+			),
+			'webhook_id'                 => array(
 				'title'       => __( 'Webhook ID', 'subscription' ),
 				'type'        => 'password',
 				'description' => __( 'Enter your Webhook ID copied from PayPal Apps & Credentials for webhook validation.', 'subscription' ),
 				'default'     => '',
 				'desc_tip'    => true,
 				'class'       => 'wpsubs-paypal-live-creds',
-			],
+			),
 
 			// Sandbox Credentials.
-			'sandbox_client_id'          => [
+			'sandbox_client_id'          => array(
 				'title'       => __( 'Client ID', 'subscription' ),
 				'type'        => 'password',
 				'description' => __( 'Enter your PayPal Client ID copied from PayPal Apps & Credentials.', 'subscription' ),
 				'default'     => '',
 				'desc_tip'    => true,
 				'class'       => 'wpsubs-paypal-sandbox-creds',
-			],
-			'sandbox_client_secret'      => [
+			),
+			'sandbox_client_secret'      => array(
 				'title'       => __( 'Secret', 'subscription' ),
 				'type'        => 'password',
 				'description' => __( 'Enter your PayPal Secret copied from PayPal Apps & Credentials.', 'subscription' ),
 				'default'     => '',
 				'desc_tip'    => true,
 				'class'       => 'wpsubs-paypal-sandbox-creds',
-			],
-			'sandbox_webhook_id'         => [
+			),
+			'sandbox_webhook_id'         => array(
 				'title'       => __( 'Webhook ID', 'subscription' ),
 				'type'        => 'password',
 				'description' => __( 'Enter your Webhook ID copied from PayPal Apps & Credentials for webhook validation.', 'subscription' ),
 				'default'     => '',
 				'desc_tip'    => true,
 				'class'       => 'wpsubs-paypal-sandbox-creds',
-			],
+			),
 
-			'webhook_url'                => [
+			'webhook_url'                => array(
 				'title'       => __( 'Webhook URL', 'subscription' ),
 				'type'        => 'text',
 				'description' => __( '<p>In the <strong style="color:#1d4ed8">Apps & Credentials</strong> page of PayPal developer account open the newly created application and click <strong style="color:#1d4ed8">Add Webhook</strong> button.<br> On the <strong>Webhook URL</strong> field use this webhook link', 'subscription' ),
 				'default'     => $this->get_webhook_url(),
 				'disabled'    => true,
 				'class'       => 'wpsubs-webhook-url',
-			],
-		];
+			),
+		);
 	}
 
 	/**
@@ -305,7 +314,7 @@ class Paypal extends \WC_Payment_Gateway {
 			get_woocommerce_currency(),
 			apply_filters(
 				'wp_subs_paypal_supported_currencies',
-				[ 'AUD', 'BRL', 'CAD', 'MXN', 'NZD', 'HKD', 'SGD', 'USD', 'EUR', 'JPY', 'NOK', 'CZK', 'DKK', 'HUF', 'ILS', 'MYR', 'PHP', 'PLN', 'SEK', 'CHF', 'TWD', 'THB', 'GBP', 'RUB', 'INR' ]
+				array( 'AUD', 'BRL', 'CAD', 'MXN', 'NZD', 'HKD', 'SGD', 'USD', 'EUR', 'JPY', 'NOK', 'CZK', 'DKK', 'HUF', 'ILS', 'MYR', 'PHP', 'PLN', 'SEK', 'CHF', 'TWD', 'THB', 'GBP', 'RUB', 'INR' )
 			),
 			true
 		);
@@ -393,8 +402,8 @@ class Paypal extends \WC_Payment_Gateway {
 			}
 		}
 
-		// The PayPal approval must be for the exact subscription created for this
-		// WooCommerce order. Never let a return-query identifier select a different
+		// The PayPal approval must be for the exact subscription created for this.
+		// WooCommerce order. Never let a return-query identifier select a different.
 		// PayPal object and thereby serve as payment proof for the current order.
 		if (
 			empty( $paypal_subscription_id )
@@ -473,12 +482,12 @@ class Paypal extends \WC_Payment_Gateway {
 	public function process_webhook() {
 		// Get raw webhook data.
 		$raw_body = file_get_contents( 'php://input' );
-		$headers  = function_exists( 'getallheaders' ) ? getallheaders() : [];
+		$headers  = function_exists( 'getallheaders' ) ? getallheaders() : array();
 
 		if ( empty( $raw_body ) ) {
 			subscrpt_write_log( 'PayPal webhook data is empty.' );
 			subscrpt_write_debug_log( 'PayPal - process_webhook EMPTY' );
-			wp_die( 'PayPal webhook data is empty.', '400 Bad Request', [ 'response' => 400 ] );
+			wp_die( 'PayPal webhook data is empty.', '400 Bad Request', array( 'response' => 400 ) );
 		}
 
 		// Verify webhook.
@@ -486,24 +495,37 @@ class Paypal extends \WC_Payment_Gateway {
 
 		// Decode webhook data.
 		$webhook_data = json_decode( $raw_body, true );
+		if ( ! is_array( $webhook_data ) ) {
+			$log_message = __( 'PayPal webhook body is not valid JSON.', 'subscription' );
+			subscrpt_write_log( $log_message );
+			subscrpt_write_debug_log( $log_message . ' ' . $this->webhook_debug_context_from_raw_body( $raw_body ) );
+			wp_die( esc_html( $log_message ), '400 Bad Request', array( 'response' => 400 ) );
+		}
+		$event_id = sanitize_text_field( (string) ( $webhook_data['id'] ?? '' ) );
+		if ( '' === $event_id ) {
+			$log_message = __( 'PayPal webhook event ID is missing.', 'subscription' );
+			subscrpt_write_log( $log_message );
+			subscrpt_write_debug_log( $log_message . ' ' . $this->webhook_debug_context( $webhook_data ) );
+			wp_die( esc_html( $log_message ), '400 Bad Request', array( 'response' => 400 ) );
+		}
 
 		// Get event type from webhook data.
 		$event = isset( $webhook_data['event_type'] ) ? sanitize_text_field( $webhook_data['event_type'] ) : '';
 
 		// Supported transaction events.
-		$transaction_events = [
+		$transaction_events = array(
 			'PAYMENT.SALE.COMPLETED',
 			'PAYMENT.SALE.REFUNDED',
-		];
+		);
 
 		// Supported subscription events.
-		$subscription_events = [
+		$subscription_events = array(
 			'BILLING.SUBSCRIPTION.ACTIVATED',
 			'BILLING.SUBSCRIPTION.UPDATED',
 			'BILLING.SUBSCRIPTION.EXPIRED',
 			'BILLING.SUBSCRIPTION.SUSPENDED',
 			'BILLING.SUBSCRIPTION.CANCELLED',
-		];
+		);
 
 		// Get subscription ID from webhook data.
 		$paypal_subscription_id = isset( $webhook_data['resource']['billing_agreement_id'] )
@@ -516,11 +538,11 @@ class Paypal extends \WC_Payment_Gateway {
 		// If no WP subscription ID found, try to find the order using the PayPal subscription ID in order meta.
 		if ( empty( $wpsubs_id ) && ! empty( $paypal_subscription_id ) ) {
 			$chk_orders = wc_get_orders(
-				[
+				array(
 					'meta_key'   => $this->get_meta_key( 'subscription_id' ),
 					'meta_value' => $paypal_subscription_id,
 					'limit'      => 1,
-				]
+				)
 			);
 
 			$chk_order         = ! empty( $chk_orders ) ? reset( $chk_orders ) : null;
@@ -555,10 +577,16 @@ class Paypal extends \WC_Payment_Gateway {
 		$transaction_id = isset( $webhook_data['resource']['sale_id'] )
 			? sanitize_text_field( $webhook_data['resource']['sale_id'] )
 			: ( isset( $webhook_data['resource']['id'] ) ? sanitize_text_field( $webhook_data['resource']['id'] ) : '' );
+		if ( in_array( $event, $transaction_events, true ) && '' === $transaction_id ) {
+			$log_message = __( 'PayPal transaction identifier is missing.', 'subscription' );
+			subscrpt_write_log( $log_message );
+			subscrpt_write_debug_log( $log_message . ' ' . $this->webhook_debug_context( $webhook_data ) );
+			wp_die( esc_html( $log_message ), '400 Bad Request', array( 'response' => 400 ) );
+		}
 
 		// Get order by Transaction ID.
 		if ( ! empty( $transaction_id ) ) {
-			$orders = wc_get_orders( [ 'transaction_id' => $transaction_id ] );
+			$orders = wc_get_orders( array( 'transaction_id' => $transaction_id ) );
 
 			if ( ! empty( $orders ) ) {
 				$order = reset( $orders );
@@ -574,9 +602,9 @@ class Paypal extends \WC_Payment_Gateway {
 			}
 		}
 
-		// Gate ALL events when both $order and $wpsubs_id are unresolved — return 425 so PayPal
+		// Gate ALL events when both $order and $wpsubs_id are unresolved — return 425 so PayPal.
 		// retries. Previously this guard was subscription-events-only; transaction events (e.g.
-		// PAYMENT.SALE.COMPLETED) fell through and returned a 404 which PayPal treats as a
+		// PAYMENT.SALE.COMPLETED) fell through and returned a 404 which PayPal treats as a.
 		// permanent failure and never retries, leaving the renewal order in "pending" forever.
 		if ( empty( $order ) && empty( $wpsubs_id ) ) {
 			$log_message = sprintf(
@@ -585,13 +613,13 @@ class Paypal extends \WC_Payment_Gateway {
 				$event,
 			);
 			subscrpt_write_log( $log_message );
-			subscrpt_write_debug_log( $log_message . ' ' . wp_json_encode( $webhook_data ) );
+			subscrpt_write_debug_log( $log_message . ' ' . $this->webhook_debug_context( $webhook_data ) );
 			wp_die( esc_html( $log_message ), '425 Too Early', array( 'response' => 425 ) );
 		}
 
 		// Finally, handle the webhook.
 		if ( in_array( $event, $transaction_events, true ) ) {
-			$this->handle_transaction_event( $webhook_data, $order, $transaction_id, $paypal_subscription_id, $wpsubs_id );
+			$this->handle_transaction_event( $webhook_data, $order, $transaction_id, $paypal_subscription_id, $wpsubs_id, $event_id );
 		} elseif ( in_array( $event, $subscription_events, true ) ) {
 			$this->handle_subscription_event( $webhook_data, $order, $transaction_id, $paypal_subscription_id, $wpsubs_id );
 		} else {
@@ -601,9 +629,77 @@ class Paypal extends \WC_Payment_Gateway {
 				$event,
 			);
 			subscrpt_write_log( $log_message );
-			subscrpt_write_debug_log( $log_message . ' ' . wp_json_encode( $webhook_data ) );
+			subscrpt_write_debug_log( $log_message . ' ' . $this->webhook_debug_context( $webhook_data ) );
 			wp_die( esc_html( $log_message ), '200 success', array( 'response' => 200 ) );
 		}
+	}
+
+	/**
+	 * Return minimal webhook context for debug logs without writing the payload.
+	 *
+	 * PayPal webhook resources may contain payer, address, order, and payment
+	 * details. Those values are useful to the webhook handler but do not belong in
+	 * WordPress or PHP debug logs. Keep only the event class and presence flags.
+	 *
+	 * @param array $webhook_data Verified webhook payload.
+	 * @return string
+	 */
+	private function webhook_debug_context( array $webhook_data ): string {
+		$resource = isset( $webhook_data['resource'] ) && is_array( $webhook_data['resource'] )
+			? $webhook_data['resource']
+			: array();
+
+		return wp_json_encode(
+			array(
+				'event_type'         => sanitize_text_field( (string) ( $webhook_data['event_type'] ?? '' ) ),
+				'has_event_id'       => ! empty( $webhook_data['id'] ),
+				'has_resource_id'    => ! empty( $resource['id'] ),
+				'has_transaction_id' => ! empty( $resource['sale_id'] ),
+			)
+		);
+	}
+
+	/**
+	 * Return minimal context when the webhook cannot be decoded yet.
+	 *
+	 * @param string $raw_body Raw verified-request candidate.
+	 * @return string
+	 */
+	private function webhook_debug_context_from_raw_body( string $raw_body ): string {
+		return wp_json_encode(
+			array(
+				'payload_bytes' => strlen( $raw_body ),
+				'payload_json'  => null !== json_decode( $raw_body, true ),
+			)
+		);
+	}
+
+	/**
+	 * Return response-shape context without logging gateway response values.
+	 *
+	 * @param mixed $response_data Decoded PayPal response.
+	 * @return string
+	 */
+	private function gateway_response_debug_context( $response_data ): string {
+		if ( is_object( $response_data ) ) {
+			$response_data = get_object_vars( $response_data );
+		}
+
+		if ( ! is_array( $response_data ) ) {
+			return wp_json_encode( array( 'response' => 'invalid' ) );
+		}
+
+		return wp_json_encode(
+			array(
+				'response' => 'error',
+				'fields'   => array_values(
+					array_intersect(
+						array_keys( $response_data ),
+						array( 'name', 'debug_id', 'error', 'error_description', 'message' )
+					)
+				),
+			)
+		);
 	}
 
 	/**
@@ -626,7 +722,7 @@ class Paypal extends \WC_Payment_Gateway {
 		}
 
 		// Prepare the request data to verify the webhook.
-		$payload = [
+		$payload = array(
 			'auth_algo'         => $headers['PAYPAL-AUTH-ALGO'] ?? $headers['Paypal-Auth-Algo'] ?? '',
 			'cert_url'          => $headers['PAYPAL-CERT-URL'] ?? $headers['Paypal-Cert-Url'] ?? '',
 			'transmission_id'   => $headers['PAYPAL-TRANSMISSION-ID'] ?? $headers['Paypal-Transmission-Id'] ?? '',
@@ -634,7 +730,7 @@ class Paypal extends \WC_Payment_Gateway {
 			'transmission_time' => $headers['PAYPAL-TRANSMISSION-TIME'] ?? $headers['Paypal-Transmission-Time'] ?? '',
 			'webhook_id'        => $this->webhook_id ?? '',
 			'webhook_event'     => $raw_body,
-		];
+		);
 
 		// Verify webhook via REST API.
 		$verified = $this->verify_paypal_webhook_rest_api( $payload, $raw_body, $access_token );
@@ -646,7 +742,7 @@ class Paypal extends \WC_Payment_Gateway {
 
 		if ( ! $verified ) {
 			subscrpt_write_log( 'PayPal webhook verification failed.' );
-			subscrpt_write_debug_log( 'Webhook verification failed for data: ' . sanitize_text_field( $raw_body ) );
+			subscrpt_write_debug_log( 'Webhook verification failed. ' . $this->webhook_debug_context_from_raw_body( $raw_body ) );
 			wp_die( 'Error: PayPal webhook verification failed.', '403 Forbidden', array( 'response' => 403 ) );
 		}
 	}
@@ -666,14 +762,14 @@ class Paypal extends \WC_Payment_Gateway {
 		// Verify webhook signature via PayPal REST API.
 		try {
 			$url  = $this->api_endpoint . '/v1/notifications/verify-webhook-signature';
-			$args = [
+			$args = array(
 				'method'  => 'POST',
-				'headers' => [
+				'headers' => array(
 					'Authorization' => 'Bearer ' . $access_token,
 					'Content-Type'  => 'application/json',
-				],
+				),
 				'body'    => wp_json_encode( $payload ),
-			];
+			);
 
 			$response = wp_remote_post( $url, $args );
 			if ( is_wp_error( $response ) ) {
@@ -696,7 +792,7 @@ class Paypal extends \WC_Payment_Gateway {
 			$verification_status = $response_data['verification_status'] ?? null;
 
 			if ( empty( $verification_status ) || 'success' !== strtolower( $verification_status ) ) {
-				subscrpt_write_debug_log( 'PayPal Webhook Verification: ' . wp_json_encode( $response_data ) );
+				subscrpt_write_debug_log( 'PayPal Webhook Verification: ' . $this->gateway_response_debug_context( $response_data ) );
 				return false;
 			}
 
@@ -731,11 +827,11 @@ class Paypal extends \WC_Payment_Gateway {
 		// Get PayPal Access Token.
 		$access_token = $this->get_paypal_access_token();
 		if ( ! $access_token ) {
-			return [
+			return array(
 				'result'   => 'error',
 				'redirect' => '',
 				'response' => 'PayPal payment failed. Please try again.',
-			];
+			);
 		}
 
 		// Get the first order item.
@@ -754,33 +850,33 @@ class Paypal extends \WC_Payment_Gateway {
 		}
 
 		if ( ! $wc_product ) {
-			return [
+			return array(
 				'result'   => 'error',
 				'redirect' => '',
 				'response' => 'Invalid product in order. Please check the order details.',
-			];
+			);
 		}
 
 		// Get PayPal Product ID.
 		$paypal_product_id = $this->get_paypal_product_id( $wc_product_id, $access_token );
 
 		if ( ! $paypal_product_id ) {
-			return [
+			return array(
 				'result'   => 'error',
 				'redirect' => '',
 				'response' => 'PayPal payment failed. Please try again. (Failed to get PayPal product ID)',
-			];
+			);
 		}
 
 		// Get PayPal Plan ID.
 		$paypal_plan_id = $this->get_paypal_plan_id( $wc_product_id, $wc_variation_id, $paypal_product_id, $access_token );
 
 		if ( ! $paypal_plan_id ) {
-			return [
+			return array(
 				'result'   => 'error',
 				'redirect' => '',
 				'response' => 'PayPal payment failed. Please try again. (Failed to get PayPal plan ID)',
-			];
+			);
 		}
 
 		// Get return URL.
@@ -788,22 +884,23 @@ class Paypal extends \WC_Payment_Gateway {
 		$return_url = wp_http_validate_url( $return_url ) ? $return_url : home_url( $return_url );
 
 		// Create Subscription in PayPal.
-		$paypal_subscription_data = [
+		$paypal_subscription_data = array(
 			'plan_id'             => $paypal_plan_id,
-			'application_context' => [
+			'request_key'         => 'order:' . (int) $order->get_id(),
+			'application_context' => array(
 				'return_url' => $return_url,
 				'cancel_url' => $order->get_cancel_order_url(),
-			],
-		];
+			),
+		);
 
 		$paypal_subscription = $this->create_paypal_subscription( $paypal_subscription_data, $access_token );
 
 		if ( empty( $paypal_subscription->id ?? null ) ) {
-			return [
+			return array(
 				'result'   => 'error',
 				'redirect' => '',
 				'response' => 'PayPal payment failed. Please try again. (Failed to create PayPal subscription)',
-			];
+			);
 		}
 
 		// Save PayPal Subscription ID in order meta.
@@ -812,7 +909,7 @@ class Paypal extends \WC_Payment_Gateway {
 
 		// Get payment link.
 		$paypal_subscription_pay_link = null;
-		foreach ( ( $paypal_subscription->links ?? [] ) as $link_obj ) {
+		foreach ( ( $paypal_subscription->links ?? array() ) as $link_obj ) {
 			if ( 'approve' === $link_obj->rel ) {
 				$paypal_subscription_pay_link = $link_obj->href;
 				break;
@@ -820,16 +917,16 @@ class Paypal extends \WC_Payment_Gateway {
 		}
 
 		if ( empty( $paypal_subscription_pay_link ) ) {
-			return [
+			return array(
 				'result'   => 'error',
 				'redirect' => '',
 				'response' => 'PayPal payment failed. Please try again. (Failed to get PayPal subscription approval link)',
-			];
+			);
 		} else {
-			return [
+			return array(
 				'result'   => 'success',
 				'redirect' => $paypal_subscription_pay_link,
-			];
+			);
 		}
 	}
 
@@ -841,13 +938,15 @@ class Paypal extends \WC_Payment_Gateway {
 	 */
 	public function get_paypal_product_id( int $wc_product_id, string $access_token ): ?string {
 		$wc_product = wc_get_product( $wc_product_id );
+		if ( ! $wc_product ) {
+			return null;
+		}
 
 		// Get data from product meta.
-		// TODO: add home_url, wc_product_id etc to avoid duplication in paypal.
 		$paypal_data = get_post_meta( $wc_product_id, $this->get_meta_key( 'product_data' ), true );
+		$paypal_data = is_array( $paypal_data ) ? $paypal_data : array();
 
 		$paypal_product_id = $paypal_data['product_id'] ?? null;
-		$paypal_image_url  = $paypal_data['image_url'] ?? null;
 
 		// If PayPal product ID is not available in meta, get or create a new PayPal product.
 		if ( ! $paypal_product_id ) {
@@ -857,18 +956,15 @@ class Paypal extends \WC_Payment_Gateway {
 				$paypal_product_id = $paypal_product->id;
 
 				// Save PayPal product ID in WooCommerce product meta.
-				$data = [
-					'product_id' => $paypal_product->id,
-					'image_url'  => $paypal_product->image_url ?? '',
-					'home_url'   => home_url(),
-				];
+				$data = array(
+					'product_id'    => $paypal_product->id,
+					'image_url'     => $paypal_product->image_url ?? '',
+					'home_url'      => home_url(),
+					'wc_product_id' => $wc_product_id,
+				);
 				update_post_meta( $wc_product_id, $this->get_meta_key( 'product_data' ), $data );
 			}
 		}
-
-		// TODO: add logic to update image url if changed.
-		// $current_image_url = $this->truncate_string( wp_get_attachment_url( $wc_product->get_image_id() ), 2000 );
-		// if ( $paypal_product_id && $paypal_image_url !== $current_image_url ) {}
 
 		// Return PayPal product ID or null if not found.
 		return $paypal_product_id;
@@ -894,7 +990,7 @@ class Paypal extends \WC_Payment_Gateway {
 		// Load stored plans array from product meta.
 		$stored_plans = get_post_meta( $wc_product_id, $this->get_meta_key( 'plans' ), true );
 		if ( ! is_array( $stored_plans ) ) {
-			$stored_plans = [];
+			$stored_plans = array();
 		}
 
 		// Return the existing plan whose fingerprint matches the current product configuration.
@@ -905,14 +1001,15 @@ class Paypal extends \WC_Payment_Gateway {
 		}
 
 		// No matching plan found — create a new one for the current configuration.
-		$plan_data   = $this->generate_plan_data( $wc_product, $paypal_product_id );
-		$paypal_plan = $this->create_paypal_plan( $plan_data, $access_token );
+		$plan_data                = $this->generate_plan_data( $wc_product, $paypal_product_id );
+		$plan_data['request_key'] = 'product:' . $paypal_product_id . '|fingerprint:' . $fingerprint;
+		$paypal_plan              = $this->create_paypal_plan( $plan_data, $access_token );
 
 		if ( $paypal_plan ) {
-			$stored_plans[] = [
+			$stored_plans[] = array(
 				'plan_id'     => $paypal_plan->id,
 				'fingerprint' => $fingerprint,
-			];
+			);
 			update_post_meta( $wc_product_id, $this->get_meta_key( 'plans' ), $stored_plans );
 			return $paypal_plan->id;
 		}
@@ -928,22 +1025,30 @@ class Paypal extends \WC_Payment_Gateway {
 	 */
 	public function get_or_create_paypal_product( WC_Product $wc_product, string $access_token ) {
 		// Prepare product data.
-		$product_data = [
-			'name'        => $this->truncate_string( $wc_product->get_name(), 126 ),
-			'description' => $this->truncate_string( $wc_product->get_short_description(), 256 ),
-			'type'        => $wc_product->get_virtual() ? 'DIGITAL' : 'PHYSICAL',
-			'image_url'   => $wc_product->get_image_id() ? $this->truncate_string( wp_get_attachment_url( $wc_product->get_image_id() ), 2000 ) : '',
-			'home_url'    => $this->truncate_string( get_permalink( $wc_product->get_id() ), 2000 ),
-		];
+		$product_data = array(
+			'name'          => $this->truncate_string( $wc_product->get_name(), 126 ),
+			'description'   => $this->truncate_string( $wc_product->get_short_description(), 256 ),
+			'type'          => $wc_product->get_virtual() ? 'DIGITAL' : 'PHYSICAL',
+			'image_url'     => $wc_product->get_image_id() ? $this->truncate_string( wp_get_attachment_url( $wc_product->get_image_id() ), 2000 ) : '',
+			'home_url'      => $this->truncate_string( get_permalink( $wc_product->get_id() ), 2000 ),
+			'wc_product_id' => $wc_product->get_id(),
+			'request_key'   => 'wc-product:' . (int) $wc_product->get_id(),
+		);
 
-		// TODO: implement logic to find existing PayPal product.
-		// $paypal_product = $this->find_paypal_product( $product_data, $access_token );
+		// Reconcile the remote catalog before creating anything. A missing local.
+		// mapping can happen after a restore or metadata cleanup; creating first.
+		// would leave an orphaned PayPal product and duplicate future plans.
+		$paypal_product = $this->find_paypal_product( $product_data, $access_token );
+		if ( false === $paypal_product ) {
+			return null;
+		}
+
+		if ( $paypal_product ) {
+			return $paypal_product;
+		}
 
 		// If not found, create a new PayPal product.
-		$paypal_product = $this->create_paypal_product( $product_data, $access_token );
-
-		// Return PayPal product or null.
-		return $paypal_product;
+		return $this->create_paypal_product( $product_data, $access_token );
 	}
 
 	/**
@@ -955,12 +1060,50 @@ class Paypal extends \WC_Payment_Gateway {
 	 * @param string|null   $subscription_id PayPal subscription ID from webhook data.
 	 * @param int|null      $wpsubs_id       WP subscription post ID resolved from mapping table.
 	 */
-	public function handle_transaction_event( array $webhook_data, ?WC_Order $order, ?string $transaction_id, ?string $subscription_id, ?int $wpsubs_id = null ) {
+	public function handle_transaction_event( array $webhook_data, ?WC_Order $order, ?string $transaction_id, ?string $subscription_id, ?int $wpsubs_id = null, ?string $event_id = null ) {
+		$transaction_lock = '';
+		global $wpdb;
+		if ( ! empty( $transaction_id ) ) {
+			$transaction_lock = 'ashbi_paypal_transaction_' . substr( hash( 'sha256', (string) $transaction_id ), 0, 32 );
+			if ( 1 !== (int) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 5)', $transaction_lock ) ) ) {
+				wp_die( 'PayPal transaction event is being reconciled.', '503 Service Unavailable', array( 'response' => 503 ) );
+			}
+		}
+
+		try {
+			return $this->handle_transaction_event_locked( $webhook_data, $order, $transaction_id, $subscription_id, $wpsubs_id, $event_id );
+		} finally {
+			if ( '' !== $transaction_lock ) {
+				$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $transaction_lock ) );
+			}
+		}
+	}
+
+	/**
+	 * Apply a transaction webhook while its transaction identity is serialized.
+	 *
+	 * @param array         $webhook_data    Webhook data from PayPal.
+	 * @param WC_Order|null $order           Order object, or null if not yet resolved by transaction ID.
+	 * @param string|null   $transaction_id  Transaction ID from webhook data.
+	 * @param string|null   $subscription_id PayPal subscription ID from webhook data.
+	 * @param int|null      $wpsubs_id       WP subscription post ID resolved from mapping table.
+	 */
+	private function handle_transaction_event_locked( array $webhook_data, ?WC_Order $order, ?string $transaction_id, ?string $subscription_id, ?int $wpsubs_id = null, ?string $event_id = null ) {
 		// Get event type.
 		$event = $webhook_data['event_type'] ?? 'N/A';
 
 		switch ( $event ) {
 			case 'PAYMENT.SALE.COMPLETED':
+				if ( $order && $this->has_processed_transaction_event( $order, $event_id ) ) {
+					$log_message = sprintf(
+						// translators: %s: transaction id.
+						__( 'Transaction webhook [PAYMENT.SALE.COMPLETED] already reconciled for transaction #%s. Skipping.', 'subscription' ),
+						$transaction_id
+					);
+					subscrpt_write_log( $log_message );
+					wp_die( esc_html( $log_message ), '200 Success', array( 'response' => 200 ) );
+				}
+
 				// If order was found by transaction_id and is already completed, this is a duplicate delivery.
 				if ( $order && $order->has_status( 'completed' ) ) {
 					$log_message = sprintf(
@@ -1013,10 +1156,10 @@ class Paypal extends \WC_Payment_Gateway {
 						$subscription_id
 					);
 					subscrpt_write_log( $log_message );
-					subscrpt_write_debug_log( $log_message . ' ' . wp_json_encode( $webhook_data ) );
-					$response_code = $wpsubs_id ? 503 : 404;
+					subscrpt_write_debug_log( $log_message . ' ' . $this->webhook_debug_context( $webhook_data ) );
+					$response_code  = $wpsubs_id ? 503 : 404;
 					$response_title = $wpsubs_id ? '503 Service Unavailable' : '404 not found';
-					wp_die( esc_html( $log_message ), $response_title, array( 'response' => $response_code ) );
+					wp_die( esc_html( $log_message ), esc_html( $response_title ), array( 'response' => absint( $response_code ) ) );
 				}
 
 				if ( ! $order instanceof \WC_Order ) {
@@ -1026,14 +1169,27 @@ class Paypal extends \WC_Payment_Gateway {
 						$wpsubs_id
 					);
 					subscrpt_write_log( $log_message );
-					subscrpt_write_debug_log( $log_message . ' ' . wp_json_encode( $webhook_data ) );
+					subscrpt_write_debug_log( $log_message . ' ' . $this->webhook_debug_context( $webhook_data ) );
 					wp_die( esc_html( $log_message ), '500 Internal Error', array( 'response' => 500 ) );
+				}
+
+				if ( in_array( $order->get_status(), array( 'refunded', 'cancelled' ), true ) ) {
+					$log_message = sprintf(
+						// translators: %s: order ID.
+						__( 'PayPal completion webhook ignored for terminal order #%s.', 'subscription' ),
+						$order->get_id()
+					);
+					$this->record_transaction_event( $order, $event_id );
+					$order->save();
+					subscrpt_write_log( $log_message );
+					wp_die( esc_html( $log_message ), '200 Success', array( 'response' => 200 ) );
 				}
 
 				$order->set_transaction_id( $transaction_id );
 
 				// If already completed (e.g. thank-you page ran first), just record the transaction ID.
 				if ( $order->has_status( 'completed' ) ) {
+					$this->record_transaction_event( $order, $event_id );
 					$order->add_order_note( __( 'PayPal transaction ID recorded by webhook.', 'subscription' ) );
 					$order->save();
 
@@ -1044,6 +1200,7 @@ class Paypal extends \WC_Payment_Gateway {
 				}
 
 				if ( $order->update_status( 'completed' ) ) {
+					$this->record_transaction_event( $order, $event_id );
 					$order->add_order_note( __( 'Payment completed by paypal webhook.', 'subscription' ) );
 					$order->save();
 
@@ -1071,8 +1228,21 @@ class Paypal extends \WC_Payment_Gateway {
 						$subscription_id
 					);
 					subscrpt_write_log( $log_message );
-					subscrpt_write_debug_log( $log_message . ' ' . wp_json_encode( $webhook_data ) );
+					subscrpt_write_debug_log( $log_message . ' ' . $this->webhook_debug_context( $webhook_data ) );
 					wp_die( esc_html( $log_message ), '404 not found', array( 'response' => 404 ) );
+				}
+
+				$event_id       = sanitize_text_field( (string) ( $webhook_data['id'] ?? '' ) );
+				$seen_event_ids = get_post_meta( $order->get_id(), '_subscrpt_paypal_refund_event_ids', true );
+				$seen_event_ids = is_array( $seen_event_ids ) ? array_values( array_filter( array_map( 'sanitize_text_field', $seen_event_ids ) ) ) : array();
+				if ( '' !== $event_id && in_array( $event_id, $seen_event_ids, true ) ) {
+					$log_message = sprintf(
+						// translators: %s: PayPal webhook event name.
+						__( 'Transaction webhook [%s] was already reconciled. Skipping duplicate refund delivery.', 'subscription' ),
+						$event
+					);
+					subscrpt_write_log( $log_message );
+					wp_die( esc_html( $log_message ), '200 Success', array( 'response' => 200 ) );
 				}
 
 				$refund_amount = (float) ( $webhook_data['resource']['amount']['total'] ?? 0 );
@@ -1089,9 +1259,13 @@ class Paypal extends \WC_Payment_Gateway {
 						: sprintf(
 							// translators: %s: refunded amount.
 							__( 'Partial payment refunded by PayPal webhook. Amount: %s', 'subscription' ),
-							wc_price( $refund_amount, [ 'currency' => $order->get_currency() ] )
+							wc_price( $refund_amount, array( 'currency' => $order->get_currency() ) )
 						)
 				);
+				if ( '' !== $event_id ) {
+					$seen_event_ids[] = $event_id;
+					$order->update_meta_data( '_subscrpt_paypal_refund_event_ids', array_slice( array_values( array_unique( $seen_event_ids ) ), -50 ) );
+				}
 				$order->save();
 
 				// translators: %s: alert name.
@@ -1107,9 +1281,45 @@ class Paypal extends \WC_Payment_Gateway {
 					$event,
 				);
 				subscrpt_write_log( $log_message );
-				subscrpt_write_debug_log( $log_message . ' ' . wp_json_encode( $webhook_data ) );
+				subscrpt_write_debug_log( $log_message . ' ' . $this->webhook_debug_context( $webhook_data ) );
 				wp_die( esc_html( $log_message ), '200 success', array( 'response' => 200 ) );
 		}
+	}
+
+	/**
+	 * Determine whether a completed-sale event was already reconciled for an order.
+	 *
+	 * @param WC_Order|null $order   WooCommerce order.
+	 * @param string|null   $event_id PayPal event ID.
+	 * @return bool
+	 */
+	private function has_processed_transaction_event( ?WC_Order $order, ?string $event_id ): bool {
+		if ( ! $order || '' === (string) $event_id ) {
+			return false;
+		}
+
+		$event_ids = $order->get_meta( '_subscrpt_paypal_transaction_event_ids', true );
+		$event_ids = is_array( $event_ids ) ? array_values( array_filter( array_map( 'sanitize_text_field', $event_ids ) ) ) : array();
+
+		return in_array( (string) $event_id, $event_ids, true );
+	}
+
+	/**
+	 * Record a completed-sale event after its local order mutation succeeds.
+	 *
+	 * @param WC_Order|null $order   WooCommerce order.
+	 * @param string|null   $event_id PayPal event ID.
+	 * @return void
+	 */
+	private function record_transaction_event( ?WC_Order $order, ?string $event_id ): void {
+		if ( ! $order || '' === (string) $event_id ) {
+			return;
+		}
+
+		$event_ids = $order->get_meta( '_subscrpt_paypal_transaction_event_ids', true );
+		$event_ids = is_array( $event_ids ) ? array_values( array_filter( array_map( 'sanitize_text_field', $event_ids ) ) ) : array();
+		$event_ids[] = sanitize_text_field( (string) $event_id );
+		$order->update_meta_data( '_subscrpt_paypal_transaction_event_ids', array_slice( array_values( array_unique( $event_ids ) ), -50 ) );
 	}
 
 	/**
@@ -1127,7 +1337,8 @@ class Paypal extends \WC_Payment_Gateway {
 
 		if ( ! $wpsubs_id ) {
 			// Subscription.
-			$subscription = Helper::get_subscriptions_from_order( $order );
+			$subscription = Helper::get_subscriptions_from_order( $order->get_id() );
+			$subscription = ! empty( $subscription ) ? reset( $subscription ) : null;
 
 			// If no subscription, try to get from order item.
 			if ( empty( $subscription ) ) {
@@ -1168,7 +1379,7 @@ class Paypal extends \WC_Payment_Gateway {
 					$event,
 				);
 				subscrpt_write_log( $log_message );
-				subscrpt_write_debug_log( $log_message . ' ' . wp_json_encode( $webhook_data ) );
+				subscrpt_write_debug_log( $log_message . ' ' . $this->webhook_debug_context( $webhook_data ) );
 				wp_die( esc_html( $log_message ), '404 not found', array( 'response' => 404 ) );
 			}
 
@@ -1220,8 +1431,8 @@ class Paypal extends \WC_Payment_Gateway {
 			wp_die( 'PayPal subscription identifier is unavailable.', '503 Service Unavailable', array( 'response' => 503 ) );
 		}
 
-		// Re-read the authoritative PayPal object for every distinct event. Delivery
-		// order is not guaranteed, so applying the event name itself can resurrect a
+		// Re-read the authoritative PayPal object for every distinct event. Delivery.
+		// order is not guaranteed, so applying the event name itself can resurrect a.
 		// cancelled subscription or discard two transitions created in one second.
 		$paypal_subscription = $this->get_paypal_subscription( $paypal_subscription_id );
 		$remote_status       = strtoupper( (string) ( $paypal_subscription->status ?? '' ) );
@@ -1243,9 +1454,9 @@ class Paypal extends \WC_Payment_Gateway {
 			'BILLING.SUBSCRIPTION.CANCELLED' => 'CANCELLED',
 			'BILLING.SUBSCRIPTION.EXPIRED'   => 'EXPIRED',
 		);
-		$expected_status = $expected_remote_status[ $event ] ?? '';
+		$expected_status        = $expected_remote_status[ $event ] ?? '';
 		if ( $expected_status && $remote_status !== $expected_status ) {
-			$remote_update_time = trim( (string) ( $paypal_subscription->status_update_time ?? '' ) );
+			$remote_update_time     = trim( (string) ( $paypal_subscription->status_update_time ?? '' ) );
 			$remote_update_datetime = null;
 			if ( '' !== $remote_update_time ) {
 				try {
@@ -1255,8 +1466,8 @@ class Paypal extends \WC_Payment_Gateway {
 				}
 			}
 
-			// A newer/equal authoritative update proves this webhook is stale. If
-			// PayPal's object is still older than the webhook, ask for redelivery
+			// A newer/equal authoritative update proves this webhook is stale. If.
+			// PayPal's object is still older than the webhook, ask for redelivery.
 			// until the API has converged instead of acknowledging a lost transition.
 			if ( ! $remote_update_datetime || $remote_update_datetime < $event_datetime ) {
 				$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock_name ) );
@@ -1265,7 +1476,7 @@ class Paypal extends \WC_Payment_Gateway {
 		}
 
 		list( $local_status, $stored_status ) = $status_map[ $remote_status ];
-		if ( $local_status !== get_post_status( $subscription_id ) ) {
+		if ( get_post_status( $subscription_id ) !== $local_status ) {
 			Action::status( $local_status, (int) $subscription_id );
 		}
 		update_post_meta( $subscription_id, $this->get_meta_key( 'paypal_subs_status' ), $stored_status );
@@ -1293,14 +1504,14 @@ class Paypal extends \WC_Payment_Gateway {
 		$order_id = get_post_meta( $subscription_id, '_subscrpt_order_id', true );
 		$order    = wc_get_order( $order_id );
 
-		// Get order payment method
+		// Get order payment method.
 		$payment_method = $order->get_payment_method();
 
 		// Get paypal subscription status from subscription meta.
 		$paypal_subs_status = get_post_meta( $subscription_id, $this->get_meta_key( 'paypal_subs_status' ), true );
 
 		// Only process if the payment method is PayPal and the subscription is not already cancelled.
-		if ( ( $this->id !== $payment_method ) || ( ! empty( $paypal_subs_status ) && $paypal_subs_status === 'cancelled' ) ) {
+		if ( ( $payment_method !== $this->id ) || ( ! empty( $paypal_subs_status ) && 'cancelled' === $paypal_subs_status ) ) {
 			return;
 		}
 
@@ -1315,7 +1526,7 @@ class Paypal extends \WC_Payment_Gateway {
 			$order_histories = $wpdb->get_results( // phpcs:ignore
 				$wpdb->prepare(
 					'SELECT * FROM %i WHERE subscription_id=%d ORDER BY order_id DESC',
-					[ $table_name, $subscription_id ]
+					array( $table_name, $subscription_id )
 				)
 			);
 
@@ -1371,8 +1582,8 @@ class Paypal extends \WC_Payment_Gateway {
 		}
 	}
 
-	// * ------------------------------------------------------------------------ * //
-	// * -------------------- Utility Methods [start] --------------------------- * //
+	// * ------------------------------------------------------------------------ * //.
+	// * -------------------- Utility Methods [start] --------------------------- * //.
 
 	/**
 	 * Truncate long string.
@@ -1386,6 +1597,21 @@ class Paypal extends \WC_Payment_Gateway {
 	}
 
 	/**
+	 * Build a deterministic PayPal idempotency key for a logical create request.
+	 *
+	 * PayPal replays a request with the same key instead of creating a second
+	 * object after a client timeout. The mode is part of the digest so sandbox
+	 * and live requests can never collide in local logs or tooling.
+	 *
+	 * @param string $operation Logical PayPal operation.
+	 * @param string $request_key Stable local identity for the operation.
+	 */
+	private function get_paypal_request_id( string $operation, string $request_key ): string {
+		$mode = $this->sandbox_mode ? 'sandbox' : 'live';
+		return 'ashbi-' . $operation . '-' . substr( hash( 'sha256', $mode . '|' . $request_key ), 0, 64 );
+	}
+
+	/**
 	 * Get Prefixed Meta Key.
 	 * Prefix the key with '_wp_subs_' to avoid possible conflicts with other plugins.
 	 *
@@ -1393,14 +1619,14 @@ class Paypal extends \WC_Payment_Gateway {
 	 * @param string|null $mode_override Optional mode override (sandbox/live).
 	 */
 	public function get_meta_key( string $key, ?string $mode_override = null ): string {
-		$keys         = [
+		$keys         = array(
 			'product_data'       => 'product_data',
 			'plan_id'            => 'plan_id',
 			'plan_desc'          => 'plan_description',
 			'plans'              => 'plans',
 			'subscription_id'    => 'subscription_id',
 			'paypal_subs_status' => 'paypal_subs_status',
-		];
+		);
 		$selected_key = $keys[ $key ] ?? $key;
 
 		$mode_string = $this->sandbox_mode ? 'sandbox_' : 'live_';
@@ -1452,7 +1678,7 @@ class Paypal extends \WC_Payment_Gateway {
 		$meta_cycles    = $wc_product->get_meta( '_subscrpt_max_no_payment' );
 		$total_cycles   = $meta_cycles ? $meta_cycles : 0;
 
-		$data = [
+		$data = array(
 			'price'          => number_format( (float) wc_get_price_including_tax( $wc_product ), 2, '.', '' ),
 			'currency'       => get_woocommerce_currency(),
 			'interval'       => $this->convert_paypal_interval( $wpsubs_product->get_timing_option() ),
@@ -1461,7 +1687,7 @@ class Paypal extends \WC_Payment_Gateway {
 			'trial_count'    => (int) $wpsubs_product->get_trial_timing_per(),
 			'signup_fee'     => number_format( (float) $wpsubs_product->get_signup_fee(), 2, '.', '' ),
 			'total_cycles'   => (int) $total_cycles,
-		];
+		);
 
 		return md5( wp_json_encode( $data ) );
 	}
@@ -1474,7 +1700,7 @@ class Paypal extends \WC_Payment_Gateway {
 	 */
 	public function generate_plan_data( WC_Product $wc_product, string $paypal_product_id ): array {
 		// Get the Ashbi Subscriptions wrapped product.
-		// $wpsubs_product type WC_Product
+		// $wpsubs_product type WC_Product.
 		$wpsubs_product = Subscription::get_subs_product( $wc_product );
 
 		// Name.
@@ -1493,73 +1719,150 @@ class Paypal extends \WC_Payment_Gateway {
 		$trial_interval = $this->convert_paypal_interval( $wpsubs_product->get_trial_timing_option() );
 		$signup_fee     = $wpsubs_product->get_signup_fee();
 
-		// get value for total_cycles from _subscrpt_max_no_payment
+		// Get value for total_cycles from _subscrpt_max_no_payment.
 		$meta_cycles  = $wc_product->get_meta( '_subscrpt_max_no_payment' );
 		$total_cycles = $meta_cycles ? $meta_cycles : 0;
 
 		// Billing Cycles.
-		$billing_cycles = [];
+		$billing_cycles = array();
 
 		// Add trial cycle in billing cycles if available.
 		if ( (int) $trial_length > 0 ) {
-			$billing_cycles[] = [
+			$billing_cycles[] = array(
 				'tenure_type'  => 'TRIAL',
 				'sequence'     => 1,
 				'total_cycles' => $total_cycles,
-				'frequency'    => [
+				'frequency'    => array(
 					'interval_unit'  => $trial_interval,
 					'interval_count' => (int) $trial_length,
-				],
-			];
+				),
+			);
 		}
 
 		// Add regular cycle in billing cycles.
-		$billing_cycles[] = [
+		$billing_cycles[] = array(
 			'tenure_type'    => 'REGULAR',
 			'sequence'       => count( $billing_cycles ) + 1,
 			'total_cycles'   => 0,
-			'pricing_scheme' => [
-				'fixed_price' => [
+			'pricing_scheme' => array(
+				'fixed_price' => array(
 					'value'         => number_format( (float) $price, 2, '.', '' ),
 					'currency_code' => get_woocommerce_currency(),
-				],
-			],
-			'frequency'      => [
+				),
+			),
+			'frequency'      => array(
 				'interval_unit'  => $plan_interval,
 				'interval_count' => (int) $plan_length,
-			],
-		];
+			),
+		);
 
 		// Payment Preferences.
-		$payment_preferences = [
+		$payment_preferences = array(
 			'auto_bill_outstanding'     => true,
 			'setup_fee_failure_action'  => 'CANCEL',
 			'payment_failure_threshold' => 3,
-			'setup_fee'                 => [
+			'setup_fee'                 => array(
 				'value'         => number_format( (float) $signup_fee, 2, '.', '' ),
 				'currency_code' => get_woocommerce_currency(),
-			],
-		];
+			),
+		);
 
 		// Final Data.
-		$plan_data = [
+		$plan_data = array(
 			'product_id'          => $paypal_product_id,
 			'name'                => $name,
 			'description'         => $description,
 			'billing_cycles'      => $billing_cycles,
 			'quantity_supported'  => false,
 			'payment_preferences' => $payment_preferences,
-		];
+		);
 		return $plan_data;
 	}
 
-	// * -------------------- Utility Methods [end] --------------------------- * //
-	// * ---------------------------------------------------------------------- * //
+	// * -------------------- Utility Methods [end] --------------------------- * //.
+	// * ---------------------------------------------------------------------- * //.
 
 
-	// * ---------------------------------------------------------------- * //
-	// * -------------------- API Operations [start] -------------------- * //
+	// * ---------------------------------------------------------------- * //.
+	// * -------------------- API Operations [start] -------------------- * //.
 	// ? Keep this section strictly for API operations. No other logic like data extraction should be added here.
+
+	/**
+	 * Find an existing PayPal catalog product for a WooCommerce product.
+	 *
+	 * @param array  $product_data Product identity fields.
+	 * @param string $access_token PayPal access token.
+	 * @return object|false|null Existing product, unavailable response, or no match.
+	 */
+	private function find_paypal_product( array $product_data, string $access_token ) {
+		$target_name     = trim( (string) ( $product_data['name'] ?? '' ) );
+		$target_home_url = untrailingslashit( trim( (string) ( $product_data['home_url'] ?? '' ) ) );
+		if ( '' === $target_name || '' === $target_home_url ) {
+			return null;
+		}
+
+		$page      = 1;
+		$page_size = 20;
+		try {
+			while ( $page <= 100 ) {
+				$url = add_query_arg(
+					array(
+						'page_size'      => $page_size,
+						'page'           => $page,
+						'total_required' => 'true',
+					),
+					$this->api_endpoint . '/v1/catalogs/products'
+				);
+
+				$response = wp_remote_get(
+					$url,
+					array(
+						'method'  => 'GET',
+						'headers' => array(
+							'Authorization' => 'Bearer ' . $access_token,
+							'Content-Type'  => 'application/json',
+						),
+					)
+				);
+
+				if ( is_wp_error( $response ) ) {
+					subscrpt_write_log( 'PayPal product catalog lookup failed: ' . $response->get_error_message() );
+					return false;
+				}
+
+				$status_code = (int) wp_remote_retrieve_response_code( $response );
+				if ( $status_code < 200 || $status_code >= 300 ) {
+					subscrpt_write_log( "PayPal product catalog lookup returned HTTP {$status_code}." );
+					return false;
+				}
+
+				$response_data = json_decode( wp_remote_retrieve_body( $response ) );
+				if ( ! is_object( $response_data ) || ! isset( $response_data->products ) || ! is_array( $response_data->products ) ) {
+					subscrpt_write_log( 'PayPal product catalog lookup returned an invalid response.' );
+					return false;
+				}
+
+				foreach ( $response_data->products as $product ) {
+					$remote_name     = trim( (string) ( $product->name ?? '' ) );
+					$remote_home_url = untrailingslashit( trim( (string) ( $product->home_url ?? '' ) ) );
+					if ( $target_name === $remote_name && $target_home_url === $remote_home_url && ! empty( $product->id ?? null ) ) {
+						return $product;
+					}
+				}
+
+				$total_pages = (int) ( $response_data->total_pages ?? 0 );
+				if ( count( $response_data->products ) < $page_size || ( $total_pages > 0 && $page >= $total_pages ) ) {
+					break;
+				}
+				++$page;
+			}
+		} catch ( \Exception $e ) {
+			subscrpt_write_log( 'PayPal product catalog lookup failed: ' . $e->getMessage() );
+			return false;
+		}
+
+		return null;
+	}
 
 	/**
 	 * Get PayPal Access Token.
@@ -1567,17 +1870,17 @@ class Paypal extends \WC_Payment_Gateway {
 	private function get_paypal_access_token(): ?string {
 		try {
 			$url  = $this->api_endpoint . '/v1/oauth2/token';
-			$args = [
+			$args = array(
 				'method'  => 'POST',
-				'headers' => [
+				'headers' => array(
 					'Accept'          => 'application/json',
 					'Accept-Language' => 'en_US',
 					'Authorization'   => 'Basic ' . base64_encode( $this->client_id . ':' . $this->client_secret ), // phpcs:ignore
-				],
-				'body'    => [
+				),
+				'body'    => array(
 					'grant_type' => 'client_credentials',
-				],
-			];
+				),
+			);
 
 			$response      = wp_remote_post( $url, $args );
 			$response_data = json_decode( wp_remote_retrieve_body( $response ) );
@@ -1616,10 +1919,10 @@ class Paypal extends \WC_Payment_Gateway {
 		}
 
 		// Prepare the body for the API request.
-		$body = [
+		$body = array(
 			'name' => $product_data['name'],
 			'type' => $product_data['type'],
-		];
+		);
 		if ( ! empty( $product_data['description'] ?? null ) ) {
 			$body['description'] = $product_data['description'];
 		}
@@ -1635,16 +1938,16 @@ class Paypal extends \WC_Payment_Gateway {
 
 		try {
 			$url  = $this->api_endpoint . '/v1/catalogs/products';
-			$args = [
+			$args = array(
 				'method'  => 'POST',
-				'headers' => [
+				'headers' => array(
 					'Authorization'     => 'Bearer ' . $access_token,
 					'Content-Type'      => 'application/json',
 					'Prefer'            => 'return=representation',
-					'PayPal-Request-Id' => uniqid( 'wp-subs-paypal-', true ),
-				],
+					'PayPal-Request-Id' => $this->get_paypal_request_id( 'product', (string) ( $product_data['request_key'] ?? $product_data['home_url'] ?? $product_data['name'] ) ),
+				),
 				'body'    => wp_json_encode( $body ),
-			];
+			);
 
 			$response      = wp_remote_post( $url, $args );
 			$response_data = json_decode( wp_remote_retrieve_body( $response ) );
@@ -1652,7 +1955,7 @@ class Paypal extends \WC_Payment_Gateway {
 			if ( empty( $response_data->id ?? null ) ) {
 				$log_message = 'Error creating PayPal product: ' . ( $response_data->error_description ?? 'Unknown error' );
 				subscrpt_write_log( $log_message );
-				subscrpt_write_debug_log( $log_message . ' ' . wp_json_encode( $response_data ) );
+				subscrpt_write_debug_log( $log_message . ' ' . $this->gateway_response_debug_context( $response_data ) );
 				return null;
 			}
 
@@ -1673,12 +1976,12 @@ class Paypal extends \WC_Payment_Gateway {
 	 */
 	private function create_paypal_plan( array $plan_data, string $access_token ): ?object {
 		// Prepare the body for the API request.
-		$body = [
+		$body = array(
 			'product_id'          => $plan_data['product_id'],
 			'name'                => $plan_data['name'],
 			'billing_cycles'      => $plan_data['billing_cycles'],
 			'payment_preferences' => $plan_data['payment_preferences'],
-		];
+		);
 		if ( ! empty( $plan_data['description'] ?? null ) ) {
 			$body['description'] = $plan_data['description'];
 		}
@@ -1688,16 +1991,16 @@ class Paypal extends \WC_Payment_Gateway {
 
 		try {
 			$url  = $this->api_endpoint . '/v1/billing/plans';
-			$args = [
+			$args = array(
 				'method'  => 'POST',
-				'headers' => [
+				'headers' => array(
 					'Authorization'     => 'Bearer ' . $access_token,
 					'Content-Type'      => 'application/json',
 					'Prefer'            => 'return=representation',
-					'PayPal-Request-Id' => uniqid( 'wp-subs-paypal-', true ),
-				],
+					'PayPal-Request-Id' => $this->get_paypal_request_id( 'plan', (string) ( $plan_data['request_key'] ?? $plan_data['product_id'] . '|' . $plan_data['name'] ) ),
+				),
 				'body'    => wp_json_encode( $body ),
-			];
+			);
 
 			$response      = wp_remote_post( $url, $args );
 			$response_data = json_decode( wp_remote_retrieve_body( $response ) );
@@ -1705,7 +2008,7 @@ class Paypal extends \WC_Payment_Gateway {
 			if ( empty( $response_data->id ?? null ) ) {
 				$log_message = 'Error creating PayPal plan: ' . ( $response_data->error_description ?? $response_data->message ?? 'Unknown error' );
 				subscrpt_write_log( $log_message );
-				subscrpt_write_debug_log( $log_message . ' ' . wp_json_encode( $response_data ) );
+				subscrpt_write_debug_log( $log_message . ' ' . $this->gateway_response_debug_context( $response_data ) );
 				return null;
 			}
 
@@ -1726,23 +2029,23 @@ class Paypal extends \WC_Payment_Gateway {
 	 */
 	private function create_paypal_subscription( array $paypal_subscription_data, string $access_token ): ?object {
 		// Prepare the body for the API request.
-		$body = [
+		$body = array(
 			'plan_id'             => $paypal_subscription_data['plan_id'],
 			'application_context' => $paypal_subscription_data['application_context'],
-		];
+		);
 
 		try {
 			$url  = $this->api_endpoint . '/v1/billing/subscriptions';
-			$args = [
+			$args = array(
 				'method'  => 'POST',
-				'headers' => [
+				'headers' => array(
 					'Authorization'     => 'Bearer ' . $access_token,
 					'Content-Type'      => 'application/json',
 					'Prefer'            => 'return=representation',
-					'PayPal-Request-Id' => uniqid( 'wp-subs-paypal-', true ),
-				],
+					'PayPal-Request-Id' => $this->get_paypal_request_id( 'subscription', (string) ( $paypal_subscription_data['request_key'] ?? $paypal_subscription_data['plan_id'] ) ),
+				),
 				'body'    => wp_json_encode( $body ),
-			];
+			);
 
 			$response      = wp_remote_post( $url, $args );
 			$response_data = json_decode( wp_remote_retrieve_body( $response ) );
@@ -1750,7 +2053,7 @@ class Paypal extends \WC_Payment_Gateway {
 			if ( empty( $response_data->id ?? null ) ) {
 				$log_message = 'Error creating PayPal subscription: ' . ( $response_data->error_description ?? $response_data->message ?? 'Unknown error' );
 				subscrpt_write_log( $log_message );
-				subscrpt_write_debug_log( $log_message . ' ' . wp_json_encode( $response_data ) );
+				subscrpt_write_debug_log( $log_message . ' ' . $this->gateway_response_debug_context( $response_data ) );
 				return null;
 			}
 
@@ -1789,28 +2092,39 @@ class Paypal extends \WC_Payment_Gateway {
 
 		try {
 			$url  = $this->api_endpoint . "/v1/payments/sale/{$capture_id}/refund";
-			$body = [];
+			$body = array();
 
 			if ( null !== $amount ) {
-				$body['amount'] = [
+				$body['amount'] = array(
 					'total'    => number_format( (float) $amount, 2, '.', '' ),
 					'currency' => $order->get_currency(),
-				];
+				);
 			}
 
 			if ( ! empty( $reason ) ) {
 				$body['description'] = substr( $reason, 0, 255 );
 			}
 
-			$args = [
+			// WooCommerce only creates the local refund after this gateway returns.
+			// success. The current refund count therefore remains stable across a.
+			// transport timeout and changes for the next legitimate partial refund.
+			$existing_refunds  = method_exists( $order, 'get_refunds' ) ? $order->get_refunds() : array();
+			$refund_sequence   = count( (array) $existing_refunds ) + 1;
+			$refund_amount     = null === $amount ? 'full' : number_format( (float) $amount, 2, '.', '' );
+			$refund_request_id = $this->get_paypal_request_id(
+				'refund',
+				'order:' . (int) $order->get_id() . '|sequence:' . $refund_sequence . '|amount:' . $refund_amount
+			);
+
+			$args = array(
 				'method'  => 'POST',
-				'headers' => [
+				'headers' => array(
 					'Authorization'     => 'Bearer ' . $access_token,
 					'Content-Type'      => 'application/json',
-					'PayPal-Request-Id' => uniqid( 'wp-subs-refund-', true ),
-				],
+					'PayPal-Request-Id' => $refund_request_id,
+				),
 				'body'    => wp_json_encode( $body ),
-			];
+			);
 
 			$response      = wp_remote_post( $url, $args );
 			$response_code = (int) wp_remote_retrieve_response_code( $response );
@@ -1831,7 +2145,7 @@ class Paypal extends \WC_Payment_Gateway {
 			$error_message = $response_data->message ?? $response_data->error_description ?? 'Unknown error';
 			$log_message   = 'PayPal refund failed: ' . $error_message;
 			subscrpt_write_log( $log_message );
-			subscrpt_write_debug_log( $log_message . ' ' . wp_json_encode( $response_data ) );
+			subscrpt_write_debug_log( $log_message . ' ' . $this->gateway_response_debug_context( $response_data ) );
 
 			return new \WP_Error( 'paypal_refund_failed', $error_message );
 
@@ -1852,21 +2166,21 @@ class Paypal extends \WC_Payment_Gateway {
 	 */
 	private function cancel_paypal_subscription( string $subscription_id, string $access_token, string $reason = 'admin cancel' ): bool {
 		// Prepare the body for the API request.
-		$body = [
+		$body = array(
 			'reason' => $reason,
-		];
+		);
 
 		try {
 			$url = $this->api_endpoint . "/v1/billing/subscriptions/$subscription_id/cancel";
 
-			$args = [
+			$args = array(
 				'method'  => 'POST',
-				'headers' => [
+				'headers' => array(
 					'Authorization' => 'Bearer ' . $access_token,
 					'Content-Type'  => 'application/json',
-				],
+				),
 				'body'    => wp_json_encode( $body ),
-			];
+			);
 
 			$response      = wp_remote_post( $url, $args );
 			$response_data = json_decode( wp_remote_retrieve_body( $response ) );
@@ -1874,7 +2188,7 @@ class Paypal extends \WC_Payment_Gateway {
 			if ( ! empty( $response_data->message ?? null ) ) {
 				$log_message = 'Error cancelling PayPal subscription: ' . ( $response_data->message ?? 'Unknown error' );
 				subscrpt_write_log( $log_message );
-				subscrpt_write_debug_log( $log_message . ' ' . wp_json_encode( $response_data ) );
+				subscrpt_write_debug_log( $log_message . ' ' . $this->gateway_response_debug_context( $response_data ) );
 				return false;
 			}
 
@@ -1902,13 +2216,13 @@ class Paypal extends \WC_Payment_Gateway {
 
 		try {
 			$url  = $this->api_endpoint . "/v2/checkout/orders/$order_id";
-			$args = [
+			$args = array(
 				'method'  => 'GET',
-				'headers' => [
+				'headers' => array(
 					'Authorization' => 'Bearer ' . $access_token,
 					'Content-Type'  => 'application/json',
-				],
-			];
+				),
+			);
 
 			$response      = wp_remote_get( $url, $args );
 			$response_data = json_decode( wp_remote_retrieve_body( $response ) );
@@ -1916,7 +2230,7 @@ class Paypal extends \WC_Payment_Gateway {
 			if ( empty( $response_data->id ?? null ) ) {
 				$log_message = 'Error getting PayPal order: ' . ( $response_data->error_description ?? $response_data->message ?? 'Unknown error' );
 				subscrpt_write_log( $log_message );
-				subscrpt_write_debug_log( $log_message . ' ' . wp_json_encode( $response_data ) );
+				subscrpt_write_debug_log( $log_message . ' ' . $this->gateway_response_debug_context( $response_data ) );
 				return null;
 			}
 
@@ -1944,13 +2258,13 @@ class Paypal extends \WC_Payment_Gateway {
 
 		try {
 			$url  = $this->api_endpoint . "/v1/billing/subscriptions/$subscription_id";
-			$args = [
+			$args = array(
 				'method'  => 'GET',
-				'headers' => [
+				'headers' => array(
 					'Authorization' => 'Bearer ' . $access_token,
 					'Content-Type'  => 'application/json',
-				],
-			];
+				),
+			);
 
 			$response      = wp_remote_get( $url, $args );
 			$response_data = json_decode( wp_remote_retrieve_body( $response ) );
@@ -1958,7 +2272,7 @@ class Paypal extends \WC_Payment_Gateway {
 			if ( empty( $response_data->id ?? null ) ) {
 				$log_message = 'Error getting PayPal subscription: ' . ( $response_data->error_description ?? $response_data->message ?? 'Unknown error' );
 				subscrpt_write_log( $log_message );
-				subscrpt_write_debug_log( $log_message . ' ' . wp_json_encode( $response_data ) );
+				subscrpt_write_debug_log( $log_message . ' ' . $this->gateway_response_debug_context( $response_data ) );
 				return null;
 			}
 
@@ -1971,6 +2285,6 @@ class Paypal extends \WC_Payment_Gateway {
 		}
 	}
 
-	// * -------------------- API Operations [end] -------------------- * //
-	// * -------------------------------------------------------------- * //
+	// * -------------------- API Operations [end] -------------------- * //.
+	// * -------------------------------------------------------------- * //.
 }

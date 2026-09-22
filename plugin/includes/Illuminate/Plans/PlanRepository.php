@@ -5,6 +5,9 @@
  * @package SpringDevs\Subscription\Illuminate\Plans
  */
 
+// PSR-4 class filename is retained for the public plan API compatibility path.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
+
 namespace SpringDevs\Subscription\Illuminate\Plans;
 
 /**
@@ -16,9 +19,10 @@ namespace SpringDevs\Subscription\Illuminate\Plans;
  * per-product N+1 here would degrade catalog pages, so reads are batched and
  * cached in the object cache.
  *
- * This is the free base. Pro subclasses/decorates it to add Pro-only columns
- * and semantics (variable/per-variation, taxonomy, live pricing); the base is
- * complete and functional standalone on a free-only install.
+ * This standalone repository owns the complete core plan model, including
+ * variable/per-variation relations, taxonomy relations, and live pricing.
+ * Optional integrations may extend it without making core plan management
+ * depend on a paid add-on.
  *
  * @package SpringDevs\Subscription\Illuminate\Plans
  */
@@ -139,7 +143,9 @@ class PlanRepository {
 	 *
 	 * Result is cached in the object cache keyed by product id. Variation
 	 * filtering is applied in PHP on the cached product-level set so a product
-	 * with many variations still costs one query per product.
+	 * with many variations still costs one query per product. Product-level
+	 * relations (vid 0) apply to every variation; an exact variation relation
+	 * overrides the product-level relation for the same plan term.
 	 *
 	 * @param int $product_id   Product (parent) id.
 	 * @param int $variation_id Variation id, or 0 for simple products.
@@ -162,14 +168,32 @@ class PlanRepository {
 			wp_cache_set( $cache_key, $resolved, self::CACHE_GROUP );
 		}
 
+		$variation_id = absint( $variation_id );
 		if ( $variation_id ) {
-			$variation_id = absint( $variation_id );
-			$resolved     = array_values(
+			// vid 0 = applies to the parent / all variations. A variation-specific.
+			// row is more specific and replaces the inherited row for that term.
+			$by_plan = array();
+			foreach ( $resolved as $row ) {
+				$row_vid = (int) $row['vid'];
+				if ( 0 !== $row_vid && $variation_id !== $row_vid ) {
+					continue;
+				}
+
+				$plan_id = (int) $row['plan_id'];
+				if ( ! isset( $by_plan[ $plan_id ] ) || $row_vid === $variation_id ) {
+					$by_plan[ $plan_id ] = $row;
+				}
+			}
+			$resolved = array_values( $by_plan );
+		} else {
+			// A variable-product parent is only a context when it has a product-level.
+			// relation. Do not leak every child variation's terms into the parent.
+			// selector or into direct plan detection.
+			$resolved = array_values(
 				array_filter(
 					$resolved,
-					static function ( $row ) use ( $variation_id ) {
-						// vid 0 = applies to the parent / all variations.
-						return 0 === (int) $row['vid'] || $variation_id === (int) $row['vid'];
+					static function ( $row ) {
+						return 0 === (int) $row['vid'];
 					}
 				)
 			);
@@ -178,7 +202,7 @@ class PlanRepository {
 		/**
 		 * Filter the resolved plan rows for a product.
 		 *
-		 * Pro's extension point to inject taxonomy- and variation-resolved rows.
+		 * Extension point to inject taxonomy- and variation-resolved rows.
 		 *
 		 * @param array $resolved     Resolved plan rows.
 		 * @param int   $product_id   Product id.
@@ -280,7 +304,7 @@ class PlanRepository {
 		return is_array( $decoded ) ? $decoded : array();
 	}
 
-	// ---- Read side (admin / REST) ----
+	// ---- Read side (admin / REST) ----.
 
 	/**
 	 * Admin read: every plan term a product is attached to, any status.
@@ -483,7 +507,7 @@ class PlanRepository {
 		return $group;
 	}
 
-	// ---- Write side (REST) ----
+	// ---- Write side (REST) ----.
 
 	/**
 	 * Insert a plan group.
@@ -728,7 +752,7 @@ class PlanRepository {
 		$created = 0;
 
 		foreach ( $seen as $rel ) {
-			// Create-only: never touch an existing relation, so a re-run can't
+			// Create-only: never touch an existing relation, so a re-run can't.
 			// overwrite a per-product price the merchant already set.
 			if ( self::find_relation( $new_plan_id, (int) $rel['oid'], (int) $rel['vid'], (int) $rel['type'] ) ) {
 				continue;
@@ -767,7 +791,7 @@ class PlanRepository {
 
 		$existing = self::get_relation( $relation_id );
 
-		// Merge a partial `data` payload into the existing JSON so callers can
+		// Merge a partial `data` payload into the existing JSON so callers can.
 		// update a few fields (e.g. price, one_time) without resending all of it.
 		if ( array_key_exists( 'data', $data ) && $existing && is_array( $existing['data'] ) ) {
 			$data['data'] = array_merge( $existing['data'], (array) $data['data'] );
@@ -810,7 +834,7 @@ class PlanRepository {
 		return false !== $ok;
 	}
 
-	// ---- Column / row helpers ----
+	// ---- Column / row helpers ----.
 
 	/**
 	 * Whitelist + encode group columns for write.

@@ -1,4 +1,12 @@
 <?php
+/**
+ * Install and activate required plugins.
+ *
+ * @package SpringDevs\Subscription\Admin
+ */
+
+// The filename is part of the imported public class path.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
 
 namespace SpringDevs\Subscription\Admin;
 
@@ -9,6 +17,11 @@ namespace SpringDevs\Subscription\Admin;
  */
 class Required {
 
+	/**
+	 * Whether the WooCommerce plugin file exists.
+	 *
+	 * @var bool
+	 */
 	private $plugin_file = true;
 
 	/**
@@ -18,10 +31,18 @@ class Required {
 	 */
 	private $required_plugins = array();
 
+	/**
+	 * Initialize the dependency checks.
+	 */
 	public function __construct() {
 		add_action( 'init', array( $this, 'check_plugins' ) );
 	}
 
+	/**
+	 * Register dependency notices when WooCommerce is unavailable.
+	 *
+	 * @return void
+	 */
 	public function check_plugins() {
 		if ( ! function_exists( 'is_plugin_active' ) ) {
 			include_once ABSPATH . 'wp-admin/includes/plugin.php';
@@ -33,9 +54,9 @@ class Required {
 			$this->plugin_file = false;
 		}
 
-		// Only wire the notice, its assets, and the plugins-list row when a
-		// dependency is actually missing — the same gating the pro plugin uses,
-		// so the red row never lingers once WooCommerce is active.
+		// Only wire the notice, its assets, and the plugins-list row when a.
+		// dependency is actually missing, so the red row never lingers once.
+		// WooCommerce is active.
 		if ( ! file_exists( $plugin_file ) || ! is_plugin_active( 'woocommerce/woocommerce.php' ) ) {
 			$this->required_plugins[] = 'WooCommerce';
 
@@ -48,8 +69,7 @@ class Required {
 	/**
 	 * Render a warning row below this plugin's row on the plugins list page.
 	 *
-	 * Mirrors the pro plugin's row: flags that the plugin is not fully active
-	 * and lists what it still needs.
+	 * Flags that the plugin is not fully active and lists what it still needs.
 	 *
 	 * @return void
 	 */
@@ -87,16 +107,21 @@ class Required {
 		<?php
 	}
 
+	/**
+	 * Enqueue dependency notice assets.
+	 *
+	 * @return void
+	 */
 	public function enqueue_assets() {
-		// Only load the notice styles/script — including the red plugins-list row
-		// tint — when a dependency is actually missing. Otherwise the row would
+		// Only load the notice styles/script — including the red plugins-list row.
+		// tint — when a dependency is actually missing. Otherwise the row would.
 		// stay tinted even after WooCommerce is active.
 		if ( empty( $this->required_plugins ) ) {
 			return;
 		}
 
-		// Version the installer stylesheet by file mtime so CSS edits bust the
-		// browser cache: the plugin version is a build-time placeholder and does
+		// Version the installer stylesheet by file mtime so CSS edits bust the.
+		// browser cache: the plugin version is a build-time placeholder and does.
 		// not change in place, so it cannot do that on its own.
 		$installer_css = SUBSCRPT_PATH . '/assets/css/installer.css';
 		if ( file_exists( $installer_css ) && wp_style_is( 'sdevs_installer', 'registered' ) ) {
@@ -113,14 +138,19 @@ class Required {
 				'sdevs_installer',
 				'sdevs_installer_helper_obj',
 				array(
-					'ajax_url'      => admin_url( 'admin-ajax.php' ),
-					'install_nonce' => wp_create_nonce( 'subscrpt_install_woocommerce_plugin' ),
+					'ajax_url'       => admin_url( 'admin-ajax.php' ),
+					'install_nonce'  => wp_create_nonce( 'subscrpt_install_woocommerce_plugin' ),
 					'activate_nonce' => wp_create_nonce( 'subscrpt_activate_woocommerce_plugin' ),
 				)
 			);
 		}
 	}
 
+	/**
+	 * Render the dependency installation notice.
+	 *
+	 * @return void
+	 */
 	public function install_plugin_notice() {
 		if ( $this->plugin_file ) {
 			$id    = 'sdevs-activate-plugin';

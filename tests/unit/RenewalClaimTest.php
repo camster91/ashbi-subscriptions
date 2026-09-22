@@ -1,51 +1,123 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- PHPUnit fixture intentionally retains its historical test filename.
+/**
+ * Integration-style unit tests for the durable renewal claim repository.
+ *
+ * The fixture combines WordPress function stubs, database doubles, and test
+ * classes so the repository can be exercised without a WordPress runtime.
+ *
+ * @package AshbiSubscriptions\Tests
+ */
 
 namespace SpringDevs\Subscription\Illuminate;
 
 use PHPUnit\Framework\TestCase;
 
+// phpcs:disable Universal.Files.SeparateFunctionsFromOO.Mixed,Generic.Files.OneObjectStructurePerFile.MultipleFound -- This fixture intentionally combines WordPress stubs, a database double, and PHPUnit tests.
+
+/**
+ * Return metadata from the isolated subscription fixture.
+ *
+ * @param mixed $subscription_id Subscription identifier.
+ * @param mixed $key Metadata key.
+ * @param mixed $single Whether to return one value.
+ */
 function get_post_meta( $subscription_id, $key, $single ) {
 	return $GLOBALS['renewal_claim_meta'][ $subscription_id ][ $key ] ?? '';
 }
 
+/**
+ * Return a deterministic UUID for the isolated subscription fixture.
+ *
+ * @return string Fixture UUID.
+ */
 function wp_generate_uuid4() {
 	$GLOBALS['renewal_claim_uuid'] = ( $GLOBALS['renewal_claim_uuid'] ?? 0 ) + 1;
 	return sprintf( '00000000-0000-4000-8000-%012d', $GLOBALS['renewal_claim_uuid'] );
 }
 
+/**
+ * Return the fixed fixture time.
+ *
+ * @param mixed $type Time format.
+ * @param mixed $gmt Whether to use GMT.
+ * @return string Fixture timestamp.
+ */
 function current_time( $type, $gmt ) {
 	return '2026-09-14 19:00:00';
 }
 
+/**
+ * Record a fixture log message.
+ *
+ * @param mixed $message Log message.
+ */
 function subscrpt_write_log( $message ) {
 	$GLOBALS['renewal_claim_log'][] = $message;
 }
 
+/**
+ * Sanitize a fixture text value.
+ *
+ * @param mixed $value Text value.
+ * @return string Sanitized value.
+ */
 function sanitize_text_field( $value ) {
 	return trim( (string) $value );
 }
 
+/** Provide the database behavior needed by renewal claim tests. */
 final class RenewalClaimWpdbFake {
+	/**
+	 * Database table prefix.
+	 *
+	 * @var string
+	 */
 	public string $prefix = 'wp_';
+	/**
+	 * Stored claim rows.
+	 *
+	 * @var array<string,object>
+	 */
 	public array $rows = array();
+	/**
+	 * Whether renewal completion should fail.
+	 *
+	 * @var bool
+	 */
 	public bool $fail_renewal_completion = false;
+	/**
+	 * Prepared query arguments.
+	 *
+	 * @var array<int,mixed>
+	 */
 	private array $args = array();
 
+	/**
+	 * Store prepared query arguments for the next database operation.
+	 *
+	 * @param mixed $sql SQL template.
+	 * @param mixed $args Query arguments.
+	 */
 	public function prepare( $sql, $args ) {
 		$this->args = $args;
 		return $sql;
 	}
 
+	/**
+	 * Execute the limited SQL behavior used by the renewal claim repository.
+	 *
+	 * @param mixed $sql SQL statement.
+	 */
 	public function query( $sql ) {
 		if ( false !== strpos( $sql, 'INSERT INTO' ) ) {
 			list( $table, $subscription_id, $period_key, $period_anchor, $order_id, $state, $token, $lease, $created ) = $this->args;
 			$key = $subscription_id . '|' . $period_key;
 			if ( ! isset( $this->rows[ $key ] ) ) {
 				$this->rows[ $key ] = (object) array(
-					'period_anchor'   => $period_anchor,
-					'order_id'        => $order_id,
-					'state'           => $state,
-					'claim_token'     => $token,
+					'period_anchor'    => $period_anchor,
+					'order_id'         => $order_id,
+					'state'            => $state,
+					'claim_token'      => $token,
 					'lease_expires_at' => $lease,
 				);
 				return 1;
@@ -169,11 +241,21 @@ final class RenewalClaimWpdbFake {
 		return 0;
 	}
 
+	/**
+	 * Return the claim row selected by the prepared arguments.
+	 *
+	 * @param mixed $sql SQL statement.
+	 */
 	public function get_row( $sql ) {
 		list( $table, $subscription_id, $period_key ) = $this->args;
 		return $this->rows[ $subscription_id . '|' . $period_key ] ?? null;
 	}
 
+	/**
+	 * Return the scalar claim value selected by the prepared arguments.
+	 *
+	 * @param mixed $sql SQL statement.
+	 */
 	public function get_var( $sql ) {
 		list( $table, $subscription_id, $order_id ) = $this->args;
 		foreach ( $this->rows as $key => $row ) {
@@ -198,12 +280,20 @@ final class RenewalClaimWpdbFake {
 	}
 }
 
+/** Verify durable renewal claim behavior against an isolated database double. */
 final class RenewalClaimTest extends TestCase {
+	/**
+	 * Isolated database double.
+	 *
+	 * @var RenewalClaimWpdbFake
+	 */
 	private RenewalClaimWpdbFake $database;
 
+	/** Load the renewal claim repository with isolated WordPress doubles. */
 	protected function setUp(): void {
 		$this->database = new RenewalClaimWpdbFake();
-		$GLOBALS['wpdb'] = $this->database;
+		// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- The unit test injects an isolated wpdb double for the claim repository.
+		$GLOBALS['wpdb']               = $this->database;
 		$GLOBALS['renewal_claim_uuid'] = 0;
 		$GLOBALS['renewal_claim_meta'] = array(
 			42 => array(
@@ -214,6 +304,7 @@ final class RenewalClaimTest extends TestCase {
 		require_once dirname( __DIR__, 2 ) . '/plugin/includes/Illuminate/RenewalClaim.php';
 	}
 
+	/** Verify only one worker acquires and finalizes a period. */
 	public function test_only_one_worker_acquires_and_finalizes_a_period(): void {
 		$first  = RenewalClaim::acquire( 42 );
 		$second = RenewalClaim::acquire( 42 );
@@ -229,6 +320,7 @@ final class RenewalClaimTest extends TestCase {
 		$this->assertSame( 501, $retry['order_id'] );
 	}
 
+	/** Verify an expired unfinalized lease can be recovered by checkout. */
 	public function test_expired_unfinalized_lease_can_be_recovered_by_checkout(): void {
 		$claim = RenewalClaim::acquire( 42 );
 		$key   = '42|' . $claim['period_key'];
@@ -241,6 +333,7 @@ final class RenewalClaimTest extends TestCase {
 		$this->assertFalse( RenewalClaim::claim_order( 42, 602 ) );
 	}
 
+	/** Verify schedule repair state is durable on the canonical claim. */
 	public function test_schedule_repair_state_is_durable_on_the_canonical_claim(): void {
 		$claim = RenewalClaim::acquire( 42 );
 		$this->assertTrue( RenewalClaim::finalize( 42, $claim['period_key'], $claim['token'], 701 ) );
@@ -261,6 +354,7 @@ final class RenewalClaimTest extends TestCase {
 		$this->assertSame( 'complete', $this->database->rows[ $key ]->schedule_state );
 	}
 
+	/** Verify payment dispatch state survives a stale gateway lock. */
 	public function test_payment_dispatch_state_survives_a_stale_gateway_lock(): void {
 		$claim = RenewalClaim::acquire( 42 );
 		$this->assertTrue( RenewalClaim::finalize( 42, $claim['period_key'], $claim['token'], 702 ) );
@@ -279,6 +373,7 @@ final class RenewalClaimTest extends TestCase {
 		$this->assertSame( 'complete', $this->database->rows[ $key ]->payment_state );
 	}
 
+	/** Verify deterministic payment failure stops automatic retry. */
 	public function test_deterministic_payment_failure_stops_automatic_retry(): void {
 		$claim = RenewalClaim::acquire( 42 );
 		$this->assertTrue( RenewalClaim::finalize( 42, $claim['period_key'], $claim['token'], 703 ) );
@@ -295,6 +390,7 @@ final class RenewalClaimTest extends TestCase {
 		$this->assertNull( $this->database->rows[ $key ]->payment_next_attempt );
 	}
 
+	/** Verify claim closure reports failure when completion does not persist. */
 	public function test_claim_closure_reports_failure_when_completion_does_not_persist(): void {
 		$claim = RenewalClaim::acquire( 42 );
 		$this->assertTrue( RenewalClaim::finalize( 42, $claim['period_key'], $claim['token'], 704 ) );
@@ -311,6 +407,7 @@ final class RenewalClaimTest extends TestCase {
 		$this->assertSame( 'scheduled', $this->database->rows[ $key ]->schedule_state );
 	}
 
+	/** Verify a captured period anchor remains stable when the date advances. */
 	public function test_captured_period_anchor_does_not_change_when_subscription_date_advances(): void {
 		$anchor = 1789412400;
 		$first  = RenewalClaim::acquire( 42, 0, $anchor );

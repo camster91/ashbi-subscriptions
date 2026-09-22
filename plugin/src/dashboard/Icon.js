@@ -2,8 +2,8 @@
  * The handful of glyphs this screen needs.
  *
  * Inline rather than @wordpress/icons: that package is bundled, not provided by
- * WordPress at runtime, so importing it would add a build dependency to the
- * free plugin for six small paths.
+ * WordPress at runtime, so importing it would add a build dependency to Ashbi
+ * Subscriptions for six small paths.
  */
 
 const PATHS = {

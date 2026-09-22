@@ -1,4 +1,4 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- This filename is part of the imported public compatibility surface.
 /**
  * Product editor integration (Subscription tab).
  *
@@ -40,7 +40,7 @@ class Product {
 	 * @return string
 	 */
 	public function change_price_html( $price, $product ) {
-		if ( $product->is_type( 'variable' ) || '' === $price || subscrpt_pro_activated() ) {
+		if ( $product->is_type( 'variable' ) || '' === $price ) {
 			return $price;
 		}
 
@@ -67,9 +67,8 @@ class Product {
 	public function enqueue_assets() {
 		wp_enqueue_script( 'sdevs_subscription_admin' );
 
-		// Plan view assets on the product editor. Enqueued whether or not Pro is
-		// active: with Pro off, free renders its own panel; with Pro on, the plan
-		// view mounts on Pro's `subscrpt_simple_plan_panel` hook.
+		// Plan view assets on the product editor. The Ashbi panel owns the plan.
+		// editor and uses the same assets for simple and variable products.
 		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
 		if ( ! $screen || 'product' !== $screen->id ) {
 			return;
@@ -78,8 +77,7 @@ class Product {
 		wp_enqueue_style( 'subscrpt_admin_components' );
 		wp_enqueue_script( 'subscrpt_admin_components' );
 
-		// Shared plan-group + selling-plan modal logic. With Pro active the
-		// Subscription tab exposes "＋ New plan group", which drives these modals.
+		// Shared plan-group + selling-plan modal logic used by the product editor.
 		wp_enqueue_script( 'subscrpt_plan_forms_js' );
 		wp_localize_script( 'subscrpt_plan_forms_js', 'subscrptPlanForms', \SpringDevs\Subscription\Admin\Plans::plan_forms_config() );
 
@@ -127,9 +125,8 @@ class Product {
 	public function register_tab( $tabs ) {
 		$tabs['sdevs_subscription'] = array(
 			'label'    => __( 'Subscription', 'subscription' ),
-			// Shown for simple and variable products. The panel content differs
-			// by type (see subscription_forms): simple renders here in free;
-			// variable is filled by Pro via `subscrpt_variable_subscription_panel`.
+			// Shown for simple and variable products. The panel content differs.
+			// by type (see subscription_forms).
 			'class'    => array( 'show_if_simple', 'show_if_variable' ),
 			'target'   => 'sdevs_subscription_options',
 			'priority' => 11,
@@ -144,99 +141,70 @@ class Product {
 		$screen           = get_current_screen();
 		$subscrpt_current = ( $screen && 'edit' === $screen->parent_base ) ? wc_get_product( get_the_ID() ) : null;
 
-		// Variable products: free renders the panel shell; the content is filled
-		// by Pro (per-variation sections) via the action below. Free itself is
-		// simple-only, so with Pro inactive it shows an upgrade note.
+		// Variable products use the same Ashbi plan editor as simple products. Each.
+		// variation gets its own enable toggle and price/term relations while a.
+		// product-level relation remains an inherited seed.
 		if ( $subscrpt_current && $subscrpt_current->is_type( 'variable' ) ) {
 			?>
-			<div id="sdevs_subscription_options" class="panel woocommerce_options_panel option_group sdevs-form sdevs_panel show_if_variable" style="padding:10px;">
-				<?php
-				/**
-				 * Fires inside the Subscription tab for a variable product. Pro
-				 * hooks this to render its per-variation subscription sections.
-				 *
-				 * @param \WC_Product $subscrpt_current Variable product being edited.
-				 */
-				do_action( 'subscrpt_variable_subscription_panel', $subscrpt_current );
-
-				if ( ! has_action( 'subscrpt_variable_subscription_panel' ) ) {
-					?>
-					<div style="text-align:center;padding:30px 20px;">
-						<span style="display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:50%;background:var(--wpsubs-brand-light,#fff1eb);color:var(--wpsubs-brand,#ff4d00);">
-							<span class="dashicons dashicons-lock" style="font-size:24px;width:24px;height:24px;"></span>
-						</span>
-						<h3 style="margin:14px 0 6px;font-size:15px;color:var(--wpsubs-text,#1d2327);display:flex;align-items:center;justify-content:center;gap:8px;">
-							<?php esc_html_e( 'Variable product subscriptions', 'subscription' ); ?>
-							<span class="wpsubs-badge wpsubs-badge--pro"><?php esc_html_e( 'Unavailable', 'subscription' ); ?></span>
-						</h3>
-						<p style="margin:0 auto;max-width:380px;font-size:13px;line-height:1.6;color:var(--wpsubs-text-muted,#646970);">
-							<?php esc_html_e( 'Sell each variation as its own subscription, with per-variation billing, trials and sign-up fees.', 'subscription' ); ?>
-						</p>
-						<p style="margin:16px 0 0;font-size:12px;color:var(--wpsubs-text-muted,#646970);">
-							<?php esc_html_e( 'Variable-product subscriptions are not included in this build.', 'subscription' ); ?>
-						</p>
-					</div>
-					<?php
-				}
-				?>
+			<div id="sdevs_subscription_options" class="panel woocommerce_options_panel option_group sdevs-form sdevs_panel show_if_variable" style="padding:10px;" data-subscrpt-product-plans data-product-id="<?php echo esc_attr( $subscrpt_current->get_id() ); ?>">
+				<?php Product\Plans::render_toolbar( $subscrpt_current ); ?>
+				<div data-subscrpt-plan-view>
+					<?php Product\Plans::render_plan_view( $subscrpt_current ); ?>
+				</div>
 			</div>
+			<?php Product\Plans::render_checkout_link_modal( $subscrpt_current ); ?>
+			<?php Product\Plans::render_modals(); ?>
 			<?php
 			return;
 		}
 
-		if ( function_exists( 'subscrpt_pro_activated' ) ) {
-			if ( subscrpt_pro_activated() ) {
-				do_action( 'subscrpt_simple_pro_fields', get_the_ID() );
-			} else {
-				$timing_types          = array(
-					'days'   => __( 'Daily', 'subscription' ),
-					'weeks'  => __( 'Weekly', 'subscription' ),
-					'months' => __( 'Monthly', 'subscription' ),
-					'years'  => __( 'Yearly', 'subscription' ),
-				);
-				$trial_timing_types    = wps_subscription_get_timing_types();
-				$subscrpt_timing       = null;
-				$subscrpt_trial_time   = null;
-				$subscrpt_trial_timing = null;
-				$subscrpt_cart_txt     = 'subscribe';
-				$subscrpt_user_cancell = 'yes';
-				$subscrpt_limit        = 'one';
-				$subscrpt_enabled      = false;
+		$timing_types          = array(
+			'days'   => __( 'Daily', 'subscription' ),
+			'weeks'  => __( 'Weekly', 'subscription' ),
+			'months' => __( 'Monthly', 'subscription' ),
+			'years'  => __( 'Yearly', 'subscription' ),
+		);
+		$trial_timing_types    = wps_subscription_get_timing_types();
+		$subscrpt_timing       = null;
+		$subscrpt_trial_time   = null;
+		$subscrpt_trial_timing = null;
+		$subscrpt_cart_txt     = 'subscribe';
+		$subscrpt_user_cancell = 'yes';
+		$subscrpt_limit        = 'one';
+		$subscrpt_enabled      = false;
 
-				$subscrpt_product = null;
-				$screen           = get_current_screen();
-				if ( 'edit' === $screen->parent_base ) {
-					$subscrpt_product = wc_get_product( get_the_ID() );
-					if ( $subscrpt_product ) {
-						$subscrpt_enabled      = (bool) $subscrpt_product->get_meta( '_subscrpt_enabled' );
-						$subscrpt_timing       = $subscrpt_product->get_meta( '_subscrpt_timing_option' );
-						$subscrpt_trial_time   = $subscrpt_product->get_meta( '_subscrpt_trial_timing_per' );
-						$subscrpt_trial_timing = $subscrpt_product->get_meta( '_subscrpt_trial_timing_option' );
-						$subscrpt_cart_txt     = $subscrpt_product->get_meta( '_subscrpt_cart_btn_label' );
-						$subscrpt_user_cancell = $subscrpt_product->get_meta( '_subscrpt_user_cancel' );
-						$subscrpt_limit        = $subscrpt_product->get_meta( '_subscrpt_limit' );
-					}
-				}
-
-				// Simple products: plan view (default) + hidden classic settings.
-				// Variable/other products keep the classic-only panel unchanged.
-				if ( $subscrpt_product && $subscrpt_product->is_type( 'simple' ) && class_exists( '\SpringDevs\Subscription\Admin\Product\Plans' ) ) {
-					?>
-					<div id="sdevs_subscription_options" class="panel woocommerce_options_panel option_group sdevs-form sdevs_panel show_if_simple" style="padding:10px;" data-subscrpt-product-plans data-product-id="<?php echo esc_attr( $subscrpt_product->get_id() ); ?>"<?php echo Product\Plans::should_default_classic( $subscrpt_product ) ? ' data-subscrpt-default-classic="1"' : ''; ?>>
-						<?php Product\Plans::render_toolbar( $subscrpt_product ); ?>
-						<div data-subscrpt-plan-view>
-							<?php Product\Plans::render_plan_view( $subscrpt_product ); ?>
-						</div>
-						<div data-subscrpt-classic-view style="display:none;">
-							<?php require __DIR__ . '/views/product-classic-fields.php'; ?>
-						</div>
-					</div>
-					<?php
-					Product\Plans::render_checkout_link_modal( $subscrpt_product );
-				} else {
-					include 'views/product-form.php';
-				}
+		$subscrpt_product = null;
+		$screen           = get_current_screen();
+		if ( $screen && 'edit' === $screen->parent_base ) {
+			$subscrpt_product = wc_get_product( get_the_ID() );
+			if ( $subscrpt_product ) {
+				$subscrpt_enabled      = (bool) $subscrpt_product->get_meta( '_subscrpt_enabled' );
+				$subscrpt_timing       = $subscrpt_product->get_meta( '_subscrpt_timing_option' );
+				$subscrpt_trial_time   = $subscrpt_product->get_meta( '_subscrpt_trial_timing_per' );
+				$subscrpt_trial_timing = $subscrpt_product->get_meta( '_subscrpt_trial_timing_option' );
+				$subscrpt_cart_txt     = $subscrpt_product->get_meta( '_subscrpt_cart_btn_label' );
+				$subscrpt_user_cancell = $subscrpt_product->get_meta( '_subscrpt_user_cancel' );
+				$subscrpt_limit        = $subscrpt_product->get_meta( '_subscrpt_limit' );
 			}
+		}
+
+		// Simple products: plan view (default) + hidden classic settings.
+		if ( $subscrpt_product && $subscrpt_product->is_type( 'simple' ) ) {
+			?>
+			<div id="sdevs_subscription_options" class="panel woocommerce_options_panel option_group sdevs-form sdevs_panel show_if_simple" style="padding:10px;" data-subscrpt-product-plans data-product-id="<?php echo esc_attr( $subscrpt_product->get_id() ); ?>"<?php echo Product\Plans::should_default_classic( $subscrpt_product ) ? ' data-subscrpt-default-classic="1"' : ''; ?>>
+				<?php Product\Plans::render_toolbar( $subscrpt_product ); ?>
+				<div data-subscrpt-plan-view>
+					<?php Product\Plans::render_plan_view( $subscrpt_product ); ?>
+				</div>
+				<div data-subscrpt-classic-view style="display:none;">
+					<?php require __DIR__ . '/views/product-classic-fields.php'; ?>
+				</div>
+			</div>
+			<?php
+			Product\Plans::render_checkout_link_modal( $subscrpt_product );
+			Product\Plans::render_modals();
+		} else {
+			include 'views/product-form.php';
 		}
 	}
 
@@ -248,12 +216,6 @@ class Product {
 	 * @return void
 	 */
 	public function save_subscrpt_data( $product_id ) {
-		if ( function_exists( 'subscrpt_pro_activated' ) ) {
-			if ( subscrpt_pro_activated() ) {
-				return;
-			}
-		}
-
 		if ( ! isset( $_POST['_subscript_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_subscript_nonce'] ) ), '_subscript_edit_product_nonce' ) ) {
 			return;
 		}

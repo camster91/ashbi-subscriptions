@@ -1,4 +1,12 @@
 <?php
+/**
+ * WooCommerce Blocks integration implementation.
+ *
+ * @package AshbiSubscriptions
+ */
+
+// The global integration class name and legacy file path are part of the public Blocks contract.
+// phpcs:ignoreFile WordPress.Files.FileName.InvalidClassFileName
 
 use Automattic\WooCommerce\Blocks\Integrations\IntegrationInterface;
 

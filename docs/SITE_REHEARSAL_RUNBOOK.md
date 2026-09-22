@@ -17,6 +17,33 @@ exports, worksheets, or customer data to this repository.
 5. Configure gateway sandbox credentials. Confirm that no live credential or
    production webhook endpoint is active on staging.
 
+Before reading or activating subscription data, set `WP_ENVIRONMENT_TYPE` to
+`staging`, set both `DISABLE_WP_CRON` and
+`ACTION_SCHEDULER_DISABLE_DEFAULT_QUEUE_RUNNER` to `true`, disable every active
+WooCommerce webhook, and run the read-only fail-closed preflight:
+
+```sh
+ASHBI_EXPECTED_SITE_URL='https://staging.example.com' \
+ASHBI_EXPECTED_GATEWAYS='stripe,wp_subscription_paypal' \
+ASHBI_HOST_CRON_DISABLED=yes \
+ASHBI_OUTBOUND_EMAIL_DISABLED=yes \
+ASHBI_PRODUCTION_CALLBACKS_DISABLED=yes \
+  wp eval-file tools/staging-preflight.php
+```
+
+The three attestations represent controls WordPress cannot verify itself. Do not
+set them until the host scheduler, outbound mail path, production callbacks,
+and live gateway webhook delivery have actually been disabled. The preflight
+must also report that the WordPress environment is non-production, both
+WordPress and Action Scheduler runners are disabled, no active WooCommerce
+webhooks remain, and every configured WooCommerce payment gateway is disabled,
+offline, or in a recognized sandbox mode. An enabled gateway with an unknown
+mode fails closed and must be disabled or taught to the preflight with a tested
+mode mapping before rehearsal. A failed or unavailable check blocks the
+rehearsal. When `ASHBI_EXPECTED_GATEWAYS` is set, every listed gateway must
+also be registered, enabled, and classified as sandbox or offline; this
+prevents a Stripe/PayPal matrix rehearsal from silently skipping one adapter.
+
 ## 2. Capture protected state
 
 Create a random comparison key in a restricted server-local location. Keep the
@@ -59,9 +86,10 @@ status counts, schedule presence, HPOS mode, and expected migration quarantine.
 
 Activation mode requires every pre-existing protected row to remain identical
 and permits only additional rows in the plugin's known migration tables. Stable
-order state excludes `date_modified` and the three metadata keys that the claim
-migration is specifically allowed to add; the complete order snapshot remains
-in the report and must match in exact rollback mode. Version and
+order state excludes WooCommerce-managed `date_modified` and `version` fields
+plus the three metadata keys that the claim migration is specifically allowed
+to add; the complete order snapshot remains in the report and must match in
+exact rollback mode. Version and
 migration-control options are deliberately outside the stable-option digest.
 Inspect those controlled deltas separately with the aggregate audit and
 migration runbook.
@@ -71,7 +99,8 @@ fingerprint. Restore the clone, diagnose the named category, and repeat.
 
 ## 4. Reconcile overdue records
 
-Follow [the 1.4.0 migration runbook](MIGRATION_1.4.0.md). Generate a schema-v2
+Follow [the 1.4.0 migration runbook](MIGRATION_1.4.0.md) and confirm the additive
+1.5.0 recovery-event table is present. Generate a schema-v2
 worksheet, review every record, dry-run the exact plan, then apply only the
 digest-confirmed no-charge actions. No charge, order creation, cancellation, or
 gateway request is part of that command. All other dispositions remain held for

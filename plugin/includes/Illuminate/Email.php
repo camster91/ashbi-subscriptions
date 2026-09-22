@@ -1,5 +1,8 @@
 <?php
 
+// PSR-4 class filename is retained for the public email compatibility path.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
+
 namespace SpringDevs\Subscription\Illuminate;
 
 use SpringDevs\Subscription\Illuminate\Emails\CancellationAdmin;
@@ -101,13 +104,8 @@ class Email {
 		$emails['subscrpt_subscription_expired_email']   = new SubscriptionExpired();
 		$emails['subscrpt_subscription_cancelled_email'] = new SubscriptionCancelled();
 
-		// The admin cancellation notices are free's reduced stand-ins. Pro ships
-		// richer equivalents on the same events, so registering both would list
-		// two of each in WooCommerce and mail the store owner twice.
-		if ( ! subscrpt_pro_activated() ) {
-			$emails['subscrpt_cancellation_admin']       = new CancellationAdmin();
-			$emails['subscrpt_cancellation_saved_admin'] = new SavedAdmin();
-		}
+		$emails['subscrpt_cancellation_admin']       = new CancellationAdmin();
+		$emails['subscrpt_cancellation_saved_admin'] = new SavedAdmin();
 
 		return $emails;
 	}

@@ -1,4 +1,12 @@
 <?php
+/**
+ * Optional gateway and ecosystem integration catalog.
+ *
+ * @package SpringDevs\Subscription\Admin
+ */
+
+// The filename is part of the imported public class path.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
 
 namespace SpringDevs\Subscription\Admin;
 
@@ -18,27 +26,24 @@ class Integrations {
 	 *
 	 * @var array
 	 */
-	protected $integrations = [];
+	protected $integrations = array();
 
 	/**
 	 * Initialize the class
 	 */
 	public function __construct() {
 		// Initialize.
-		add_action( 'init', [ $this, 'init' ], 10 );
+		add_action( 'init', array( $this, 'init' ), 10 );
 
 		// Admin menu (sidebar).
 		add_action( 'admin_menu', array( $this, 'register_admin_menu' ), 20 );
 
 		// Ashbi Subscriptions navbar.
-		add_filter( 'subscrpt_admin_header_menu_items', [ $this, 'add_integrations_menu_item' ], 10, 2 );
+		add_filter( 'subscrpt_admin_header_menu_items', array( $this, 'add_integrations_menu_item' ), 10, 2 );
 
 		// Enqueue integrations scripts.
-		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_integrations_scripts' ] );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_integrations_scripts' ) );
 
-		// Integrations AJAX handler.
-		// add_action( 'admin_ajax_integrations_handler', [ $this,'integrations_handler_callback' ] );
-		// add_action( 'admin_ajax_nopriv_integrations_handler', [ $this,'integrations_handler_callback' ] );
 	}
 
 	/**
@@ -62,7 +67,7 @@ class Integrations {
 			__( 'Integrations', 'subscription' ),
 			'manage_options',
 			'wp-subscription-integrations',
-			[ $this, 'render_integrations_page' ],
+			array( $this, 'render_integrations_page' ),
 		);
 	}
 
@@ -73,11 +78,11 @@ class Integrations {
 	 * @param string $current Current active menu item slug.
 	 */
 	public function add_integrations_menu_item( $menu_items, $current ) {
-		$menu_items[] = [
+		$menu_items[] = array(
 			'slug'  => 'wp-subscription-integrations',
 			'label' => __( 'Integrations', 'subscription' ),
 			'url'   => admin_url( 'admin.php?page=wp-subscription-integrations' ),
-		];
+		);
 		return $menu_items;
 	}
 
@@ -90,7 +95,7 @@ class Integrations {
 			return;
 		}
 
-		wp_enqueue_script( 'subscrpt-integrations', SUBSCRPT_ASSETS . '/js/integration_settings.js', [], SUBSCRPT_VERSION, true );
+		wp_enqueue_script( 'subscrpt-integrations', SUBSCRPT_ASSETS . '/js/integration_settings.js', array(), SUBSCRPT_VERSION, true );
 
 		wp_localize_script(
 			'subscrpt-integrations',
@@ -101,9 +106,9 @@ class Integrations {
 			)
 		);
 
-		// Browser-side filter rail. Enqueued on this hook, not in the render
+		// Browser-side filter rail. Enqueued on this hook, not in the render.
 		// callback, so it always loads.
-		wp_enqueue_script( 'subscrpt-integrations-filter', SUBSCRPT_ASSETS . '/js/admin/integrations-filter.js', [], SUBSCRPT_VERSION, true );
+		wp_enqueue_script( 'subscrpt-integrations-filter', SUBSCRPT_ASSETS . '/js/admin/integrations-filter.js', array(), SUBSCRPT_VERSION, true );
 	}
 
 	/**
@@ -211,401 +216,386 @@ class Integrations {
 	 * @return array
 	 */
 	protected function get_integrations(): array {
-		$integrations = [
-			'paypal'   => [
+		$integrations = array(
+			'paypal'   => array(
 				'title'              => 'PayPal',
 				'description'        => 'Accept recurring subscription payments directly through PayPal.',
-				'icon_url'           => SUBSCRPT_ASSETS . '/images/integrations/paypal.svg',
 				'type'               => 'payment_gateway',
 				'is_installed'       => 'on' === get_option( 'wp_subs_paypal_integration_enabled', 'off' ),
 				'is_active'          => self::is_gateway_enabled( 'wp_subscription_paypal' ),
 				'supports_recurring' => true,
-				'actions'            => [
-					// [
-					// 'action'   => 'install',
-					// 'label'    => 'Install Now',
-					// 'type'     => 'function',
-					// 'function' => 'wpSubsInstallPaypalIntegration()',
-					// ],
-					[
+				'actions'            => array(
+					// [.
+					// 'action'   => 'install',.
+					// 'label'    => 'Install Now',.
+					// 'type'     => 'function',.
+					// 'function' => 'wpSubsInstallPaypalIntegration()',.
+					// ],.
+					array(
 						'action' => 'settings',
 						'label'  => 'Settings',
 						'type'   => 'link',
 						'url'    => admin_url( 'admin.php?page=wc-settings&tab=checkout&section=wp_subscription_paypal' ),
-					],
-					// [
-					// 'action'   => 'uninstall',
-					// 'label'    => 'Uninstall',
-					// 'type'     => 'function',
-					// 'function' => 'wpSubsUninstallPaypalIntegration()',
-					// 'class'    => 'button button-primary wp-subs-button-danger',
-					// ],
-				],
-			],
-			'stripe'   => [
+					),
+					// [.
+					// 'action'   => 'uninstall',.
+					// 'label'    => 'Uninstall',.
+					// 'type'     => 'function',.
+					// 'function' => 'wpSubsUninstallPaypalIntegration()',.
+					// 'class'    => 'button button-primary wp-subs-button-danger',.
+					// ],.
+				),
+			),
+			'stripe'   => array(
 				'title'              => 'Stripe',
 				'description'        => 'Process subscription payments securely with Stripe.',
-				'icon_url'           => SUBSCRPT_ASSETS . '/images/integrations/stripe.png',
 				'type'               => 'payment_gateway',
 				'is_installed'       => class_exists( 'WC_Stripe' ),
 				'is_active'          => self::is_gateway_enabled( 'stripe' ),
 				'supports_recurring' => true,
-				'actions'            => [
-					[
+				'actions'            => array(
+					array(
 						'action'   => 'install',
 						'label'    => 'Install Now',
 						'type'     => 'function',
 						'function' => "subscrptInstallPlugin(this, 'woocommerce-gateway-stripe')",
-					],
-					[
+					),
+					array(
 						'action' => 'settings',
 						'label'  => 'Settings',
 						'type'   => 'link',
 						'url'    => admin_url( 'admin.php?page=wc-settings&tab=checkout&section=stripe&panel=settings' ),
-					],
-				],
-			],
-			'paddle'   => [
+					),
+				),
+			),
+			'paddle'   => array(
 				'title'              => 'Paddle',
 				'description'        => 'Process subscription payments securely with Paddle.',
-				'icon_url'           => SUBSCRPT_ASSETS . '/images/integrations/paddle.svg',
 				'type'               => 'payment_gateway',
 				'is_installed'       => class_exists( 'SmartPayWoo\Gateways\Paddle\SmartPay_Paddle' ),
 				'is_active'          => self::is_gateway_enabled( 'smartpay_paddle' ),
 				'supports_recurring' => true,
-				'actions'            => [
-					[
+				'actions'            => array(
+					array(
 						'action' => 'install',
 						'label'  => 'Get Paddle',
 						'type'   => 'external_link',
 						'url'    => 'https://wpsmartpay.com/paddle-for-woocommerce/',
-					],
-					[
+					),
+					array(
 						'action'     => 'enable',
 						'label'      => 'Enable Gateway',
 						'type'       => 'toggle_option',
 						'option_key' => 'woocommerce_enable_paddle_gateway',
 						'value'      => true,
-					],
-					[
+					),
+					array(
 						'action' => 'settings',
 						'label'  => 'Settings',
 						'type'   => 'link',
 						'url'    => admin_url( 'admin.php?page=wc-settings&tab=checkout&section=smartpay_paddle&from=WCADMIN_PAYMENT_SETTINGS' ),
-					],
-					[
+					),
+					array(
 						'label' => 'More Details',
 						'type'  => 'external_link',
 						'url'   => 'https://wpsmartpay.com/paddle-for-woocommerce/',
-					],
-				],
-			],
-			'mollie'   => [
+					),
+				),
+			),
+			'mollie'   => array(
 				'title'              => 'Mollie',
 				'description'        => 'Pay for subscriptions with Mollie Payments for WooCommerce.',
-				'icon_url'           => SUBSCRPT_ASSETS . '/images/integrations/mollie.png',
 				'type'               => 'payment_gateway',
-				'is_pro'             => true,
+				'is_optional'        => true,
 				'is_installed'       => class_exists( 'Mollie\WooCommerce\Activation\ActivationModule' ),
 				'is_active'          => self::is_gateway_enabled( 'mollie_wc_gateway', true ),
 				'supports_recurring' => true,
-				'actions'            => [
-					[
+				'actions'            => array(
+					array(
 						'action'   => 'install',
 						'label'    => 'Install Now',
 						'type'     => 'function',
 						'function' => "subscrptInstallPlugin(this, 'mollie-payments-for-woocommerce')",
-					],
-					[
+					),
+					array(
 						'action' => 'settings',
 						'label'  => 'Settings',
 						'type'   => 'link',
 						'url'    => admin_url( 'admin.php?page=wc-settings&tab=mollie_settings' ),
-					],
-					[
+					),
+					array(
 						'label' => 'More Details',
 						'type'  => 'link',
 						'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
-					],
-				],
-			],
-			'razorpay' => [
+					),
+				),
+			),
+			'razorpay' => array(
 				'title'              => 'Razorpay',
 				'description'        => 'Pay for subscriptions securely with Razorpay for WooCommerce.',
-				'icon_url'           => SUBSCRPT_ASSETS . '/images/integrations/razorpay.png',
 				'type'               => 'payment_gateway',
-				'is_pro'             => true,
+				'is_optional'        => true,
 				'is_beta'            => true,
 				'is_installed'       => class_exists( 'WC_Razorpay' ),
 				'is_active'          => self::is_gateway_enabled( 'razorpay' ),
 				'supports_recurring' => true,
-				'actions'            => [
-					[
+				'actions'            => array(
+					array(
 						'action'   => 'install',
 						'label'    => 'Install Now',
 						'type'     => 'function',
 						'function' => "subscrptInstallPlugin(this, 'woo-razorpay')",
-					],
-					[
+					),
+					array(
 						'action' => 'settings',
 						'label'  => 'Settings',
 						'type'   => 'link',
 						'url'    => admin_url( 'admin.php?page=wc-settings&tab=checkout&section=razorpay' ),
-					],
-					[
+					),
+					array(
 						'label' => 'More Details',
 						'type'  => 'link',
 						'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
-					],
-				],
-			],
-			'xendit'   => [
+					),
+				),
+			),
+			'xendit'   => array(
 				'title'              => 'Xendit',
 				'description'        => 'Pay for subscriptions securely with Xendit for WooCommerce.',
-				'icon_url'           => SUBSCRPT_ASSETS . '/images/integrations/xendit.png',
 				'type'               => 'payment_gateway',
-				'is_pro'             => true,
+				'is_optional'        => true,
 				'is_beta'            => true,
 				'is_installed'       => class_exists( 'WC_Xendit_CC' ),
 				'is_active'          => self::is_gateway_enabled( 'xendit' ),
 				'supports_recurring' => true,
-				'actions'            => [
-					[
+				'actions'            => array(
+					array(
 						'action'   => 'install',
 						'label'    => 'Install Now',
 						'type'     => 'function',
 						'function' => "subscrptInstallPlugin(this, 'woo-xendit-virtual-accounts')",
-					],
-					[
+					),
+					array(
 						'action' => 'settings',
 						'label'  => 'Settings',
 						'type'   => 'link',
 						'url'    => admin_url( 'admin.php?page=wc-settings&tab=checkout&section=xendit_gateway' ),
-					],
-					[
+					),
+					array(
 						'label' => 'More Details',
 						'type'  => 'link',
 						'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
-					],
-				],
-			],
-		];
+					),
+				),
+			),
+		);
 
-		// Third-party integrations (requires Pro plugin to function).
-		$third_party = [
+		// Third-party integrations are optional adapters supplied by other plugins.
+		$third_party = array(
 			// LMS.
-			'tutor_lms'   => [
+			'tutor_lms'   => array(
 				'title'        => 'Tutor LMS',
 				'description'  => 'Restrict course access based on subscription status. Enroll and unenroll students automatically.',
-				'icon_url'     => SUBSCRPT_ASSETS . '/images/integrations/tutor-lms.jpeg',
 				'type'         => 'third_party',
-				'is_pro'       => true,
+				'is_optional'  => true,
 				'category'     => 'lms',
 				'is_installed' => is_plugin_active( 'tutor/tutor.php' ) && class_exists( 'TUTOR\Tutor' ),
 				'is_active'    => is_plugin_active( 'tutor/tutor.php' ) && class_exists( 'TUTOR\Tutor' ),
-				'actions'      => [
-					[
+				'actions'      => array(
+					array(
 						'action'   => 'install',
 						'label'    => __( 'Install Now', 'subscription' ),
 						'type'     => 'function',
 						'function' => "subscrptInstallPlugin(this, 'tutor')",
-					],
-					[
+					),
+					array(
 						'label' => __( 'Learn More', 'subscription' ),
 						'type'  => 'link',
 						'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
-					],
-				],
-			],
-			'learnpress'  => [
+					),
+				),
+			),
+			'learnpress'  => array(
 				'title'        => 'LearnPress',
 				'description'  => 'Connect subscriptions with LearnPress courses. Enroll users automatically when subscriptions are active.',
-				'icon_url'     => SUBSCRPT_ASSETS . '/images/integrations/learnpress.png',
 				'type'         => 'third_party',
-				'is_pro'       => true,
+				'is_optional'  => true,
 				'category'     => 'lms',
 				'is_installed' => is_plugin_active( 'learnpress/learnpress.php' ) && class_exists( 'LearnPress' ),
 				'is_active'    => is_plugin_active( 'learnpress/learnpress.php' ) && class_exists( 'LearnPress' ),
-				'actions'      => [
-					[
+				'actions'      => array(
+					array(
 						'action'   => 'install',
 						'label'    => __( 'Install Now', 'subscription' ),
 						'type'     => 'function',
 						'function' => "subscrptInstallPlugin(this, 'learnpress')",
-					],
-					[
+					),
+					array(
 						'label' => __( 'Learn More', 'subscription' ),
 						'type'  => 'link',
 						'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
-					],
-				],
-			],
-			'learndash'   => [
+					),
+				),
+			),
+			'learndash'   => array(
 				'title'        => 'LearnDash',
 				'description'  => 'Sync subscription status with LearnDash group enrollment and course access.',
-				'icon_url'     => SUBSCRPT_ASSETS . '/images/integrations/learndash.jpeg',
 				'type'         => 'third_party',
-				'is_pro'       => true,
+				'is_optional'  => true,
 				'category'     => 'lms',
 				'is_installed' => is_plugin_active( 'sfwd-lms/sfwd_lms.php' ) && class_exists( 'LearnDash\Core\App' ),
 				'is_active'    => is_plugin_active( 'sfwd-lms/sfwd_lms.php' ) && class_exists( 'LearnDash\Core\App' ),
-				'actions'      => [
-					[
+				'actions'      => array(
+					array(
 						'action' => 'install',
 						'label'  => __( 'Get LearnDash', 'subscription' ),
 						'type'   => 'external_link',
 						'url'    => 'https://www.learndash.com/',
-					],
-					[
+					),
+					array(
 						'label' => __( 'Learn More', 'subscription' ),
 						'type'  => 'link',
 						'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
-					],
-				],
-			],
+					),
+				),
+			),
 			// CRM.
-			'fluentcrm'   => [
+			'fluentcrm'   => array(
 				'title'        => 'FluentCRM',
 				'description'  => 'Trigger email sequences and manage contacts based on subscription events and status changes.',
-				'icon_url'     => SUBSCRPT_ASSETS . '/images/integrations/fluentcrm.png',
 				'type'         => 'third_party',
-				'is_pro'       => true,
+				'is_optional'  => true,
 				'category'     => 'crm',
 				'is_installed' => class_exists( 'FluentCrm\App\Services\Funnel\BaseTrigger' ),
 				'is_active'    => class_exists( 'FluentCrm\App\Services\Funnel\BaseTrigger' ),
-				'actions'      => [
-					[
+				'actions'      => array(
+					array(
 						'action'   => 'install',
 						'label'    => __( 'Install Now', 'subscription' ),
 						'type'     => 'function',
 						'function' => "subscrptInstallPlugin(this, 'fluent-crm')",
-					],
-					[
+					),
+					array(
 						'label' => __( 'Learn More', 'subscription' ),
 						'type'  => 'link',
 						'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
-					],
-				],
-			],
+					),
+				),
+			),
 			// Automation.
-			'automatorwp' => [
+			'automatorwp' => array(
 				'title'        => 'AutomatorWP',
 				'description'  => 'Build powerful automations triggered by subscription events without writing any code.',
-				'icon_url'     => SUBSCRPT_ASSETS . '/images/integrations/automatorwp.png',
 				'type'         => 'third_party',
-				'is_pro'       => true,
+				'is_optional'  => true,
 				'category'     => 'automation',
 				'is_installed' => is_plugin_active( 'automatorwp/automatorwp.php' ) && class_exists( 'AutomatorWP' ),
 				'is_active'    => is_plugin_active( 'automatorwp/automatorwp.php' ) && class_exists( 'AutomatorWP' ),
-				'actions'      => [
-					[
+				'actions'      => array(
+					array(
 						'action'   => 'install',
 						'label'    => __( 'Install Now', 'subscription' ),
 						'type'     => 'function',
 						'function' => "subscrptInstallPlugin(this, 'automatorwp')",
-					],
-					// [
-					// 'label' => __( 'Learn More', 'subscription' ),
-					// 'type'  => 'external_link',
-					// 'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
-					// ],
-				],
-			],
-			'wpfusion'    => [
+					),
+					// [.
+					// 'label' => __( 'Learn More', 'subscription' ),.
+					// 'type'  => 'external_link',.
+					// 'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),.
+					// ],.
+				),
+			),
+			'wpfusion'    => array(
 				'title'        => 'WP Fusion',
 				'description'  => 'Sync subscription data with your CRM and marketing platforms through WP Fusion.',
-				'icon_url'     => SUBSCRPT_ASSETS . '/images/integrations/wp-fusion.png',
 				'type'         => 'third_party',
-				'is_pro'       => true,
+				'is_optional'  => true,
 				'category'     => 'automation',
 				'is_installed' => class_exists( 'WPF_Integrations_Base' ),
 				'is_active'    => class_exists( 'WPF_Integrations_Base' ),
-				'actions'      => [
-					[
+				'actions'      => array(
+					array(
 						'action' => 'install',
 						'label'  => __( 'Get WP Fusion', 'subscription' ),
 						'type'   => 'external_link',
 						'url'    => 'https://wpfusion.com/',
-					],
-					// [
-					// 'label' => __( 'Learn More', 'subscription' ),
-					// 'type'  => 'external_link',
-					// 'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
-					// ],
-				],
-			],
+					),
+					// [.
+					// 'label' => __( 'Learn More', 'subscription' ),.
+					// 'type'  => 'external_link',.
+					// 'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),.
+					// ],.
+				),
+			),
 			// Email Marketing.
-			'mailpoet'    => [
+			'mailpoet'    => array(
 				'title'        => 'MailPoet',
 				'description'  => 'Add subscribers to MailPoet lists and trigger email automations based on subscription lifecycle events.',
-				'icon_url'     => SUBSCRPT_ASSETS . '/images/integrations/mailpoet.png',
 				'type'         => 'third_party',
-				'is_pro'       => true,
+				'is_optional'  => true,
 				'category'     => 'email',
 				'is_installed' => is_plugin_active( 'mailpoet/mailpoet.php' ) || is_plugin_active( 'mailpoet-premium/mailpoet-premium.php' ),
 				'is_active'    => is_plugin_active( 'mailpoet/mailpoet.php' ) || is_plugin_active( 'mailpoet-premium/mailpoet-premium.php' ),
-				'actions'      => [
-					[
+				'actions'      => array(
+					array(
 						'action'   => 'install',
 						'label'    => __( 'Install Now', 'subscription' ),
 						'type'     => 'function',
 						'function' => "subscrptInstallPlugin(this, 'mailpoet')",
-					],
-					[
+					),
+					array(
 						'label' => __( 'Learn More', 'subscription' ),
 						'type'  => 'link',
 						'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
-					],
-				],
-			],
+					),
+				),
+			),
 			// License Management.
-			'wp_soft_lic' => [
+			'wp_soft_lic' => array(
 				'title'        => 'WP Software License',
 				'description'  => 'Issue and validate software licenses for subscription-based digital products.',
-				'icon_url'     => SUBSCRPT_ASSETS . '/images/integrations/wp-software-license.png',
 				'type'         => 'third_party',
-				'is_pro'       => true,
+				'is_optional'  => true,
 				'category'     => 'license',
 				'is_installed' => is_plugin_active( 'software-license/software-license.php' ) && class_exists( 'WOO_SL' ),
 				'is_active'    => is_plugin_active( 'software-license/software-license.php' ) && class_exists( 'WOO_SL' ),
-				'actions'      => [
-					[
+				'actions'      => array(
+					array(
 						'action' => 'install',
 						'label'  => __( 'Get Plugin', 'subscription' ),
 						'type'   => 'external_link',
 						'url'    => 'https://wpsoftwarelicense.com/',
-					],
-					// [
-					// 'label' => __( 'Learn More', 'subscription' ),
-					// 'type'  => 'external_link',
-					// 'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
-					// ],
-				],
-			],
-			'license_mgr' => [
+					),
+					// [.
+					// 'label' => __( 'Learn More', 'subscription' ),.
+					// 'type'  => 'external_link',.
+					// 'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),.
+					// ],.
+				),
+			),
+			'license_mgr' => array(
 				'title'        => 'License Manager for WooCommerce',
 				'description'  => 'Generate and manage software license keys that are automatically tied to active subscriptions.',
-				'icon_url'     => SUBSCRPT_ASSETS . '/images/integrations/license-manager.png',
 				'type'         => 'third_party',
-				'is_pro'       => true,
+				'is_optional'  => true,
 				'category'     => 'license',
 				'is_installed' => is_plugin_active( 'license-manager-for-woocommerce/license-manager-for-woocommerce.php' ) && class_exists( 'LicenseManagerForWooCommerce\Models\Resources\License' ),
 				'is_active'    => is_plugin_active( 'license-manager-for-woocommerce/license-manager-for-woocommerce.php' ) && class_exists( 'LicenseManagerForWooCommerce\Models\Resources\License' ),
-				'actions'      => [
-					[
+				'actions'      => array(
+					array(
 						'action'   => 'install',
 						'label'    => __( 'Install Now', 'subscription' ),
 						'type'     => 'function',
 						'function' => "subscrptInstallPlugin(this, 'license-manager-for-woocommerce')",
-					],
-					// [
-					// 'label' => __( 'Learn More', 'subscription' ),
-					// 'type'  => 'external_link',
-					// 'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),
-					// ],
-				],
-			],
-		];
+					),
+					// [.
+					// 'label' => __( 'Learn More', 'subscription' ),.
+					// 'type'  => 'external_link',.
+					// 'url'   => admin_url( 'admin.php?page=wp-subscription-support' ),.
+					// ],.
+				),
+			),
+		);
 		$integrations = array_merge( $integrations, $third_party );
 
 		// Add more integrations as needed.
@@ -620,13 +610,13 @@ class Integrations {
 	 * @param array $integrations Integrations array.
 	 */
 	protected function filter_integration_actions( array $integrations ): array {
-		$cleaned_integrations = [];
+		$cleaned_integrations = array();
 
 		foreach ( $integrations as $integration ) {
 			$is_installed = $integration['is_installed'] ?? false;
 			$is_active    = $integration['is_active'] ?? false;
 
-			$cleaned_actions   = [];
+			$cleaned_actions   = array();
 			$shown_install_url = null;
 
 			foreach ( $integration['actions'] as $integration_action ) {
@@ -658,8 +648,8 @@ class Integrations {
 					continue;
 				}
 
-				// Default. Skip a "More Details"-style link that just repeats the
-				// install/"Get X" link already shown (e.g. Paddle), so the card
+				// Default. Skip a "More Details"-style link that just repeats the.
+				// install/"Get X" link already shown (e.g. Paddle), so the card.
 				// does not carry the same URL twice.
 				if ( null !== $shown_install_url && ( $integration_action['url'] ?? null ) === $shown_install_url ) {
 					continue;

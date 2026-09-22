@@ -1,4 +1,4 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- This filename is part of the imported public compatibility surface.
 /**
  * Settings Helper File
  *
@@ -36,7 +36,7 @@ class SettingsHelper {
 	 * Initialize the class.
 	 */
 	private function __construct() {
-		add_filter( 'process_subscrpt_settings_fields', [ $this, 'process_settings_fields' ], 100, 1 );
+		add_filter( 'process_subscrpt_settings_fields', array( $this, 'process_settings_fields' ), 100, 1 );
 	}
 
 	/**
@@ -62,11 +62,11 @@ class SettingsHelper {
 	 * @return array Processed settings fields.
 	 */
 	public function group_settings_fields( $fields ) {
-		$tmp_fields = [];
+		$tmp_fields = array();
 		foreach ( $fields as $field ) {
 			$field_group = $field['group'] ?? 'main';
 
-			if ( $field['type'] === 'heading' ) {
+			if ( 'heading' === $field['type'] ) {
 				$group_priority                         = $field['priority'] ?? 0;
 				$tmp_fields[ $field_group ]['priority'] = $group_priority;
 				$field['priority']                      = -1;
@@ -142,28 +142,17 @@ class SettingsHelper {
 	}
 
 	/**
-	 * Whether every field in a group is locked behind Pro.
+	 * Legacy compatibility shim for extensions that still ask about paid locks.
 	 *
-	 * Drives the "Pro" marker on the tab, so the whole panel does not have to be
-	 * opened to find out that none of it can be changed yet.
+	 * The standalone build owns every core setting, so no group is unavailable.
+	 * Keep the method name for older integrations without allowing it to hide a
+	 * live control.
 	 *
-	 * @param array $group Group data.
-	 * @return bool
+	 * @param array $group Group data (unused compatibility argument).
+	 * @return bool Always false.
 	 */
 	public static function group_is_pro_locked( array $group ) {
-		$has_field = false;
-
-		foreach ( $group['fields'] ?? array() as $field ) {
-			if ( 'heading' === ( $field['type'] ?? '' ) ) {
-				continue;
-			}
-			$has_field = true;
-			if ( empty( $field['field_data']['pro_locked'] ) ) {
-				return false;
-			}
-		}
-
-		return $has_field;
+		return false;
 	}
 
 	/**
@@ -225,8 +214,8 @@ class SettingsHelper {
 	 * Group keys bucketed by section, each list in the order the groups already
 	 * sort in.
 	 *
-	 * Empty sections are dropped. Most of them are filled by Pro, and free
-	 * alone would otherwise show rail items that open onto nothing.
+	 * Empty sections are dropped so the navigation only shows panels that have
+	 * settings registered for the current installation.
 	 *
 	 * @param array $settings_fields Grouped, sorted settings fields.
 	 * @return array<string,string[]> Section key => ordered group keys.
@@ -251,27 +240,16 @@ class SettingsHelper {
 	}
 
 	/**
-	 * Whether every group in a section is locked behind Pro.
+	 * Legacy compatibility shim for extensions that still ask about paid locks.
 	 *
-	 * Drives the "Pro" marker on the rail item, so a section none of which can
-	 * be changed yet says so before it is opened.
+	 * No standalone settings section is unavailable.
 	 *
-	 * @param string[] $group_ids       Group keys in the section.
-	 * @param array    $settings_fields Grouped settings fields.
-	 * @return bool
+	 * @param string[] $group_ids       Group keys in the section (unused).
+	 * @param array    $settings_fields Grouped settings fields (unused).
+	 * @return bool Always false.
 	 */
 	public static function category_is_pro_locked( array $group_ids, array $settings_fields ) {
-		if ( empty( $group_ids ) ) {
-			return false;
-		}
-
-		foreach ( $group_ids as $group_id ) {
-			if ( ! self::group_is_pro_locked( $settings_fields[ $group_id ] ?? array() ) ) {
-				return false;
-			}
-		}
-
-		return true;
+		return false;
 	}
 
 	/**
@@ -308,12 +286,12 @@ class SettingsHelper {
 	}
 
 	/**
-	 * Unavailable-feature badge markup.
+	 * Legacy compatibility shim for the removed paid-feature badge.
 	 *
-	 * @return string Pre-escaped badge HTML.
+	 * @return string Empty markup; standalone features are available directly.
 	 */
 	public static function pro_badge_html() {
-		return '<span class="subscrpt-pro-badge" title="' . esc_attr__( 'Not included in this build', 'subscription' ) . '">' . esc_html__( 'Unavailable', 'subscription' ) . '</span>';
+		return '';
 	}
 
 
@@ -323,7 +301,7 @@ class SettingsHelper {
 	 * @param array $args Same as 'render_text_field'.
 	 * @param bool  $join_item Whether to return element for 'join' container or not.
 	 */
-	public static function inp_element( $args = [], $join_item = false ) {
+	public static function inp_element( $args = array(), $join_item = false ) {
 		$id          = $args['id'];
 		$value       = $args['value'] ?? '';
 		$placeholder = $args['placeholder'] ?? '';
@@ -337,7 +315,7 @@ class SettingsHelper {
 		}
 
 		$other_attrs_html = '';
-		foreach ( ( $args['attributes'] ?? [] ) as $attr_key => $attr_value ) {
+		foreach ( ( $args['attributes'] ?? array() ) as $attr_key => $attr_value ) {
 			$other_attrs_html .= sprintf( ' %s="%s" ', esc_attr( $attr_key ), esc_attr( $attr_value ) );
 		}
 
@@ -367,14 +345,14 @@ class SettingsHelper {
 	 * @param array $args Same as 'render_select_field'.
 	 * @param bool  $join_item Whether to return element for 'join' container or not.
 	 */
-	public static function select_element( $args = [], $join_item = false ) {
+	public static function select_element( $args = array(), $join_item = false ) {
 		$id = $args['id'];
 
 		// Enhanced / multiselect → wpsubs-tag-select (pill input with filter).
 		if ( isset( $args['enhanced'] ) && $args['enhanced'] ) {
 			$multiple    = isset( $args['attributes']['multiple'] ) && $args['attributes']['multiple'];
 			$adv_options = array();
-			foreach ( ( $args['options'] ?? [] ) as $opt_value => $opt_label ) {
+			foreach ( ( $args['options'] ?? array() ) as $opt_value => $opt_label ) {
 				$adv_options[] = array(
 					'value' => (string) $opt_value,
 					'label' => $opt_label,
@@ -396,7 +374,7 @@ class SettingsHelper {
 		// Regular select → wpsubs-adv-select (button-based custom dropdown).
 		$selected    = (string) ( $args['selected'] ?? '' );
 		$adv_options = array();
-		foreach ( ( $args['options'] ?? [] ) as $opt_value => $opt_label ) {
+		foreach ( ( $args['options'] ?? array() ) as $opt_value => $opt_label ) {
 			$adv_options[] = array(
 				'value'    => (string) $opt_value,
 				'label'    => $opt_label,
@@ -429,7 +407,7 @@ class SettingsHelper {
 	 * @param array $args Field arguments.
 	 * @param bool  $should_print Whether to print the field or return as HTML string.
 	 */
-	public static function render_heading( $args = [], $should_print = true ) {
+	public static function render_heading( $args = array(), $should_print = true ) {
 		$title       = $args['title'] ?? '';
 		$description = $args['description'] ?? '';
 
@@ -464,7 +442,7 @@ class SettingsHelper {
 	 * @param array $args Field arguments.
 	 * @param bool  $should_print Whether to print the field or return as HTML string.
 	 */
-	public static function render_input_field( $args = [], $should_print = true ) {
+	public static function render_input_field( $args = array(), $should_print = true ) {
 		$title       = $args['title'] ?? '';
 		$description = $args['description'] ?? '';
 
@@ -480,14 +458,8 @@ class SettingsHelper {
 
 		ob_start();
 		?>
-		<div class="wpsubs-settings-field<?php echo ! empty( $args['pro_locked'] ) ? ' wpsubs-settings-field--locked' : ''; ?>">
+		<div class="wpsubs-settings-field">
 			<div class="wpsubs-settings-field__label">
-				<?php
-				if ( ! empty( $args['pro_locked'] ) ) {
-					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Pre-escaped badge markup.
-					echo self::pro_badge_html();
-				}
-				?>
 				<?php echo esc_html( $title ); ?>
 			</div>
 			<div class="wpsubs-settings-field__control">
@@ -525,7 +497,7 @@ class SettingsHelper {
 	 * @param array $args Field arguments.
 	 * @param bool  $should_print Whether to print the field or return as HTML string.
 	 */
-	public static function render_switch_field( $args = [], $should_print = true ) {
+	public static function render_switch_field( $args = array(), $should_print = true ) {
 		$id          = $args['id'];
 		$title       = $args['title'] ?? '';
 		$label       = $args['label'] ?? '';
@@ -553,7 +525,7 @@ class SettingsHelper {
 		}
 
 		$other_attrs_html = '';
-		foreach ( ( $args['attributes'] ?? [] ) as $attr_key => $attr_value ) {
+		foreach ( ( $args['attributes'] ?? array() ) as $attr_key => $attr_value ) {
 			$other_attrs_html .= sprintf( ' %s="%s" ', esc_attr( $attr_key ), esc_attr( $attr_value ) );
 		}
 
@@ -562,14 +534,8 @@ class SettingsHelper {
 
 		ob_start();
 		?>
-		<div class="wpsubs-settings-field<?php echo ! empty( $args['pro_locked'] ) ? ' wpsubs-settings-field--locked' : ''; ?>">
+		<div class="wpsubs-settings-field">
 			<div class="wpsubs-settings-field__label">
-				<?php
-				if ( ! empty( $args['pro_locked'] ) ) {
-					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Pre-escaped badge markup.
-					echo self::pro_badge_html();
-				}
-				?>
 				<?php echo esc_html( $title ); ?>
 			</div>
 			<div class="wpsubs-settings-field__control">
@@ -619,7 +585,7 @@ class SettingsHelper {
 	 * @param array $args Field arguments.
 	 * @param bool  $should_print Whether to print the field or return as HTML string.
 	 */
-	public static function render_select_field( $args = [], $should_print = true ) {
+	public static function render_select_field( $args = array(), $should_print = true ) {
 		$title       = $args['title'] ?? '';
 		$description = $args['description'] ?? '';
 
@@ -635,14 +601,8 @@ class SettingsHelper {
 
 		ob_start();
 		?>
-		<div class="wpsubs-settings-field<?php echo ! empty( $args['pro_locked'] ) ? ' wpsubs-settings-field--locked' : ''; ?>">
+		<div class="wpsubs-settings-field">
 			<div class="wpsubs-settings-field__label">
-				<?php
-				if ( ! empty( $args['pro_locked'] ) ) {
-					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Pre-escaped badge markup.
-					echo self::pro_badge_html();
-				}
-				?>
 				<?php echo esc_html( $title ); ?>
 			</div>
 			<div class="wpsubs-settings-field__control">
@@ -672,13 +632,13 @@ class SettingsHelper {
 	 * @param array $args Field arguments.
 	 * @param bool  $should_print Whether to print the field or return as HTML string.
 	 */
-	public static function render_multiselect_field( $args = [], $should_print = true ) {
-		$default_multiselect_args = [
-			'attributes' => [
+	public static function render_multiselect_field( $args = array(), $should_print = true ) {
+		$default_multiselect_args = array(
+			'attributes' => array(
 				'multiple' => 'multiple',
-			],
+			),
 			'enhanced'   => true,
-		];
+		);
 
 		$args = wp_parse_args( $args, $default_multiselect_args );
 
@@ -697,7 +657,7 @@ class SettingsHelper {
 	 * @param array $args Field arguments.
 	 * @param bool  $should_print Whether to print the field or return as HTML string.
 	 */
-	public static function render_joined_field( $args = [], $should_print = true ) {
+	public static function render_joined_field( $args = array(), $should_print = true ) {
 		$title       = $args['title'] ?? '';
 		$description = $args['description'] ?? '';
 
@@ -705,14 +665,8 @@ class SettingsHelper {
 
 		ob_start();
 		?>
-		<div class="wpsubs-settings-field<?php echo ! empty( $args['pro_locked'] ) ? ' wpsubs-settings-field--locked' : ''; ?>">
+		<div class="wpsubs-settings-field">
 			<div class="wpsubs-settings-field__label">
-				<?php
-				if ( ! empty( $args['pro_locked'] ) ) {
-					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Pre-escaped badge markup.
-					echo self::pro_badge_html();
-				}
-				?>
 				<?php echo esc_html( $title ); ?>
 			</div>
 			<div class="wpsubs-settings-field__control">
@@ -722,7 +676,7 @@ class SettingsHelper {
 					?>
 					style="<?php echo esc_attr( $vertical_style ); ?>"<?php endif; ?>>
 					<?php
-					foreach ( ( $args['elements'] ?? [] ) as $element_html ) {
+					foreach ( ( $args['elements'] ?? array() ) as $element_html ) {
 						// Output intentionally not escaped as element is already escaped during generation & re-escaping breaks the HTML structure.
 						// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 						echo $element_html;
@@ -767,17 +721,15 @@ class SettingsHelper {
 	 *   - modal (bool)         - Present the list inside a modal (default false).
 	 *   - button_label (string) - Modal trigger button text (modal mode).
 	 *   - modal_title (string) - Modal header title (modal mode; defaults to title).
-	 *   - pro_locked (bool)
 	 *
 	 * @param array $args Field arguments.
 	 * @param bool  $should_print Whether to print the field or return as HTML string.
 	 */
-	public static function render_editlist_field( $args = [], $should_print = true ) {
+	public static function render_editlist_field( $args = array(), $should_print = true ) {
 		$id          = $args['id'] ?? '';
 		$title       = $args['title'] ?? '';
 		$description = $args['description'] ?? '';
-		$items       = is_array( $args['value'] ?? null ) ? $args['value'] : [];
-		$locked      = ! empty( $args['pro_locked'] );
+		$items       = is_array( $args['value'] ?? null ) ? $args['value'] : array();
 		$modal       = ! empty( $args['modal'] );
 
 		$add_placeholder = $args['add_placeholder'] ?? __( 'Add an item…', 'subscription' );
@@ -792,37 +744,31 @@ class SettingsHelper {
 			return $should_print ? print wp_kses_post( $no_id_msg ) : $no_id_msg;
 		}
 
-		$body = self::editlist_body_html( $items, $add_placeholder, $add_label, $empty_text, $locked );
+		$body = self::editlist_body_html( $items, $add_placeholder, $add_label, $empty_text );
 
 		ob_start();
 		?>
-		<div class="wpsubs-settings-field<?php echo $locked ? ' wpsubs-settings-field--locked' : ''; ?>">
+		<div class="wpsubs-settings-field">
 			<div class="wpsubs-settings-field__label">
-				<?php
-				if ( $locked ) {
-					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Pre-escaped badge markup.
-					echo self::pro_badge_html();
-				}
-				?>
 				<?php echo esc_html( $title ); ?>
 			</div>
 			<div class="wpsubs-settings-field__control">
-				<div class="wpsubs-editlist<?php echo $locked ? ' wpsubs-editlist--locked' : ''; ?>">
+				<div class="wpsubs-editlist">
 					<input type="hidden" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $id ); ?>" value="<?php echo esc_attr( wp_json_encode( array_values( $items ) ) ); ?>" />
 					<?php if ( $modal ) : ?>
-						<button type="button" class="wpsubs-btn wpsubs-btn--outline wpsubs-editlist__trigger" data-wpsubs-modal-open="<?php echo esc_attr( $id . '_modal' ); ?>"<?php echo $locked ? ' disabled' : ''; ?>>
+						<button type="button" class="wpsubs-btn wpsubs-btn--outline wpsubs-editlist__trigger" data-wpsubs-modal-open="<?php echo esc_attr( $id . '_modal' ); ?>">
 							<?php echo esc_html( $button_label ); ?>
 							<span class="wpsubs-editlist__count"><?php echo esc_html( (string) count( $items ) ); ?></span>
 						</button>
 						<?php
 						wpsubs_render_modal(
-							[
+							array(
 								'id'     => $id . '_modal',
 								'title'  => $modal_title,
 								'body'   => $body,
 								'class'  => 'wpsubs-modal--editlist',
 								'footer' => '<button type="button" class="wpsubs-btn wpsubs-btn--primary" data-wpsubs-modal-close>' . esc_html__( 'Done', 'subscription' ) . '</button>',
-							]
+							)
 						);
 						?>
 					<?php else : ?>
@@ -856,10 +802,9 @@ class SettingsHelper {
 	 * @param string $add_placeholder Inline input placeholder.
 	 * @param string $add_label       Add button accessible label.
 	 * @param string $empty_text      Message shown when the list is empty.
-	 * @param bool   $locked          Whether the controls are disabled.
 	 * @return string Pre-escaped HTML.
 	 */
-	private static function editlist_body_html( array $items, $add_placeholder, $add_label, $empty_text, $locked ) {
+	private static function editlist_body_html( array $items, $add_placeholder, $add_label, $empty_text ) {
 		ob_start();
 		?>
 		<ul class="wpsubs-editlist__items">
@@ -884,8 +829,8 @@ class SettingsHelper {
 		</ul>
 		<p class="wpsubs-editlist__empty"<?php echo empty( $items ) ? '' : ' hidden'; ?>><?php echo esc_html( $empty_text ); ?></p>
 		<div class="wpsubs-editlist__add">
-			<input type="text" class="wpsubs-input wpsubs-editlist__input" placeholder="<?php echo esc_attr( $add_placeholder ); ?>"<?php echo $locked ? ' disabled' : ''; ?> />
-			<button type="button" class="wpsubs-editlist__add-btn" data-editlist-add aria-label="<?php echo esc_attr( $add_label ); ?>"<?php echo $locked ? ' disabled' : ''; ?>>
+				<input type="text" class="wpsubs-input wpsubs-editlist__input" placeholder="<?php echo esc_attr( $add_placeholder ); ?>" />
+				<button type="button" class="wpsubs-editlist__add-btn" data-editlist-add aria-label="<?php echo esc_attr( $add_label ); ?>">
 				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
 			</button>
 		</div>

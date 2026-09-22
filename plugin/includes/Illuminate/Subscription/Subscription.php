@@ -2,10 +2,16 @@
 /**
  * Main subscription class.
  *
- * TODO: Refactor and move all subscription related logic from Helper class into this class.
+ * Compatibility wrapper for product helpers and customer endpoints. The
+ * legacy Helper remains the lifecycle boundary for the imported public API;
+ * moving those methods is deferred until a separately tested namespace
+ * migration can preserve extension behavior.
  *
  * @package Subscription
  */
+
+// PSR-4 class filename is retained for the public subscription compatibility path.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
 
 namespace SpringDevs\Subscription\Illuminate\Subscription;
 
@@ -41,18 +47,16 @@ class Subscription {
 	 * @return string
 	 */
 	public static function get_user_endpoint( string $view = 'subs_list' ) {
-		$is_pro = subscrpt_pro_activated();
-
 		switch ( strtolower( $view ) ) {
 			case 'view_subs':
 				$default_endpoint = 'subscription';
-				$endpoint         = $is_pro ? get_option( 'wpsubs_custom_view_subscription_endpoint', $default_endpoint ) : $default_endpoint;
+				$endpoint         = get_option( 'wpsubs_custom_view_subscription_endpoint', $default_endpoint );
 				break;
 
 			case 'subs_list':
 			default:
 				$default_endpoint = 'subscriptions';
-				$endpoint         = $is_pro ? get_option( 'wpsubs_custom_subscriptions_endpoint', $default_endpoint ) : $default_endpoint;
+				$endpoint         = get_option( 'wpsubs_custom_subscriptions_endpoint', $default_endpoint );
 				break;
 		}
 

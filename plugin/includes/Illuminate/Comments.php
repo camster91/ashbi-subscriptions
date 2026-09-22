@@ -1,5 +1,8 @@
 <?php
 
+// PSR-4 class filename is retained for the public comments compatibility path.
+// phpcs:ignoreFile WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName
+
 namespace SpringDevs\Subscription\Illuminate;
 
 /**

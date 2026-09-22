@@ -1,4 +1,4 @@
-<?php
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase,WordPress.Files.FileName.InvalidClassFileName -- This filename is part of the imported public compatibility surface.
 /**
  * Shared admin UI component renderers.
  *
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * dashed rule beneath. The one header for every admin screen in both plugins —
  * use this instead of hand-writing the markup on a new page.
  *
- * @param array $args {
+ * @param array $args Arguments.
  *     Header args.
  *
  *     @type string $title       Page title. Required.
@@ -95,7 +95,7 @@ function wpsubs_pager_page_range( int $current, int $total ): array {
 	$last    = $total;
 	$current = max( 1, min( $total, $current ) );
 
-	// Slide a 3-number window centred on the current page, excluding the pinned
+	// Slide a 3-number window centred on the current page, excluding the pinned.
 	// first/last pages so they don't show twice.
 	$near_start = max( 2, $current - 1 );
 	$near_end   = min( $last - 1, $current + 1 );
@@ -128,9 +128,9 @@ function wpsubs_pager_page_range( int $current, int $total ): array {
 		if ( $j > 0 ) {
 			$gap = $p - $parts[ $j - 1 ];
 			if ( 2 === $gap ) {
-				$range[] = $parts[ $j - 1 ] + 1; // single hidden page — surface it
+				$range[] = $parts[ $j - 1 ] + 1; // single hidden page — surface it.
 			} elseif ( $gap > 2 ) {
-				$range[] = null; // ellipsis
+				$range[] = null; // ellipsis.
 			}
 		}
 		$range[] = $p;
@@ -153,7 +153,7 @@ function wpsubs_pager_page_range( int $current, int $total ): array {
  *     .wpsubs-pagination__nav
  *       .wpsubs-pagination__btn  (mods: --active | --disabled | --ellipsis)
  *
- * @param array $args {
+ * @param array $args Arguments.
  *     @type int    $current       Current page (1-indexed). Default 1.
  *     @type int    $total         Total number of pages. Default 1.
  *     @type bool   $info          Whether to render the "Showing X–Y of Z" info
@@ -180,7 +180,7 @@ function wpsubs_pager_page_range( int $current, int $total ): array {
  *     @type string $id            Optional id on the root.
  *     @type array  $attrs         Extra HTML attributes (key => value) on the root.
  *     @type string $context       Free-form hint passed to filters. Default ''.
- * }
+ * }.
  */
 function wpsubs_render_pager( array $args ): void {
 	$args = wp_parse_args(
@@ -210,9 +210,9 @@ function wpsubs_render_pager( array $args ): void {
 
 	// Item window for "Showing X–Y of Z" (only used when $info is true).
 	if ( $show_info ) {
-		// Callers that know the real item_count pass it; for cards where the
-		// row count isn't known at render time (Pro activities), item_count=0
-		// keeps the info text minimal ("0–0 of 0") and the JS rehydrates it
+		// Callers that know the real item_count pass it; for cards where the.
+		// row count isn't known at render time (Pro activities), item_count=0.
+		// keeps the info text minimal ("0–0 of 0") and the JS rehydrates it.
 		// once rows are visible.
 		if ( $args['item_count'] > 0 ) {
 			$item_total = (int) $args['item_count'];
@@ -244,12 +244,12 @@ function wpsubs_render_pager( array $args ): void {
 	$has_prev   = $current > 1;
 	$has_next   = $current < $total;
 
-	// Filterable info string (only composed when $info is true). The default
-	// keeps the previous hard-coded copy so the existing POT entry stays the
+	// Filterable info string (only composed when $info is true). The default.
+	// keeps the previous hard-coded copy so the existing POT entry stays the.
 	// source of truth.
 	$info_text = '';
 	if ( $show_info ) {
-		// translators: Pagination: %1$s: first item, %2$s: last item, %3$s: total items
+			// translators: Pagination: %1$s: first item, %2$s: last item, %3$s: total items.
 		$info_format = '' !== $args['info_format'] ? $args['info_format'] : __( 'Showing %1$s–%2$s of %3$s', 'subscription' );
 		$info_text   = sprintf(
 			$info_format,
@@ -412,11 +412,11 @@ function wpsubs_render_pager( array $args ): void {
  * }
  */
 function subscrpt_multiselect_field( $field ) {
-	$defaults = [
+	$defaults = array(
 		'id'            => '',
 		'label'         => '',
-		'options'       => [],
-		'selected'      => [],
+		'options'       => array(),
+		'selected'      => array(),
 		'desc_tip'      => false,
 		'description'   => '',
 		'wrapper_class' => '',
@@ -424,7 +424,7 @@ function subscrpt_multiselect_field( $field ) {
 		'class'         => 'wc-enhanced-select',
 		'style'         => '',
 		'name'          => '',
-	];
+	);
 
 	$field = wp_parse_args( $field, $defaults );
 
@@ -439,13 +439,13 @@ function subscrpt_multiselect_field( $field ) {
 	$desc_tip    = $field['desc_tip'];
 
 	// Normalize selected values into array.
-	$selected = [];
+	$selected = array();
 	if ( is_array( $field['selected'] ) ) {
 		$selected = $field['selected'];
-	} elseif ( is_string( $field['selected'] ) && $field['selected'] !== '' ) {
+	} elseif ( is_string( $field['selected'] ) && '' !== $field['selected'] ) {
 		if ( false !== strpos( $field['selected'], '[' ) ) {
 			$tmp      = json_decode( $field['selected'], true );
-			$selected = is_array( $tmp ) ? $tmp : [];
+			$selected = is_array( $tmp ) ? $tmp : array();
 		} else {
 			$selected = array_filter( array_map( 'trim', explode( ',', $field['selected'] ) ) );
 		}
@@ -503,76 +503,13 @@ function subscrpt_multiselect_field( $field ) {
 }
 
 /**
- * Render a preview for pages that are unavailable in this build.
- *
- * @param array $args Preview arguments.
- */
-function subscrpt_render_page_preview( array $args = [] ) {
-	$defaults = [
-		'preview_image_url' => SUBSCRPT_ASSETS . '/images/previews/subscrpt-health-preview.png',
-		'cta_title'         => __( 'Feature unavailable', 'subscription' ),
-		'cta_description'   => __( 'This optional feature is not included in the current build.', 'subscription' ),
-		'cta_button_text'   => __( 'Open support', 'subscription' ),
-		'cta_button_url'    => admin_url( 'admin.php?page=wp-subscription-support' ),
-	];
-
-	$args = wp_parse_args( $args, $defaults );
-
-	ob_start();
-	?>
-		<div style="position: relative;">
-			<div style="filter:blur(4px);pointer-events:none;">
-				<div style="max-width:1240px;margin:32px auto 0 auto;">
-					<img
-						src="<?php echo esc_url( $args['preview_image_url'] ); ?>"
-						alt="<?php esc_attr_e( 'page preview', 'subscription' ); ?>"
-						style="width:100%;display:block;"
-					/>
-				</div>
-			</div>
-			<div style="position:absolute;inset:0;display:flex;align-items:top;justify-content:center;padding:100px 32px 32px;">
-				<div style="height:fit-content;background:#fff;border-radius:12px;padding:28px 32px;text-align:center;max-width:440px;box-shadow:0 8px 48px rgba(0,0,0,0.22);">
-
-					<!-- Lock icon with radial glow -->
-					<div style="position:relative;display:flex;align-items:center;justify-content:center;margin-bottom:20px;">
-						<div style="position:absolute;width:100px;height:100px;background:radial-gradient(circle,var(--wpsubs-brand-ring) 0%,transparent 70%);border-radius:50%;"></div>
-						<div style="position:relative;width:56px;height:56px;border:1.5px solid var(--wpsubs-brand);border-radius:14px;display:flex;align-items:center;justify-content:center;background:#fff;">
-							<svg width="24" height="24" fill="none" viewBox="0 0 24 24" style="stroke:var(--wpsubs-brand);" stroke-width="2" aria-hidden="true">
-								<rect x="5" y="11" width="14" height="10" rx="2"/>
-								<path stroke-linecap="round" d="M8 11V7a4 4 0 018 0v4"/>
-							</svg>
-						</div>
-					</div>
-
-					<!-- Title -->
-					<div style="font-size:22px;font-weight:700;color:#111;margin-bottom:10px;line-height:1.3;">
-						<?php echo esc_html( $args['cta_title'] ); ?>
-					</div>
-
-					<!-- Subtitle -->
-					<div style="font-size:14px;color:#6b7280;margin-bottom:20px;line-height:1.6;">
-						<?php echo esc_html( $args['cta_description'] ); ?>
-					</div>
-
-					<!-- CTA button -->
-					<a href="<?php echo esc_url( $args['cta_button_url'] ); ?>" style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--wpsubs-brand);color:#fff;font-size:15px;font-weight:600;padding:14px 28px;border-radius:8px;text-decoration:none;">
-						<?php echo esc_html( $args['cta_button_text'] ); ?>
-					</a>
-				</div>
-			</div>
-		</div>
-	<?php
-	return ob_get_clean();
-}
-
-/**
  * Render an Advanced Select component.
  *
  * Outputs a styled trigger-button + dropdown that replaces a native <select>.
  * A hidden <input> carries the selected value for form submission.
  * JS (admin-components.js WPSubsAdvSelect) handles open/close and selection.
  *
- * @param array $args {
+ * @param array $args Arguments.
  *   @type string   $name          Hidden input name attribute.  Required.
  *   @type string   $placeholder   Trigger label when nothing is selected.
  *   @type string   $value         Initial hidden-input value (default: '').
@@ -587,7 +524,7 @@ function subscrpt_render_page_preview( array $args = [] ) {
  *   @type string   $align         Menu alignment: 'left' (default) or 'right'.
  *   @type string   $id            Optional id on the root element.
  *   @type string   $class         Extra classes on the root element.
- * }
+ * }.
  */
 function wpsubs_render_adv_select( array $args ): void {
 	$args = wp_parse_args(
@@ -698,12 +635,12 @@ function wpsubs_render_adv_select( array $args ): void {
  * other wpsubs_render_adv_select() arg (name, align, id, class, attrs) — they
  * pass straight through.
  *
- * @param array $args {
+ * @param array $args Arguments.
  *   @type string $name    Hidden input name.
  *   @type string $value   Initial value. Default '10'.
  *   @type array  $options Page sizes (ints) or option arrays. Default 10/20/50/100.
  *   @type mixed  ...       Any other wpsubs_render_adv_select() arg.
- * }
+ * }.
  *
  * @return void
  */
@@ -743,7 +680,7 @@ function wpsubs_render_per_page_select( array $args = array() ): void {
  * JS: WPSubsTagSelect (admin-components.js) auto-inits elements.
  * Event fired on root: `wpsubs:select` — detail: { value, label, selected }
  *
- * @param array $args {
+ * @param array $args Arguments.
  *   string       $name        Form field name (base name, without [] suffix).
  *   string       $placeholder Input placeholder shown when nothing is selected.
  *   string|array $value       Current value(s). Array for multiple, string for single.
@@ -752,7 +689,7 @@ function wpsubs_render_per_page_select( array $args = array() ): void {
  *   string       $id          Optional root element id.
  *   string       $class       Extra CSS classes for the root element.
  *   array        $attrs       Extra HTML attributes for the root element.
- * }
+ * }.
  */
 function wpsubs_render_tag_select( array $args ): void {
 	$args = wp_parse_args(
@@ -981,9 +918,9 @@ function wpsubs_render_hint( string $text, array $args = array() ): string {
 		$classes .= ' ' . $args['class'];
 	}
 
-	// A <span> (not a <button>/<input>) is NOT a labelable element, so nesting
-	// it inside a <label> does not associate the label with it — hovering the
-	// label text therefore never reveals the tooltip, only hovering the icon
+	// A <span> (not a <button>/<input>) is NOT a labelable element, so nesting.
+	// it inside a <label> does not associate the label with it — hovering the.
+	// label text therefore never reveals the tooltip, only hovering the icon.
 	// does. The text is exposed to assistive tech via role="img" + aria-label.
 	return sprintf(
 		'<span class="%1$s" data-tip="%2$s" role="img" aria-label="%2$s">'

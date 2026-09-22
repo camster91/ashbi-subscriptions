@@ -66,7 +66,7 @@ use SpringDevs\Subscription\Admin\Plans;
 					<span class="dashicons dashicons-plus-alt2" style="font-size:16px;width:16px;height:16px;line-height:1;"></span>
 					<?php esc_html_e( 'Add Duration', 'subscription' ); ?>
 				</button>
-				<?php // Nothing to manage until a product is attached — the empty state invites the first one. ?>
+			<?php // Nothing to manage until a product is attached — the empty state invites the first one. ?>
 				<?php if ( ! empty( $plan['terms'] ) && ! empty( $plan['products'] ) ) : ?>
 					<button type="button" class="wpsubs-btn wpsubs-btn--primary" data-wpsubs-modal-open="subscrpt-add-product" data-subscrpt-tab-action="subscrpt-tab-products">
 						<span class="dashicons dashicons-edit" style="font-size:16px;width:16px;height:16px;line-height:1;"></span>
