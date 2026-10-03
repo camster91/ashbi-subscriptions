@@ -1,3 +1,17 @@
+/* Read-only delivery cadence for variations mapped to one subscription term. */
+(function () {
+  if (!window.jQuery) { return; }
+  window.jQuery(document).on("found_variation", ".variations_form", function (event, variation) {
+    var note = this.querySelector("[data-subscrpt-variation-note]");
+    if (note) {
+      note.textContent = variation.subscrpt_term_note || "";
+      note.hidden = !note.textContent;
+    }
+  }).on("reset_data hide_variation", ".variations_form", function () {
+    var note = this.querySelector("[data-subscrpt-variation-note]");
+    if (note) { note.textContent = ""; note.hidden = true; }
+  });
+})();
 /**
  * Storefront plan selector — simple and variable products.
  *

@@ -45,7 +45,9 @@ class AutoRenewal {
 	 */
 	public function filter_renewal_product_args( $product_args, $product, $order_item, $subscription_id = 0 ) {
 		$custom_price = $subscription_id ? get_post_meta( $subscription_id, '_subscrpt_custom_renewal_price', true ) : '';
-		if ( 'updated' !== get_option( 'subscrpt_renewal_price', 'subscribed' ) && '' === $custom_price ) {
+		$plan_data = $subscription_id ? get_post_meta( $subscription_id, '_subscrpt_plan_data', true ) : array();
+		$purchase_snapshot = is_array( $plan_data ) && in_array( $plan_data['ashbi_price_source'] ?? '', array( 'variation', 'product' ), true );
+		if ( ( $purchase_snapshot || 'updated' !== get_option( 'subscrpt_renewal_price', 'subscribed' ) ) && '' === $custom_price ) {
 			return $product_args;
 		}
 
@@ -88,6 +90,10 @@ class AutoRenewal {
 	 * @return array
 	 */
 	public function filter_renewal_item_meta( $item_meta, $product, $order_item = null, $subscription_id = 0 ) {
+		$plan_data = $subscription_id ? get_post_meta( $subscription_id, '_subscrpt_plan_data', true ) : array();
+		if ( is_array( $plan_data ) && in_array( $plan_data['ashbi_price_source'] ?? '', array( 'variation', 'product' ), true ) ) {
+			return $item_meta;
+		}
 		if ( 'updated' !== get_option( 'subscrpt_renewal_price', 'subscribed' ) || ! $product ) {
 			return $item_meta;
 		}

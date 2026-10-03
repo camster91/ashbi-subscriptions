@@ -23,6 +23,7 @@ if ( ! function_exists( 'wc_get_price_decimals' ) ) {
 require_once dirname( __DIR__, 2 ) . '/plugin/includes/functions.php';
 require_once dirname( __DIR__, 2 ) . '/plugin/includes/Illuminate/Plans/PlanRepository.php';
 require_once dirname( __DIR__, 2 ) . '/plugin/includes/Admin/PlanPresenter.php';
+require_once dirname( __DIR__, 2 ) . '/plugin/includes/Illuminate/Plans/PlanPrice.php';
 require_once dirname( __DIR__, 2 ) . '/plugin/includes/Frontend/PlanCheckout.php';
 
 /** Verify plan payment limits and split installment selection. */

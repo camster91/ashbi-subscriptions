@@ -184,6 +184,11 @@ abstract class Product {
 	 * @return bool True when the product is enabled.
 	 */
 	public function is_enabled(): bool {
+		$parent_id = (int) $this->product->get_parent_id();
+		if ( $parent_id && 'yes' === get_post_meta( $parent_id, '_subscrpt_variation_term_mode', true ) ) {
+			return subscrpt_plan_offered( $parent_id, $this->product->get_id() );
+		}
+
 		if ( empty( $this->product->get_meta( '_subscrpt_enabled' ) ) ) {
 			return false;
 		}

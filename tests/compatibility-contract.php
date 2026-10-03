@@ -8,9 +8,9 @@
  * @package AshbiSubscriptions\Tests
  */
 
-$root                  = dirname( __DIR__ );
+$root                   = dirname( __DIR__ );
 $ashbi_plugin_directory = $root . '/plugin';
-$compatibility_errors  = array();
+$compatibility_errors   = array();
 
 /**
  * Record a failed assertion.
@@ -39,6 +39,7 @@ function ashbi_read( $path ) {
 		return '';
 	}
 
+	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Dependency-free local source contract.
 	$contents = file_get_contents( $path );
 	if ( false === $contents ) {
 		$compatibility_errors[] = 'Unable to read required file: ' . $path;
@@ -48,7 +49,7 @@ function ashbi_read( $path ) {
 	return $contents;
 }
 
-$bootstrap    = ashbi_read( $ashbi_plugin_directory . '/subscription.php' );
+$bootstrap   = ashbi_read( $ashbi_plugin_directory . '/subscription.php' );
 $composer    = json_decode( ashbi_read( $ashbi_plugin_directory . '/composer.json' ), true );
 $installer   = ashbi_read( $ashbi_plugin_directory . '/includes/Installer.php' );
 $post_source = ashbi_read( $ashbi_plugin_directory . '/includes/Illuminate/Post.php' );
@@ -79,6 +80,7 @@ $required_meta = array(
 	'_subscrpt_order_item_id',
 	'_subscrpt_product_id',
 	'_subscrpt_variation_id',
+	'_subscrpt_variation_term_mode',
 	'_subscrpt_start_date',
 	'_subscrpt_next_date',
 	'_subscrpt_trial',
@@ -107,6 +109,7 @@ ashbi_assert( false === strpos( $source, '$variation_id = $variation_id;' ), 'Ma
 ashbi_assert( false === strpos( $source, '$product_data->' ), 'PayPal product creation must not dereference undefined product data.' );
 
 if ( $compatibility_errors ) {
+	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- Dependency-free CLI error output.
 	fwrite( STDERR, "Compatibility contract failed:\n- " . implode( "\n- ", $compatibility_errors ) . "\n" );
 	exit( 1 );
 }

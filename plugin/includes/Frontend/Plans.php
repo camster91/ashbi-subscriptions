@@ -17,6 +17,7 @@ namespace SpringDevs\Subscription\Frontend;
 
 use SpringDevs\Subscription\Admin\PlanPresenter;
 use SpringDevs\Subscription\Illuminate\Plans\PlanRepository;
+use SpringDevs\Subscription\Illuminate\Plans\PlanPrice;
 
 /**
  * Frontend plan selector for simple and variable products.
@@ -29,9 +30,34 @@ class Plans {
 	public function __construct() {
 		// Runs after Frontend\Product::change_price_html (priority 10) so the plan.
 		// price replaces the classic suffix rather than appending to it.
+		add_filter( 'woocommerce_available_variation', array( $this, 'variation_note' ), 20, 3 );
 		add_filter( 'woocommerce_get_price_html', array( $this, 'plan_price_html' ), 20, 2 );
 		add_action( 'woocommerce_before_add_to_cart_button', array( $this, 'render_selector' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
+	}
+
+	/**
+	 * Carry the read-only cadence through WooCommerce's variation event payload.
+	 *
+	 * @param array       $data Variation payload.
+	 * @param \WC_Product $parent_product Parent product.
+	 * @param \WC_Product $variation Variation product.
+	 * @return array
+	 */
+	public function variation_note( $data, $parent_product, $variation ) {
+		if ( 'yes' !== get_post_meta( $parent_product->get_id(), '_subscrpt_variation_term_mode', true ) ) {
+			return $data;
+		}
+		$rows                       = PlanRepository::resolve_for_product( $parent_product->get_id(), $variation->get_id() );
+		$data['subscrpt_term_note'] = '';
+		if ( 1 === count( $rows ) ) {
+			$row       = $rows[0];
+			$unit      = strtolower( PlanPresenter::interval_label( (int) $row['billing_interval'] ) );
+			$frequency = (int) $row['billing_frequency'];
+			// translators: Delivery cadence, for example "2 months".
+			$data['subscrpt_term_note'] = sprintf( __( 'Delivered every %s — renews automatically', 'subscription' ), 1 === $frequency ? $unit : $frequency . ' ' . $unit . 's' );
+		}
+		return $data;
 	}
 
 	/**
@@ -117,10 +143,14 @@ class Plans {
 			return $price_html;
 		}
 
-		$parent_id    = $product->is_type( 'variation' ) ? $product->get_parent_id() : $product->get_id();
-		$variation_id = $product->is_type( 'variation' ) ? $product->get_id() : 0;
-		$rows         = PlanRepository::resolve_for_product( $parent_id, $variation_id );
+		$parent_product_id = $product->is_type( 'variation' ) ? $product->get_parent_id() : $product->get_id();
+		$variation_id      = $product->is_type( 'variation' ) ? $product->get_id() : 0;
+		$rows              = PlanRepository::resolve_for_product( $parent_product_id, $variation_id );
 		if ( empty( $rows ) ) {
+			return $price_html;
+		}
+
+		if ( in_array( $rows[0]['relation_data']['price_source'] ?? '', array( 'variation', 'product' ), true ) ) {
 			return $price_html;
 		}
 
@@ -131,6 +161,10 @@ class Plans {
 			$regular = isset( $data['regular_price'] ) && '' !== $data['regular_price'] ? (float) $data['regular_price'] : null;
 			$offer   = $this->term_price( $row );
 
+			if ( null === $offer ) {
+				return $price_html;
+			}
+
 			return ( null !== $regular && $offer < $regular )
 				? '<del aria-hidden="true">' . wc_price( $regular ) . '</del> <ins>' . wc_price( $offer ) . '</ins>'
 				: wc_price( $offer );
@@ -139,7 +173,14 @@ class Plans {
 		// Multiple plans: a min–max range across every attached term.
 		$prices = array();
 		foreach ( $rows as $row ) {
-			$prices[] = $this->term_price( $row );
+			$price = $this->term_price( $row );
+			if ( null !== $price ) {
+				$prices[] = $price;
+			}
+		}
+
+		if ( ! $prices ) {
+			return $price_html;
 		}
 
 		$min = min( $prices );
@@ -163,6 +204,11 @@ class Plans {
 
 		global $product;
 		if ( ! $this->product_has_plans( $product ) ) {
+			return;
+		}
+
+		if ( 'yes' === get_post_meta( $product->get_id(), '_subscrpt_variation_term_mode', true ) ) {
+			echo '<p data-subscrpt-variation-note hidden aria-live="polite"></p>';
 			return;
 		}
 
@@ -236,11 +282,15 @@ class Plans {
 	 * @return array
 	 */
 	private function build_groups( $product, $variation_id = 0 ) {
-		$parent_id = $product->is_type( 'variation' ) ? $product->get_parent_id() : $product->get_id();
-		$resolved  = PlanRepository::resolve_for_product( $parent_id, $variation_id );
+		$parent_product_id = $product->is_type( 'variation' ) ? $product->get_parent_id() : $product->get_id();
+		$resolved          = PlanRepository::resolve_for_product( $parent_product_id, $variation_id );
 
 		$groups = array();
 		foreach ( $resolved as $row ) {
+			$price_num = $this->term_price( $row );
+			if ( null === $price_num ) {
+				continue;
+			}
 			$gid = (int) $row['plan_group_id'];
 
 			if ( ! isset( $groups[ $gid ] ) ) {
@@ -255,8 +305,6 @@ class Plans {
 					'pcts'             => array(),
 				);
 			}
-
-			$price_num = $this->term_price( $row );
 
 			// Each term's discount (offer below regular). Installments price on a.
 			// different basis, so they never contribute a percentage.
@@ -305,16 +353,14 @@ class Plans {
 	 *
 	 * @param array $row Resolved plan row.
 	 *
-	 * @return float
+	 * @return float|null Null when a live price is unavailable.
 	 */
 	private function term_price( $row ) {
-		$data    = is_array( $row['relation_data'] ) ? $row['relation_data'] : array();
-		$regular = isset( $data['regular_price'] ) ? (string) $data['regular_price'] : '';
-		$selling = isset( $data['sale_price'] ) ? (string) $data['sale_price'] : '';
-		$dtype   = isset( $data['discount_type'] ) ? (string) $data['discount_type'] : 'percentage';
-		$dvalue  = isset( $data['discount_value'] ) ? (string) $data['discount_value'] : '0';
-
-		$price = (float) PlanPresenter::offer_price( $regular, $selling, $dtype, $dvalue );
+		try {
+			$price = PlanPrice::purchase_price( $row );
+		} catch ( \UnexpectedValueException $error ) {
+			return null;
+		}
 		if ( 'installments' === PlanRepository::type_to_string( (int) $row['group_type'] ) ) {
 			$count = max( 2, (int) ( $row['plan_data']['installment_count'] ?? 2 ) );
 			if ( function_exists( 'subscrpt_split_amounts' ) ) {

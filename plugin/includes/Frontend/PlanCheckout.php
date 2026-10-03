@@ -22,9 +22,9 @@
 
 namespace SpringDevs\Subscription\Frontend;
 
-use SpringDevs\Subscription\Admin\PlanPresenter;
 use SpringDevs\Subscription\Illuminate\Helper;
 use SpringDevs\Subscription\Illuminate\Plans\PlanRepository;
+use SpringDevs\Subscription\Illuminate\Plans\PlanPrice;
 
 /**
  * Class PlanCheckout
@@ -83,6 +83,10 @@ class PlanCheckout {
 	 * @return int Plan-term id, or 0 to leave the item untouched.
 	 */
 	private function fallback_plan_id( $product_id, $variation_id = 0 ) {
+		if ( 'yes' === get_post_meta( $product_id, '_subscrpt_variation_term_mode', true ) ) {
+			return self::mapped_plan_id( PlanRepository::resolve_for_product( $product_id, $variation_id ) );
+		}
+
 		if ( ! function_exists( 'subscrpt_product_has_plan' ) || ! subscrpt_product_has_plan( $product_id, $variation_id ) ) {
 			return 0;
 		}
@@ -102,18 +106,28 @@ class PlanCheckout {
 	}
 
 	/**
+	 * A mapped variation has exactly one term; malformed multi-term data fails closed.
+	 *
+	 * @param array $rows Exact variation rows.
+	 * @return int
+	 * @throws \UnexpectedValueException On conflicting mappings.
+	 */
+	public static function mapped_plan_id( array $rows ) {
+		if ( count( $rows ) > 1 ) {
+			throw new \UnexpectedValueException( 'This variation has conflicting subscription terms. Please contact the store.' );
+		}
+		return 1 === count( $rows ) ? (int) $rows[0]['plan_id'] : 0;
+	}
+
+	/**
 	 * Map a resolved plan row to checkout terms.
 	 *
 	 * @param array $row Resolved plan row.
 	 *
+	 * @throws \UnexpectedValueException When the subscription price is unavailable.
 	 * @return array{price:float,total_price:float,time:int,option:string,trial:?string,signup_fee:float,payment_type:string,max_payments:int,billing_length:int,plan_data:array}
 	 */
 	private function term_terms( $row ) {
-		$data    = is_array( $row['relation_data'] ) ? $row['relation_data'] : array();
-		$regular = isset( $data['regular_price'] ) ? (string) $data['regular_price'] : '';
-		$selling = isset( $data['sale_price'] ) ? (string) $data['sale_price'] : '';
-		$dtype   = isset( $data['discount_type'] ) ? (string) $data['discount_type'] : 'percentage';
-		$dvalue  = isset( $data['discount_value'] ) ? (string) $data['discount_value'] : '0';
 
 		$trial = null;
 		if ( ! empty( $row['free_trial'] ) && (int) $row['free_trial'] > 0 ) {
@@ -121,8 +135,15 @@ class PlanCheckout {
 			$trial          = (int) $row['free_trial'] . ' ' . $trial_interval;
 		}
 
-		$total_price = (float) PlanPresenter::offer_price( $regular, $selling, $dtype, $dvalue );
+		try {
+			$total_price = PlanPrice::purchase_price( $row );
+		} catch ( \UnexpectedValueException $error ) {
+			throw new \UnexpectedValueException( esc_html__( 'This subscription is currently unavailable. Please choose another option or contact the store.', 'subscription' ), 0, $error );
+		}
 		$plan_data   = is_array( $row['plan_data'] ) ? $row['plan_data'] : array();
+		if ( in_array( $row['relation_data']['price_source'] ?? '', array( 'variation', 'product' ), true ) ) {
+			$plan_data['ashbi_price_source'] = $row['relation_data']['price_source'];
+		}
 		$group_type  = PlanRepository::type_to_string( (int) $row['group_type'] );
 		$payment_type = 'installments' === $group_type ? 'split_payment' : 'recurring';
 		$billing_length = max( 0, (int) ( $row['billing_length'] ?? 0 ) );
@@ -181,6 +202,10 @@ class PlanCheckout {
 		if ( ! $plan_id ) {
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- WooCommerce verifies the add-to-cart request; we only read a plan id.
 			$plan_id = isset( $_REQUEST['subscrpt_plan_id'] ) ? absint( wp_unslash( $_REQUEST['subscrpt_plan_id'] ) ) : 0;
+		}
+		if ( 'yes' === get_post_meta( $product_id, '_subscrpt_variation_term_mode', true ) ) {
+			$plan_id = $this->fallback_plan_id( $product_id, $variation_id );
+			unset( $cart_item_data['subscrpt_plan_id'] );
 		}
 		if ( ! $plan_id ) {
 			// Bare add-to-cart (direct link, no plan chosen): fall back to one-time.
@@ -260,7 +285,11 @@ class PlanCheckout {
 
 		foreach ( $cart->get_cart() as $cart_item ) {
 			if ( isset( $cart_item['subscrpt_plan_price'], $cart_item['data'] ) ) {
-				$cart_item['data']->set_price( (float) $cart_item['subscrpt_plan_price'] );
+				$price = (float) $cart_item['subscrpt_plan_price'];
+				if ( ! empty( $cart_item['subscription']['trial'] ) && in_array( $cart_item['subscrpt_plan_data']['ashbi_price_source'] ?? '', array( 'variation', 'product' ), true ) ) {
+					$price = 0.0;
+				}
+				$cart_item['data']->set_price( $price );
 			}
 		}
 	}
@@ -280,6 +309,7 @@ class PlanCheckout {
 			return;
 		}
 
+		$item->update_meta_data( '_subscrpt_variation_id', (int) ( $cart_item['subscrpt_variation_id'] ?? 0 ) );
 		$item->update_meta_data( '_subscrpt_plan_id', (int) $cart_item['subscrpt_plan_id'] );
 		$item->update_meta_data( '_subscrpt_plan_group_id', (int) ( $cart_item['subscrpt_plan_group_id'] ?? 0 ) );
 		$item->update_meta_data( '_subscrpt_plan_price', (float) ( $cart_item['subscrpt_plan_price'] ?? 0 ) );
