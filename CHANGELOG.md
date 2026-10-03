@@ -3,6 +3,16 @@
 All notable Ashbi-maintained changes after the immutable upstream import are
 documented here. The original vendor changelog remains at `plugin/changelog.txt`.
 
+## 2.1.1 — 2026-10-03
+
+- Refuse to load when WP Subscription Core or upstream WPSubscription is already
+  active, with an admin notice and clean activation refusal, avoiding a fatal
+  shared-class clash.
+- After successful variation mapping apply, rollback, or editor saves, clear
+  product object caches and request well-known full-page cache purges
+  (LiteSpeed, WP Rocket, and similar). Migration reports include `cache_purged`
+  and remind operators to purge manually if a page still lacks the delivery note.
+
 ## 2.1.0 — 2026-10-03
 
 - Add opt-in variation term mapping without schema changes. Each mapped variation

@@ -151,6 +151,8 @@ subsequent worker replaces the stale display option. Apply requires InnoDB plan,
 postmeta and options tables and refuses nontransactional storage before writing.
 Plan rows, metadata and the rollback journal commit together. A failed write
 rolls back all those writes and clears plan/product/meta/option caches.
+Product page caches are purged for touched products; if a page still lacks the
+delivery note, purge the page cache manually.
 
 The non-autoloaded `subscrpt_variation_migration_journal` records created relation,
 term and group rows, each changed meta key's prior existence/value, and removed

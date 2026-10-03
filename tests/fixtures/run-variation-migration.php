@@ -451,6 +451,23 @@ namespace {
 	 * @return void
 	 */
 	function wc_delete_product_transients( $id ) {}
+	/**
+	 * Post cache cleanup double.
+	 *
+	 * @param int $id ID.
+	 * @return void
+	 */
+	function clean_post_cache( $id ) {}
+	/**
+	 * Action dispatch double for page-cache purge helpers.
+	 *
+	 * @param string $hook Hook.
+	 * @param mixed  ...$args Args.
+	 * @return void
+	 */
+	function do_action( $hook, ...$args ) {
+		$GLOBALS['actions'][] = array( $hook, $args );
+	}
 	/** Fixture site URL.
 	 *
 	 * @return string
@@ -467,6 +484,7 @@ namespace {
 		$GLOBALS['logs'][] = $line; }
 
 	$root = dirname( __DIR__, 2 );
+	require_once $root . '/plugin/includes/Illuminate/Plans/CachePurge.php';
 	require_once $root . '/plugin/includes/Illuminate/Migration/FrequencyParser.php';
 	require_once $root . '/plugin/includes/Illuminate/Migration/VariationPlanPlanner.php';
 	require_once $root . '/plugin/includes/Illuminate/Migration/VariationPlanMigrator.php';

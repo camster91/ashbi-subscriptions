@@ -1,5 +1,10 @@
 *** Ashbi Subscriptions Changelog ***
 
+2026-10-03 - version 2.1.1
+* fixed: Refuse coexistence with WP Subscription Core / WPSubscription to avoid a fatal class clash.
+* fixed: Purge product page caches after variation mapping apply, rollback, and editor saves.
+* improved: Migration results note when page cache may still need a manual purge.
+
 2026-10-03 - version 2.1.0
 * new: Single-term variation mapping using live WooCommerce sale-aware prices.
 * new: Native variation editor subscription term selector and mapping mode toggle.

@@ -81,6 +81,15 @@ final class BrandingBoundaryTest extends TestCase {
 			self::assertFileExists( $file );
 			$contents = file_get_contents( $file );
 			self::assertNotFalse( $contents, 'Unable to read ' . $file );
+			// Coexistence guard (and its catalog entry) must name the conflicting products.
+			$contents = str_replace(
+				array(
+					'Ashbi Subscriptions is inactive because another subscription plugin (WP Subscription Core / WPSubscription) is active and must be deactivated first.',
+					'WP Subscription Core / WPSubscription',
+				),
+				'',
+				$contents
+			);
 
 			foreach ( self::PROHIBITED_PATTERNS as $pattern ) {
 				if ( preg_match( $pattern, $contents ) ) {

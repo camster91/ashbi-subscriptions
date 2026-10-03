@@ -3,7 +3,7 @@
  * Plugin Name: Ashbi Subscriptions
  * Description: Adds recurring purchases, subscription management, and automated renewals to WooCommerce stores.
  *
- * Version: 2.1.0
+ * Version: 2.1.1
  *
  * Author: Ashbi
  *
@@ -30,6 +30,35 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+// Another copy (WP Subscription Core / upstream WP Subscription) already owns the shared class/constants.
+if ( class_exists( 'Sdevs_Subscription', false ) || defined( 'WP_SUBSCRIPTION_FILE' ) || defined( 'SUBSCRPT_FILE' ) ) {
+	if ( ! function_exists( 'ashbi_subscriptions_core_conflict_notice' ) ) {
+		/**
+		 * Admin notice when a conflicting subscription plugin is already loaded.
+		 *
+		 * @return void
+		 */
+		function ashbi_subscriptions_core_conflict_notice() {
+			if ( ! current_user_can( 'activate_plugins' ) ) {
+				return;
+			}
+			echo '<div class="notice notice-error"><p>' . esc_html__( 'Ashbi Subscriptions is inactive because another subscription plugin (WP Subscription Core / WPSubscription) is active and must be deactivated first.', 'subscription' ) . '</p></div>';
+		}
+	}
+	add_action( 'admin_notices', 'ashbi_subscriptions_core_conflict_notice' );
+
+	// Activation sandbox: refuse cleanly so this plugin does not appear active while idle.
+	if ( is_admin() && function_exists( 'deactivate_plugins' ) && function_exists( 'plugin_basename' ) && function_exists( 'sanitize_key' ) && function_exists( 'wp_unslash' ) ) {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Activation request detection only.
+		$ashbi_subscriptions_action = isset( $_GET['action'] ) ? sanitize_key( wp_unslash( $_GET['action'] ) ) : '';
+		if ( 'activate' === $ashbi_subscriptions_action ) {
+			deactivate_plugins( plugin_basename( __FILE__ ) );
+		}
+	}
+
+	return;
+}
+
 use Automattic\WooCommerce\Blocks\Payments\PaymentMethodRegistry;
 use SpringDevs\Subscription\Illuminate\Gateways\Paypal\Paypal_Blocks_Integration;
 
@@ -54,7 +83,7 @@ final class Sdevs_Subscription {
 	 *
 	 * @var string
 	 */
-	const VERSION = '2.1.0';
+	const VERSION = '2.1.1';
 
 	/**
 	 * Holds various class instances

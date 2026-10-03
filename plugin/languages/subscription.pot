@@ -2,7 +2,7 @@
 # This file is distributed under the GPLv2 or later.
 msgid ""
 msgstr ""
-"Project-Id-Version: Ashbi Subscriptions 2.1.0\n"
+"Project-Id-Version: Ashbi Subscriptions 2.1.1\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/plugin\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -33,6 +33,14 @@ msgstr ""
 #. Author of the plugin
 #: subscription.php
 msgid "Ashbi"
+msgstr ""
+
+#: subscription.php
+msgid "Ashbi Subscriptions is inactive because another subscription plugin (WP Subscription Core / WPSubscription) is active and must be deactivated first."
+msgstr ""
+
+#: includes/Admin/VariationMigration.php
+msgid "Product page caches are purged for touched products; if a page still lacks the delivery note, purge the page cache manually."
 msgstr ""
 
 #: includes/Admin/AdminComponents.php:67

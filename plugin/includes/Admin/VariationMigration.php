@@ -127,6 +127,9 @@ class VariationMigration {
 			<?php if ( $report ) : ?>
 				<p><?php echo esc_html( ( $report['mode'] ?? '' ) . ' — ' . ( $report['timestamp'] ?? '' ) ); ?></p>
 				<p><?php echo esc_html( wp_json_encode( $report['totals'] ?? array() ) ); ?></p>
+				<?php if ( isset( $report['cache_purged'] ) ) : ?>
+					<p><?php esc_html_e( 'Product page caches are purged for touched products; if a page still lacks the delivery note, purge the page cache manually.', 'subscription' ); ?></p>
+				<?php endif; ?>
 				<?php
 				foreach ( $report['errors'] ?? array() as $error ) :
 					?>
