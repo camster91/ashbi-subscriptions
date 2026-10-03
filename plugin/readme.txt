@@ -3,7 +3,7 @@ Contributors: ashbi
 Tags: woocommerce subscriptions, subscriptions, recurring payments, stripe, paypal
 Requires at least: 6.2
 Tested up to: 7.1
-Stable tag: 2.0.0
+Stable tag: 2.1.0
 Requires PHP: 7.4
 WC requires at least: 6.0
 WC tested up to: 10.3
@@ -80,12 +80,24 @@ the administrator or support contact responsible for your managed site.
 
 == Changelog ==
 
+= 2.1.0 =
+
+* Map each delivery-frequency variation to one term using its live WooCommerce price.
+* Auto-select mapped terms for programmatic add-to-cart and snapshot purchase prices for renewal.
+* Add a dry-run-first migration page and WP-CLI command with guarded rollback.
+* Preserve product-level stopgaps unless removal is explicitly selected.
+
 = 2.0.0 =
 
 * Ashbi-maintained compatibility, renewal-safety, security, packaging, and branding work.
 * Retains the legacy plugin identity and storage identifiers for in-place upgrades.
 
 == Upgrade Notice ==
+
+= 2.1.0 =
+
+Back up and test on staging. Mapping is opt-in and never migrates existing
+subscriptions or charges payments. Use Migration to scan each site before apply.
 
 = 2.0.0 =
 

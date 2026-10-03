@@ -58,10 +58,10 @@ npm run env:start
 npm run test:integration
 npm run env:stop
 bash scripts/build-release.sh
-bash scripts/build-release-evidence.sh dist/ashbi-subscriptions-2.0.0.zip
-bash scripts/verify-release-evidence.sh dist/ashbi-subscriptions-2.0.0.zip
-bash scripts/test-release-runtime.sh dist/ashbi-subscriptions-2.0.0.zip
-bash scripts/test-release-runtime-matrix.sh dist/ashbi-subscriptions-2.0.0.zip
+bash scripts/build-release-evidence.sh dist/ashbi-subscriptions-2.1.0.zip
+bash scripts/verify-release-evidence.sh dist/ashbi-subscriptions-2.1.0.zip
+bash scripts/test-release-runtime.sh dist/ashbi-subscriptions-2.1.0.zip
+bash scripts/test-release-runtime-matrix.sh dist/ashbi-subscriptions-2.1.0.zip
 ```
 
 The release ZIP has the legacy-compatible `subscription/` root, excludes the

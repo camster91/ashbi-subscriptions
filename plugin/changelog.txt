@@ -1,5 +1,15 @@
 *** Ashbi Subscriptions Changelog ***
 
+2026-10-03 - version 2.1.0
+* new: Single-term variation mapping using live WooCommerce sale-aware prices.
+* new: Native variation editor subscription term selector and mapping mode toggle.
+* new: Dry-run-first per-site migration, digest review, locked apply and guarded rollback.
+* new: WP-CLI migrate-variations and rollback commands with explicit apply confirmation.
+* improved: Programmatic add-to-cart selects the mapped term without a request field.
+* fixed: Stripe force-save recognizes plan order snapshots before relation creation.
+* fixed: Mapped subscription price and term snapshots survive the updated-price renewal setting.
+* preserved: Legacy storage, ordinary plan inheritance, GPL notices and existing subscriptions.
+
 2026-09-14 - version 2.0.0
 * new: Plans. Build reusable plans with multiple durations.
 * new: Connect a plan to products, or create one from the product editor.
