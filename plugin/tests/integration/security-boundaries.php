@@ -207,6 +207,22 @@ function ashbi_run_security_boundary_integration_checks() {
 		$check( 'split_payment' === (string) ( $cart_item_data['subscrpt_payment_type'] ?? '' ), 'Classic cart filter did not preserve installment payment type.' );
 		$check( 8.0 === (float) ( $cart_item_data['subscrpt_plan_price'] ?? 0 ), 'Classic cart filter did not split the installment price.' );
 		$check( 5.0 === (float) ( $cart_item_data['subscrpt_signup_fee'] ?? 0 ), 'Classic cart filter did not preserve the signup fee.' );
+		// Restore a fabricated Core-era cart through the real WooCommerce session.
+		// filter without creating an order or contacting a payment gateway.
+		update_post_meta( $variable_product->get_id(), '_subscrpt_variation_term_mode', 'yes' );
+		wp_cache_flush();
+		$saved_cart_line = array(
+			'product_id' => $variable_product->get_id(),
+			'variation_id' => $variation->get_id(),
+			'quantity' => 2,
+			'data' => $variation,
+		);
+		$restored_cart_line = apply_filters( 'woocommerce_get_cart_item_from_session', $saved_cart_line, $saved_cart_line, 'fabricated-saved-line' );
+		$check( (int) ( $restored_cart_line['subscrpt_plan_id'] ?? 0 ) === (int) $plan_id, 'Saved variation cart did not restore the exact plan.' );
+		$check( 2 === $restored_cart_line['quantity'] && 8.0 === (float) $restored_cart_line['subscription']['per_cost'], 'Saved variation cart changed quantity or installment pricing.' );
+		$check( $restored_cart_line === apply_filters( 'woocommerce_get_cart_item_from_session', $restored_cart_line, $restored_cart_line, 'fabricated-saved-line' ), 'Saved cart restoration was not idempotent.' );
+		delete_post_meta( $variable_product->get_id(), '_subscrpt_variation_term_mode' );
+		wp_cache_flush();
 		$blocks_cart      = new \SpringDevs\Subscription\Frontend\Cart();
 		$blocks_item_data = $blocks_cart->extend_cart_item_data(
 			array_merge(

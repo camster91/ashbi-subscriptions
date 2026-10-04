@@ -196,6 +196,10 @@ class Cart {
 		$cart_items = WC()->cart->cart_contents;
 		if ( is_array( $cart_items ) ) {
 			foreach ( $cart_items as $key => $value ) {
+				if ( ! empty( $value['ashbi_cart_restore_error'] ) ) {
+					wc_add_notice( __( 'A saved subscription option has changed. Please review it before checkout or contact the store.', 'subscription' ), 'error' );
+					continue;
+				}
 				// Plan items were validated against the plan by the resolver at.
 				// add-to-cart; their `subscription` snapshot intentionally differs.
 				// from the product's classic meta, so skip the classic re-check.
@@ -218,7 +222,7 @@ class Cart {
 				}
 				if ( isset( $value['subscription'] ) ) {
 					if ( $product->is_type( 'simple' ) || $product->is_type( 'variation' ) ) {
-						if ( Helper::get_typos( 1, $product->get_meta( '_subscrpt_timing_option' ) ) !== $value['subscription']['type'] || $product->get_trial() !== $value['subscription']['trial'] ) {
+						if ( Helper::get_typos( 1, $product->get_meta( '_subscrpt_timing_option' ) ) !== Helper::get_typos( 1, $value['subscription']['type'] ) || $product->get_trial() !== $value['subscription']['trial'] ) {
 							// remove the item.
 							wc_add_notice( __( 'An item which is no longer available was removed from your cart.', 'subscription' ), 'error' );
 							WC()->cart->remove_cart_item( $key );

@@ -5,6 +5,9 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 
 ## 2.1.2 — 2026-10-04
 
+- Restore pre-migration variation cart lines through their exact mapped terms.
+  Keep conflicting saved snapshots and block checkout for review, without deleting
+  cart lines. Normalize singular/plural units during classic cart validation.
 - Only show the admin Upcoming renewal notice and scheduled-payment header for
   active subscriptions with a valid future date outside grace periods. Retain
   historical dates in the summary without changing records or renewal workers.

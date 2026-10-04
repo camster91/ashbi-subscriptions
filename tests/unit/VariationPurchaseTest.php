@@ -192,6 +192,19 @@ namespace AshbiSubscriptions\Tests {
 			self::assertSame( 20.0, PlanPrice::purchase_price( $GLOBALS['variation_purchase_rows'][1] ) );
 		}
 
+		/** Saved carts resolve exact terms without relying on a posted plan. */
+		public function test_saved_variation_uses_exact_mapping_without_request(): void {
+			$checkout = ( new \ReflectionClass( PlanCheckout::class ) )->newInstanceWithoutConstructor();
+			$item = array( 'product_id' => 10, 'variation_id' => 11, 'quantity' => 2 );
+			$restored = $checkout->restore_mapped_cart_item( $item, $item, 'saved' );
+			self::assertSame( 8, $restored['subscrpt_plan_id'] );
+			self::assertSame( 17.5, $restored['subscription']['per_cost'] );
+			self::assertSame( 2, $restored['quantity'] );
+			self::assertSame( $restored, $checkout->restore_mapped_cart_item( $restored, $restored, 'saved' ) );
+			$item['variation_id'] = 12;
+			self::assertSame( $item, $checkout->restore_mapped_cart_item( $item, $item, 'one-time' ) );
+		}
+
 		/** An invalid posted plan is overridden; unmapped variation is a plain purchase. */
 		public function test_posted_plan_cannot_change_variation_mapping(): void {
 			$checkout = ( new \ReflectionClass( PlanCheckout::class ) )->newInstanceWithoutConstructor();
