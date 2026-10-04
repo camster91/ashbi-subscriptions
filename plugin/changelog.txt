@@ -1,6 +1,7 @@
 *** Ashbi Subscriptions Changelog ***
 
 2026-10-04 - version 2.1.2
+* fixed: Do not label cancelled, inactive or past subscription dates as upcoming renewals in admin details.
 * fixed: Prevent self-conflict at bootstrap and refuse conflicting activation cleanly.
 * fixed: Restore administrator Migration access and support custom WooCommerce folders.
 

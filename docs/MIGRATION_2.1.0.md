@@ -181,6 +181,13 @@ catalogues edited after apply or for broader multi-batch rollback.
 
 ## Verification boundary
 
+For 2.1.2, verify the admin detail view against cancelled and active records.
+Only an active subscription with a valid future date outside a grace period
+shows Upcoming renewal and the scheduled-payment header. Historical dates stay
+in the Next Payment summary tile; this display correction changes no stored
+date, status, order, scheduler, or email behavior. Reverting the package restores
+the prior display and requires no database migration.
+
 The unit suite exercises parser/planner behavior, production plan resolution,
 programmatic cart selection and purchase pricing, mapped-trial initial pricing,
 Stripe order-only force-save, immutable renewal filters, and migration apply/

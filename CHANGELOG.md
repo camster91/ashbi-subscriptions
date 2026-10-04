@@ -5,6 +5,9 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 
 ## 2.1.2 — 2026-10-04
 
+- Only show the admin Upcoming renewal notice and scheduled-payment header for
+  active subscriptions with a valid future date outside grace periods. Retain
+  historical dates in the summary without changing records or renewal workers.
 - Fix the early-bound class falsely detecting its own runtime as a conflict.
 - Refuse conflicting activation without deactivating plugins on unrelated requests.
 - Restore administrator Migration access and recognize custom WooCommerce folders.

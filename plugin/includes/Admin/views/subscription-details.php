@@ -68,8 +68,14 @@ $header_title = ( $product_name && '-' !== $product_name )
 	/* translators: %s: Subscription ID */
 	: sprintf( __( 'Subscription #%s', 'subscription' ), $subscription_id );
 
-$next_payment_date = $subscription_data['next_date'] ?? '';
-$next_payment_date = ! empty( $next_payment_date ) ? wp_date( get_option( 'date_format' ), strtotime( $next_payment_date ) ) : '';
+$next_payment_date      = $subscription_data['next_date'] ?? '';
+$next_payment_timestamp = ! empty( $next_payment_date ) ? strtotime( $next_payment_date ) : false;
+$next_payment_date      = false !== $next_payment_timestamp ? wp_date( get_option( 'date_format' ), $next_payment_timestamp ) : '';
+// Stored dates remain visible below, but do not imply an actionable renewal.
+$has_upcoming_renewal = 'active' === $subscrpt_status
+	&& false !== $next_payment_timestamp
+	&& $next_payment_timestamp > time()
+	&& ! $is_grace_period;
 
 $header_badge = '<span class="wpsubs-badge wpsubs-badge--' . esc_attr( $badge_mod ) . '">' . esc_html( $verbose_status );
 if ( $is_grace_period && $grace_remaining > 0 ) {
@@ -86,7 +92,7 @@ $header_segments = array(
 if ( $customer_email ) {
 	$header_segments[] = esc_html( $customer_email );
 }
-if ( $next_payment_date ) {
+if ( $has_upcoming_renewal ) {
 	/* translators: %s: next payment date */
 	$header_segments[] = esc_html( sprintf( __( 'Next payment on %s', 'subscription' ), $next_payment_date ) );
 }
@@ -102,7 +108,7 @@ $status_summary_tile = array(
 );
 
 $state_notice = array();
-if ( $next_payment_date && ! $is_grace_period ) {
+if ( $has_upcoming_renewal ) {
 	$state_notice = array(
 		'title'       => __( 'Upcoming renewal', 'subscription' ),
 		'description' => sprintf(
@@ -110,7 +116,7 @@ if ( $next_payment_date && ! $is_grace_period ) {
 			__( 'Next payment is scheduled for %s.', 'subscription' ),
 			$next_payment_date
 		),
-		'modifier'    => 'active' === $subscrpt_status ? 'active' : 'neutral',
+		'modifier'    => 'active',
 	);
 }
 
@@ -160,8 +166,8 @@ if ( ! empty( $subscription_data['start_date'] ) ) {
 // Always show the Next Payment tile; dash when there is no next date.
 $summary_tiles[] = array(
 	'label' => __( 'Next Payment', 'subscription' ),
-	'value' => ! empty( $subscription_data['next_date'] )
-		? esc_html( wp_date( get_option( 'date_format' ), strtotime( $subscription_data['next_date'] ) ) )
+	'value' => $next_payment_date
+		? esc_html( $next_payment_date )
 		: '-',
 );
 // Total payments is not part of $subscription_data; pull it from the info rows.
