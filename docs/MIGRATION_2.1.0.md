@@ -62,7 +62,10 @@ In **Ashbi Subscriptions → Migration**:
 6. Re-run the scan/apply: mappings should be `already_linked`, with zero additional
    rows or metadata changes. A no-change apply retains the previous rollback record.
 
-Access requires `manage_woocommerce`; every form action verifies a nonce. The
+In 2.1.2, the menu uses `manage_options`, matching its parent. Rendering accepts
+`manage_options` or `manage_woocommerce`; every form action verifies a nonce.
+Native variation saves accept either management capability and still require
+product edit permission and the existing nonce. The
 native product editor's **Variations** panels also offer **Subscription term
 (variation price)** / **None — one-time**. Select a term and save the variation to
 enable mapping on its parent. Clearing a mapping removes only live-price mappings;

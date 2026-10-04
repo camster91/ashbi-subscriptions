@@ -3,6 +3,13 @@
 All notable Ashbi-maintained changes after the immutable upstream import are
 documented here. The original vendor changelog remains at `plugin/changelog.txt`.
 
+## 2.1.2 — 2026-10-04
+
+- Fix the early-bound class falsely detecting its own runtime as a conflict.
+- Refuse conflicting activation without deactivating plugins on unrelated requests.
+- Restore administrator Migration access and recognize custom WooCommerce folders.
+- Preserve slugs, nonces and stored data. Rollback: restore the previous package; no schema changes.
+
 ## 2.1.1 — 2026-10-03
 
 - Refuse to load when WP Subscription Core or upstream WPSubscription is already

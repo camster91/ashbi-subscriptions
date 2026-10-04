@@ -42,7 +42,7 @@ class VariationTerms {
 	 */
 	public function save_mode( $id ) {
 		$nonce = isset( $_POST['ashbi_variation_mode_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['ashbi_variation_mode_nonce'] ) ) : '';
-		if ( ! current_user_can( 'manage_woocommerce' ) || ! current_user_can( 'edit_post', $id ) || ! wp_verify_nonce( $nonce, 'ashbi_variation_mode' ) ) {
+		if ( ( ! current_user_can( 'manage_options' ) && ! current_user_can( 'manage_woocommerce' ) ) || ! current_user_can( 'edit_post', $id ) || ! wp_verify_nonce( $nonce, 'ashbi_variation_mode' ) ) {
 			return;
 		}
 		$product = wc_get_product( $id );
@@ -135,7 +135,7 @@ class VariationTerms {
 	 */
 	public function save( $id ) {
 		$nonce = isset( $_POST['ashbi_variation_term_nonce'][ $id ] ) ? sanitize_text_field( wp_unslash( $_POST['ashbi_variation_term_nonce'][ $id ] ) ) : '';
-		if ( ! current_user_can( 'manage_woocommerce' ) || ! current_user_can( 'edit_post', $id ) || ! wp_verify_nonce( $nonce, 'ashbi_variation_term_' . $id ) || ! isset( $_POST['ashbi_variation_term'][ $id ] ) ) {
+		if ( ( ! current_user_can( 'manage_options' ) && ! current_user_can( 'manage_woocommerce' ) ) || ! current_user_can( 'edit_post', $id ) || ! wp_verify_nonce( $nonce, 'ashbi_variation_term_' . $id ) || ! isset( $_POST['ashbi_variation_term'][ $id ] ) ) {
 			return;
 		}
 		$variation = wc_get_product( $id );

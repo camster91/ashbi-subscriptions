@@ -3,7 +3,7 @@ Contributors: ashbi
 Tags: woocommerce subscriptions, subscriptions, recurring payments, stripe, paypal
 Requires at least: 6.2
 Tested up to: 7.1
-Stable tag: 2.1.1
+Stable tag: 2.1.2
 Requires PHP: 7.4
 WC requires at least: 6.0
 WC tested up to: 10.3
@@ -80,6 +80,10 @@ the administrator or support contact responsible for your managed site.
 
 == Changelog ==
 
+= 2.1.2 =
+* Fix self-conflict during bootstrap and refuse conflicting Core activation cleanly.
+* Restore administrator Migration access and recognize custom WooCommerce folders.
+
 = 2.1.1 =
 
 * Refuse to load alongside WP Subscription Core or another active WP Subscription copy to avoid a fatal class clash.
@@ -98,6 +102,11 @@ the administrator or support contact responsible for your managed site.
 * Retains the legacy plugin identity and storage identifiers for in-place upgrades.
 
 == Upgrade Notice ==
+
+= 2.1.2 =
+
+Fixes the 2.1.1 loading failure and Migration administrator access. Deactivate
+WP Subscription Core before activating Ashbi Subscriptions. No schema changes.
 
 = 2.1.1 =
 

@@ -66,4 +66,19 @@ if grep -q '  subscription/tests/' "$test_root/release.manifest"; then
   exit 1
 fi
 
-printf 'Release package checks passed.\n'
+unzip -q "$archive" -d "$test_root/unpacked"
+grep -qx 'subscription/bootstrap.php' "$test_root/contents.txt"
+php -r '
+foreach (token_get_all(file_get_contents($argv[1])) as $token) {
+    if (is_array($token) && $token[0] === T_CLASS) {
+        fwrite(STDERR, "Packaged main file declares a class.\n");
+        exit(1);
+    }
+}
+' "$test_root/unpacked/subscription/subscription.php"
+php_count=0
+while IFS= read -r -d '' php_file; do
+  php -l "$php_file" >/dev/null
+  php_count=$((php_count + 1))
+done < <(find "$test_root/unpacked/subscription" -type f -name '*.php' -print0)
+printf 'Release package checks passed (%s PHP files linted; main has no class declaration).\n' "$php_count"

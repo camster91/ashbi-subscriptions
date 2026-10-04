@@ -1,35 +1,44 @@
 <?php
 /**
- * Contract for refusing dual subscription-plugin loads.
+ * Executable isolated-process coexistence regressions.
  *
  * @package AshbiSubscriptions\Tests
  */
 
+// phpcs:disable WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents, WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec -- Local source and isolated PHP process regressions.
 use PHPUnit\Framework\TestCase;
 
-/**
- * Asserts the bootstrap coexistence guard sits before Composer autoload.
- */
+/** Exercises the actual main file without sharing PHPUnit globals. */
 final class CoreCoexistenceGuardTest extends TestCase {
+	/** No class may be early-bound in the guarded main file. */
+	public function test_main_has_no_class_declarations(): void {
+		$tokens = token_get_all( file_get_contents( dirname( __DIR__, 2 ) . '/plugin/subscription.php' ) );
+		foreach ( $tokens as $token ) {
+			if ( is_array( $token ) ) {
+				self::assertNotSame( T_CLASS, $token[0] );
+			}
+		}
+	}
+
 	/**
-	 * Guard symbols and early return must precede the vendor autoloader require.
+	 * Execute actual plugin inclusion with minimal WordPress stubs.
+	 *
+	 * @dataProvider scenarios
+	 * @param string $scenario Loaded owner scenario.
 	 */
-	public function testGuardAppearsBeforeAutoloaderAndChecksConflictSymbols(): void {
-		$source = file_get_contents( dirname( __DIR__, 2 ) . '/plugin/subscription.php' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local source contract.
-		self::assertIsString( $source );
+	public function test_guard_in_separate_process( string $scenario ): void {
+		$command = escapeshellarg( PHP_BINARY ) . ' ' . escapeshellarg( dirname( __DIR__ ) . '/fixtures/coexistence.php' ) . ' ' . escapeshellarg( $scenario );
+		exec( $command . ' 2>&1', $output, $status );
+		self::assertSame( 0, $status, implode( "\n", $output ) );
+		self::assertSame( array( 'PASS' ), $output );
+	}
 
-		$autoload_pos = strpos( $source, "require_once __DIR__ . '/vendor/autoload.php'" );
-		$guard_pos    = strpos( $source, "class_exists( 'Sdevs_Subscription', false )" );
-
-		self::assertNotFalse( $autoload_pos, 'Autoloader require must remain in the bootstrap.' );
-		self::assertNotFalse( $guard_pos, 'Coexistence guard must check Sdevs_Subscription.' );
-		self::assertLessThan( $autoload_pos, $guard_pos, 'Guard must run before the Composer autoloader.' );
-
-		self::assertStringContainsString( "defined( 'WP_SUBSCRIPTION_FILE' )", $source );
-		self::assertStringContainsString( "defined( 'SUBSCRPT_FILE' )", $source );
-		self::assertStringContainsString( 'ashbi_subscriptions_', $source );
-		self::assertStringContainsString( "add_action( 'admin_notices'", $source );
-		self::assertStringContainsString( "deactivate_plugins( plugin_basename( __FILE__ ) )", $source );
-		self::assertStringContainsString( "'subscription'", $source );
+	/**
+	 * Isolated owner scenarios.
+	 *
+	 * @return array
+	 */
+	public static function scenarios(): array {
+		return array( array( 'clean' ), array( 'class' ), array( 'constant' ), array( 'subscrpt' ), array( 'own' ) );
 	}
 }
