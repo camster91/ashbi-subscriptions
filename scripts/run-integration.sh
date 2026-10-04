@@ -56,8 +56,8 @@ for attempt in $(seq 1 60); do
 			activation_attempted=true
 		fi
 
-		if printf '%s' "$plugins_json" | grep --quiet '"plugin":"woocommerce\\/woocommerce","status":"active"' && \
-			printf '%s' "$plugins_json" | grep --quiet '"plugin":"woocommerce-gateway-stripe\\/woocommerce-gateway-stripe","status":"active"' && \
+		if printf '%s' "$plugins_json" | grep --extended-regexp --quiet '"plugin":"woocommerce(\.latest-stable)?\\/woocommerce","status":"active"' && \
+			printf '%s' "$plugins_json" | grep --extended-regexp --quiet '"plugin":"woocommerce-gateway-stripe(\.latest-stable)?\\/woocommerce-gateway-stripe","status":"active"' && \
 			printf '%s' "$plugins_json" | grep --quiet '"plugin":"plugin\\/subscription","status":"active"'; then
 			dependencies_ready=true
 			break

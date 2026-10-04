@@ -112,9 +112,7 @@ jobs:
         run: npm run test:tooling
 
       - name: Start disposable WordPress
-        run: |
-          npm run env:start
-          npx wp-env run cli wp plugin activate woocommerce woocommerce-gateway-stripe plugin
+        run: npm run env:start
 
       - name: Run security-boundary integration checks
         run: npm run test:integration
