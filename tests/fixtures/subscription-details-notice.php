@@ -20,13 +20,16 @@ namespace {
 	function wp_date( $format, $timestamp ) { return gmdate( $format, $timestamp ); }
 	function get_post_meta( ...$args ) { return ''; }
 	function get_comments( $args ) {
+		if ( ! empty( $GLOBALS['activity_query_error'] ) ) { throw new \RuntimeException( 'Fabricated query failure' ); }
 		$types = $args['type__in'] ?? array( $args['type'] ?? '' );
 		return array_values( array_filter( $GLOBALS['activity_fixture'] ?? array(), function ( $note ) use ( $args, $types ) {
-			return $note->comment_post_ID === $args['post_id'] && in_array( $note->comment_type, $types, true ) && '1' === $note->comment_approved && 'approve' === $args['status'];
+			return ! ( false !== ( $GLOBALS['note_filter_priority'] ?? false ) && 'order_note' === $note->comment_type ) && $note->comment_post_ID === $args['post_id'] && in_array( $note->comment_type, $types, true ) && '1' === $note->comment_approved && 'approve' === $args['status'];
 		} ) );
 	}
 	function get_comment_meta( $id, $key, $single ) { return $GLOBALS['activity_labels'][ $id ][ $key ] ?? ''; }
-	function has_filter( ...$args ) { return false; }
+	function has_filter( ...$args ) { return $GLOBALS['note_filter_priority'] ?? false; }
+	function remove_filter( ...$args ) { $GLOBALS['note_filter_priority'] = false; }
+	function add_filter( $hook, $callback, $priority ) { $GLOBALS['note_filter_priority'] = $priority; }
 	function do_action( ...$args ) {}
 	function wp_nonce_field( ...$args ) {}
 	function wpsubs_render_pager( ...$args ) {}
@@ -82,6 +85,7 @@ namespace {
 	}
 	$GLOBALS['activity_labels'] = array( 1 => array( 'subscrpt_activity' => 'Legacy label' ), 2 => array( '_subscrpt_activity' => 'Current label', 'subscrpt_activity' => 'Obsolete label' ) );
 	$before = serialize( array( $GLOBALS['activity_fixture'], $GLOBALS['activity_labels'] ) );
+	$GLOBALS['note_filter_priority'] = 10;
 	$html = render_details( 'cancelled', $past );
 	foreach ( array( 'Legacy renewal &lt;script&gt;bad&lt;/script&gt;', 'Current renewal', 'Legacy label', 'Current label' ) as $text ) {
 		if ( false === strpos( $html, $text ) ) { throw new \RuntimeException( 'Missing activity: ' . $text ); }
@@ -90,5 +94,10 @@ namespace {
 		if ( false !== strpos( $html, $text ) ) { throw new \RuntimeException( 'Unexpected activity output: ' . $text ); }
 	}
 	if ( $before !== serialize( array( $GLOBALS['activity_fixture'], $GLOBALS['activity_labels'] ) ) ) { throw new \RuntimeException( 'Reading history mutated notes.' ); }
+	if ( 10 !== $GLOBALS['note_filter_priority'] ) { throw new \RuntimeException( 'Note privacy filter was not restored.' ); }
+	$GLOBALS['activity_query_error'] = true;
+	try { render_details( 'cancelled', $past ); throw new \RuntimeException( 'Query failure did not propagate.' ); }
+	catch ( \RuntimeException $error ) { ob_end_clean(); if ( 'Fabricated query failure' !== $error->getMessage() ) { throw $error; } }
+	if ( 10 !== $GLOBALS['note_filter_priority'] ) { throw new \RuntimeException( 'Failed history read did not restore note privacy.' ); }
 	echo "PASS\n";
 }
