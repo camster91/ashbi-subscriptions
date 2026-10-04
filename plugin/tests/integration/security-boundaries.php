@@ -1295,7 +1295,7 @@ function ashbi_run_security_boundary_integration_checks() {
 		}
 		update_comment_meta( $activity_ids[0], 'subscrpt_activity', 'Fabricated legacy label' );
 		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Consumed by included production view.
-		$render_activity = static function ( $subscription_id ) {
+		$render_activity    = static function ( $subscription_id ) {
 			$subscription_data = array( 'status' => 'cancelled' );
 			$rows              = array();
 			$actions           = array();
@@ -1309,7 +1309,9 @@ function ashbi_run_security_boundary_integration_checks() {
 			include SUBSCRPT_PATH . '/includes/Admin/views/subscription-details.php';
 			return ob_get_clean();
 		};
-		$history_html    = $render_activity( $subscription_id );
+		$note_filter_before = has_filter( 'comments_clauses', array( 'WC_Comments', 'exclude_order_comments' ) );
+		$history_html       = $render_activity( $subscription_id );
+		$check( has_filter( 'comments_clauses', array( 'WC_Comments', 'exclude_order_comments' ) ) === $note_filter_before, 'Admin history read did not restore WooCommerce note filtering.' );
 		$check( false !== strpos( $history_html, 'Fabricated history subscription_note' ), 'Legacy Core activity was omitted.' );
 		$check( false !== strpos( $history_html, 'Fabricated history order_note' ), 'Current activity was omitted.' );
 		$check( false !== strpos( $history_html, 'Fabricated legacy label' ), 'Legacy activity label was omitted.' );

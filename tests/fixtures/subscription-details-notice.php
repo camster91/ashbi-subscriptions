@@ -26,6 +26,7 @@ namespace {
 		} ) );
 	}
 	function get_comment_meta( $id, $key, $single ) { return $GLOBALS['activity_labels'][ $id ][ $key ] ?? ''; }
+	function has_filter( ...$args ) { return false; }
 	function do_action( ...$args ) {}
 	function wp_nonce_field( ...$args ) {}
 	function wpsubs_render_pager( ...$args ) {}

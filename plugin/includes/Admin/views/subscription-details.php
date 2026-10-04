@@ -361,16 +361,29 @@ $subscrpt_details_ctx = array(
 );
 
 // Read current order notes and legacy Core subscription notes without rewriting history.
-$subscrpt_activities = get_comments(
-	array(
-		'post_id'  => $subscription_id,
-		'type__in' => array( 'order_note', 'subscription_note' ),
-		'status'   => 'approve',
-		'number'   => 100,
-		'orderby'  => 'comment_date_gmt',
-		'order'    => 'DESC',
-	)
-);
+// WooCommerce hides order notes from ordinary comment queries. Restore its
+// filter immediately after this authorized, subscription-scoped admin read.
+$subscrpt_note_filter          = array( 'WC_Comments', 'exclude_order_comments' );
+$subscrpt_note_filter_priority = has_filter( 'comments_clauses', $subscrpt_note_filter );
+if ( false !== $subscrpt_note_filter_priority ) {
+	remove_filter( 'comments_clauses', $subscrpt_note_filter, $subscrpt_note_filter_priority );
+}
+try {
+	$subscrpt_activities = get_comments(
+		array(
+			'post_id'  => $subscription_id,
+			'type__in' => array( 'order_note', 'subscription_note' ),
+			'status'   => 'approve',
+			'number'   => 100,
+			'orderby'  => 'comment_date_gmt',
+			'order'    => 'DESC',
+		)
+	);
+} finally {
+	if ( false !== $subscrpt_note_filter_priority ) {
+		add_filter( 'comments_clauses', $subscrpt_note_filter, $subscrpt_note_filter_priority );
+	}
+}
 ?>
 <div class="wp-subscription-admin-content list-page subscrpt-subs-details">
 
