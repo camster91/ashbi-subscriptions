@@ -1281,6 +1281,42 @@ function ashbi_run_security_boundary_integration_checks() {
 			}
 		}
 
+		// Render legacy and current approved notes through the production admin view.
+		$activity_ids = array();
+		foreach ( array( 'subscription_note', 'order_note', 'comment' ) as $activity_type ) {
+			$activity_ids[] = wp_insert_comment(
+				array(
+					'comment_post_ID'  => $subscription_id,
+					'comment_type'     => $activity_type,
+					'comment_content'  => 'Fabricated history ' . $activity_type,
+					'comment_approved' => 1,
+				)
+			);
+		}
+		update_comment_meta( $activity_ids[0], 'subscrpt_activity', 'Fabricated legacy label' );
+		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Consumed by included production view.
+		$render_activity = static function ( $subscription_id ) {
+			$subscription_data = array( 'status' => 'cancelled' );
+			$rows              = array();
+			$actions           = array();
+			$actions_data      = array();
+			$order_histories   = array();
+			$order             = null;
+			$order_item        = null;
+			$list_url          = '';
+			$form_action       = '';
+			ob_start();
+			include SUBSCRPT_PATH . '/includes/Admin/views/subscription-details.php';
+			return ob_get_clean();
+		};
+		$history_html    = $render_activity( $subscription_id );
+		$check( false !== strpos( $history_html, 'Fabricated history subscription_note' ), 'Legacy Core activity was omitted.' );
+		$check( false !== strpos( $history_html, 'Fabricated history order_note' ), 'Current activity was omitted.' );
+		$check( false !== strpos( $history_html, 'Fabricated legacy label' ), 'Legacy activity label was omitted.' );
+		$check( false === strpos( $history_html, 'Fabricated history comment' ), 'Unrelated comment was displayed as activity.' );
+		$check( 'subscription_note' === get_comment( $activity_ids[0] )->comment_type, 'Rendering rewrote legacy note type.' );
+		$check( 'Fabricated legacy label' === get_comment_meta( $activity_ids[0], 'subscrpt_activity', true ), 'Rendering rewrote legacy metadata.' );
+
 		if ( $failures ) {
 			wp_send_json_error( array( 'failures' => $failures ), 500 );
 		}

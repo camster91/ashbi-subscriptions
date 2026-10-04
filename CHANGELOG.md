@@ -5,6 +5,8 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 
 ## 2.1.2 — 2026-10-04
 
+- Display approved legacy Core subscription activity notes alongside current
+  order notes, preserving historical labels without rewriting any records.
 - Restore pre-migration variation cart lines through their exact mapped terms.
   Keep conflicting saved snapshots and block checkout for review, without deleting
   cart lines. Normalize singular/plural units during classic cart validation.

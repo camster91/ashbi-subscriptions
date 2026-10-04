@@ -211,3 +211,11 @@ rollback using isolated transactional storage doubles. These are offline tests,
 not a real WordPress database or Stripe sandbox proof. Complete
 [the staging checklist](QA_VARIATION_PLANS_2.1.0.md) on mobile and desktop before
 client rollout, especially WooCommerce Blocks and the installed DWL/Stripe stack.
+# Legacy activity history in 2.1.2
+
+The subscription detail page reads both Core `subscription_note` and current
+`order_note` comments for the selected subscription. Historical activity labels
+are displayed from their original metadata when the current label is absent.
+This is a read-only compatibility change: no comments, subscriptions or orders
+are rewritten. Verify existing renewal notes after switching. Rollback uses the
+previous plugin package without a database migration.

@@ -19,7 +19,13 @@ namespace {
 	function get_option( $name ) { return 'date_format' === $name ? 'Y-m-d' : 'H:i'; }
 	function wp_date( $format, $timestamp ) { return gmdate( $format, $timestamp ); }
 	function get_post_meta( ...$args ) { return ''; }
-	function get_comments( ...$args ) { return array(); }
+	function get_comments( $args ) {
+		$types = $args['type__in'] ?? array( $args['type'] ?? '' );
+		return array_values( array_filter( $GLOBALS['activity_fixture'] ?? array(), function ( $note ) use ( $args, $types ) {
+			return $note->comment_post_ID === $args['post_id'] && in_array( $note->comment_type, $types, true ) && '1' === $note->comment_approved && 'approve' === $args['status'];
+		} ) );
+	}
+	function get_comment_meta( $id, $key, $single ) { return $GLOBALS['activity_labels'][ $id ][ $key ] ?? ''; }
 	function do_action( ...$args ) {}
 	function wp_nonce_field( ...$args ) {}
 	function wpsubs_render_pager( ...$args ) {}
@@ -69,5 +75,19 @@ namespace {
 			throw new \RuntimeException( 'Historical date disappeared from the summary.' );
 		}
 	}
+	$GLOBALS['activity_fixture'] = array();
+	foreach ( array( array( 1, 123, 'subscription_note', '1', 'Legacy renewal <script>bad</script>' ), array( 2, 123, 'order_note', '1', 'Current renewal' ), array( 3, 456, 'subscription_note', '1', 'Foreign subscription' ), array( 4, 123, 'comment', '1', 'Unrelated comment' ), array( 5, 123, 'subscription_note', '0', 'Unapproved note' ) ) as $note ) {
+		$GLOBALS['activity_fixture'][] = (object) array( 'comment_ID' => $note[0], 'comment_post_ID' => $note[1], 'comment_type' => $note[2], 'comment_approved' => $note[3], 'comment_content' => $note[4], 'comment_date_gmt' => '2026-01-04 12:00:00' );
+	}
+	$GLOBALS['activity_labels'] = array( 1 => array( 'subscrpt_activity' => 'Legacy label' ), 2 => array( '_subscrpt_activity' => 'Current label', 'subscrpt_activity' => 'Obsolete label' ) );
+	$before = serialize( array( $GLOBALS['activity_fixture'], $GLOBALS['activity_labels'] ) );
+	$html = render_details( 'cancelled', $past );
+	foreach ( array( 'Legacy renewal &lt;script&gt;bad&lt;/script&gt;', 'Current renewal', 'Legacy label', 'Current label' ) as $text ) {
+		if ( false === strpos( $html, $text ) ) { throw new \RuntimeException( 'Missing activity: ' . $text ); }
+	}
+	foreach ( array( 'Foreign subscription', 'Unrelated comment', 'Unapproved note', 'Obsolete label', '<script>bad</script>', 'No activity recorded yet.' ) as $text ) {
+		if ( false !== strpos( $html, $text ) ) { throw new \RuntimeException( 'Unexpected activity output: ' . $text ); }
+	}
+	if ( $before !== serialize( array( $GLOBALS['activity_fixture'], $GLOBALS['activity_labels'] ) ) ) { throw new \RuntimeException( 'Reading history mutated notes.' ); }
 	echo "PASS\n";
 }

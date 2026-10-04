@@ -360,17 +360,15 @@ $subscrpt_details_ctx = array(
 	'status'            => $subscrpt_status,
 );
 
-// Core lifecycle events are stored as private WooCommerce-style order notes.
-// Read them directly so the standalone build retains an auditable history even.
-// when no optional extension is installed.
+// Read current order notes and legacy Core subscription notes without rewriting history.
 $subscrpt_activities = get_comments(
 	array(
-		'post_id' => $subscription_id,
-		'type'    => 'order_note',
-		'status'  => 'approve',
-		'number'  => 100,
-		'orderby' => 'comment_date_gmt',
-		'order'   => 'DESC',
+		'post_id'  => $subscription_id,
+		'type__in' => array( 'order_note', 'subscription_note' ),
+		'status'   => 'approve',
+		'number'   => 100,
+		'orderby'  => 'comment_date_gmt',
+		'order'    => 'DESC',
 	)
 );
 ?>
@@ -652,7 +650,10 @@ $subscrpt_activities = get_comments(
 								<?php foreach ( $subscrpt_activities as $subscrpt_activity ) : ?>
 									<?php
 									$activity_label = get_comment_meta( $subscrpt_activity->comment_ID, '_subscrpt_activity', true );
-									$activity_date  = strtotime( $subscrpt_activity->comment_date_gmt . ' UTC' );
+									if ( ! $activity_label ) {
+										$activity_label = get_comment_meta( $subscrpt_activity->comment_ID, 'subscrpt_activity', true );
+									}
+									$activity_date = strtotime( $subscrpt_activity->comment_date_gmt . ' UTC' );
 									?>
 									<tr>
 										<td><strong><?php echo esc_html( $activity_label ? $activity_label : __( 'Subscription update', 'subscription' ) ); ?></strong></td>
