@@ -37,6 +37,9 @@ final class PlanBillingRulesTest extends TestCase {
 	public function test_finite_recurring_plan_uses_billing_length_as_payment_limit(): void {
 		$checkout = ( new ReflectionClass( '\SpringDevs\Subscription\Frontend\PlanCheckout' ) )->newInstanceWithoutConstructor();
 		$method   = new ReflectionMethod( $checkout, 'term_terms' );
+		if ( PHP_VERSION_ID < 80100 ) {
+			$method->setAccessible( true );
+		}
 
 		$terms = $method->invoke(
 			$checkout,
@@ -62,6 +65,9 @@ final class PlanBillingRulesTest extends TestCase {
 	public function test_installment_plan_uses_installment_count_as_payment_limit(): void {
 		$checkout = ( new ReflectionClass( '\SpringDevs\Subscription\Frontend\PlanCheckout' ) )->newInstanceWithoutConstructor();
 		$method   = new ReflectionMethod( $checkout, 'term_terms' );
+		if ( PHP_VERSION_ID < 80100 ) {
+			$method->setAccessible( true );
+		}
 
 		$terms = $method->invoke(
 			$checkout,
