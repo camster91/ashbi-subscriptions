@@ -195,7 +195,11 @@ namespace AshbiSubscriptions\Tests {
 		/** Saved carts resolve exact terms without relying on a posted plan. */
 		public function test_saved_variation_uses_exact_mapping_without_request(): void {
 			$checkout = ( new \ReflectionClass( PlanCheckout::class ) )->newInstanceWithoutConstructor();
-			$item = array( 'product_id' => 10, 'variation_id' => 11, 'quantity' => 2 );
+			$item     = array(
+				'product_id'   => 10,
+				'variation_id' => 11,
+				'quantity'     => 2,
+			);
 			$restored = $checkout->restore_mapped_cart_item( $item, $item, 'saved' );
 			self::assertSame( 8, $restored['subscrpt_plan_id'] );
 			self::assertSame( 17.5, $restored['subscription']['per_cost'] );
