@@ -87,9 +87,9 @@ def prepare_environment(output, repo):
             'https://downloads.wordpress.org/plugin/woocommerce-gateway-stripe.latest-stable.zip'],
         'phpVersion': '8.2', 'port': 8888, 'testsEnvironment': False,
         'mappings': {'wp-content/mu-plugins': mu.as_posix(),
-                     '/ashbi-integration': (repo / 'plugin/tests/integration').as_posix(),
-                     '/ashbi-tools': (repo / 'scripts/package-validation').as_posix(),
-                     '/ashbi-release': output.as_posix()},
+                     'ashbi-integration': (repo / 'plugin/tests/integration').as_posix(),
+                     'ashbi-tools': (repo / 'scripts/package-validation').as_posix(),
+                     'ashbi-release': output.as_posix()},
         'config': {'WP_ENVIRONMENT_TYPE': 'local', 'WP_DEBUG': True, 'WP_DEBUG_LOG': True,
                    'DISABLE_WP_CRON': True, 'ACTION_SCHEDULER_DISABLE_DEFAULT_QUEUE_RUNNER': True}
     }, indent=2), encoding='utf-8')
@@ -134,18 +134,18 @@ def run_environment(env, output, mode, kind, invoke=subprocess.run):
 
     try:
         run(['start'])
-        run(['run', 'cli', 'wp', 'plugin', 'install', '/ashbi-release/candidate.zip', '--activate'])
+        run(['run', 'cli', 'wp', 'plugin', 'install', '/var/www/html/ashbi-release/candidate.zip', '--activate'])
         run(['run', 'cli', 'wp', 'plugin', 'is-active', 'subscription'])
         run(['run', 'cli', 'wp', 'option', 'update', 'woocommerce_custom_orders_table_enabled',
              'yes' if mode == 'on' else 'no'])
-        run(['run', 'cli', 'wp', 'eval-file', '/ashbi-tools/verify-installed.php'])
+        run(['run', 'cli', 'wp', 'eval-file', '/var/www/html/ashbi-tools/verify-installed.php'])
         if kind == 'plugin-check':
             run(['run', 'cli', 'wp', 'plugin', 'install',
-                 '/ashbi-release/plugin-check.zip', '--activate'])
+                 '/var/www/html/ashbi-release/plugin-check.zip', '--activate'])
             run(['run', 'cli', 'wp', 'plugin', 'is-active', 'plugin-check'])
         run(['run', 'cli', 'bash', '-c',
-             'wp core version > /ashbi-release/wordpress-version.txt && '
-             'wp plugin list --format=json > /ashbi-release/installed-plugins.json'])
+             'wp core version > /var/www/html/ashbi-release/wordpress-version.txt && '
+             'wp plugin list --format=json > /var/www/html/ashbi-release/installed-plugins.json'])
         if kind == 'runtime':
             try:
                 result = invoke([shutil.which('bash') or 'bash', (REPO / 'scripts/run-integration.sh').as_posix()],
@@ -163,13 +163,13 @@ def run_environment(env, output, mode, kind, invoke=subprocess.run):
                 raise RuntimeError('Integration callback did not report success')
         else:
             run(['run', 'cli', 'bash', '-c',
-                 'wp plugin list-checks --format=json > /ashbi-release/plugin-check-checks.json'])
+                 'wp plugin list-checks --format=json > /var/www/html/ashbi-release/plugin-check-checks.json'])
             # Redirect inside Docker so wp-env progress output cannot corrupt JSON.
             result = run(['run', 'cli', 'bash', '-c',
                           'wp plugin check subscription/subscription.php --format=strict-json --fields=file,line,column,type,code,message,docs '
                           '--require=./wp-content/plugins/plugin-check/cli.php '
-                          '> /ashbi-release/plugin-check.stdout 2> /ashbi-release/plugin-check.stderr; '
-                          'status=$?; printf "%s\\n" "$status" > /ashbi-release/plugin-check.exit-code; '
+                          '> /var/www/html/ashbi-release/plugin-check.stdout 2> /var/www/html/ashbi-release/plugin-check.stderr; '
+                          'status=$?; printf "%s\\n" "$status" > /var/www/html/ashbi-release/plugin-check.exit-code; '
                           'exit "$status"'], check=False)
             status = int((output / 'plugin-check.exit-code').read_text().strip())
             # Findings are diagnostic; missing/invalid machine output is infrastructure failure.
@@ -184,7 +184,7 @@ def run_environment(env, output, mode, kind, invoke=subprocess.run):
                 'runtime_bootstrap': True, 'errors': errors, 'warnings': warnings,
                 'format': 'strict-json; raw stdout preserved; exact no-findings success line normalized to []'}), encoding='utf-8')
             print('Plugin Check diagnostic exit status:', status, flush=True)
-        run(['run', 'cli', 'wp', 'eval-file', '/ashbi-tools/verify-installed.php'])
+        run(['run', 'cli', 'wp', 'eval-file', '/var/www/html/ashbi-tools/verify-installed.php'])
     finally:
         cleanup_environment(output, invoke)
 

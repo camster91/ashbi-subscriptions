@@ -5,7 +5,7 @@
  * @package AshbiSubscriptions
  */
 
-$evidence_dir = isset( $args[0] ) ? $args[0] : '/ashbi-release';
+$evidence_dir = isset( $args[0] ) ? $args[0] : '/var/www/html/ashbi-release';
 // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Read only the local, checksum-derived CI member manifest.
 $manifest = json_decode( file_get_contents( $evidence_dir . '/members.json' ), true );
 // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Read only the local CI provenance file.

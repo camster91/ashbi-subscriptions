@@ -34,7 +34,7 @@ Changing the target requires an explicit reviewed code change.
    runtime basename and actual WooCommerce HPOS datastore, then repeats after
    integration. The existing authenticated HTTP runner retains real admin login,
    REST nonces, and capability/ownership assertions. Tests are mounted externally
-   at `/ashbi-integration`, because the published ZIP deliberately excludes them.
+   at `/var/www/html/ashbi-integration`, because the published ZIP deliberately excludes them.
 3. **Official Plugin Check / initial nonblocking findings:** a separate fresh
    package installation, after the HPOS jobs, with the official checker installed
    and activated from its own verified ZIP. The exact command is:

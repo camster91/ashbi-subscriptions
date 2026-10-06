@@ -10,6 +10,9 @@ $integration_file = '/ashbi-integration/security-boundaries.php';
 if ( ! file_exists( $integration_file ) ) {
 	$integration_file = WP_PLUGIN_DIR . '/plugin/tests/integration/security-boundaries.php';
 }
+if ( ! file_exists( $integration_file ) ) {
+	$integration_file = ABSPATH . 'ashbi-integration/security-boundaries.php';
+}
 
 // Give the authenticated runner a session-bound REST nonce in both harnesses.
 add_action(

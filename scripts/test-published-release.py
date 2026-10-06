@@ -19,6 +19,26 @@ class PublishedReleaseTests(unittest.TestCase):
         spec.loader.exec_module(module)
         return module
 
+    def test_wp_env_mappings_use_wordpress_relative_targets(self):
+        module = self.load_module()
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            output.mkdir(exist_ok=True)
+            env = module.prepare_environment(output, SCRIPT.parent.parent)
+            config = __import__('json').loads(env['config'].read_text())
+            self.assertTrue(all(not target.startswith('/') for target in config['mappings']),
+                            'wp-env prefixes mappings with /var/www/html; root-looking targets are not root mounts')
+            calls = []
+            def invoke(command, **kwargs):
+                calls.append(command)
+                return subprocess.CompletedProcess(command, 0, '{"success":true}\n', '')
+            module.run_environment(env, output, 'off', 'runtime', invoke)
+            combined = '\n'.join(' '.join(command) for command in calls)
+            self.assertIn('/var/www/html/ashbi-release/candidate.zip', combined)
+            self.assertIn('/var/www/html/ashbi-tools/verify-installed.php', combined)
+            self.assertNotIn(' /ashbi-release', combined)
+            self.assertNotIn(' /ashbi-tools', combined)
+
     def test_rejects_unsafe_members(self):
         module = self.load_module()
         for member in ['../escaped.php', 'subscription/../escaped.php', 'plugin/subscription.php',
@@ -109,7 +129,7 @@ bash "$1"
             env = module.prepare_environment(output, SCRIPT.parent.parent)
             config = __import__('json').loads(env['config'].read_text())
             self.assertNotIn('./plugin', config['plugins'])
-            self.assertIn('/ashbi-integration', config['mappings'])
+            self.assertIn('ashbi-integration', config['mappings'])
             self.assertEqual(config['port'], 8888)
             self.assertEqual(override.read_text(), '{"port":9999}')
             with self.assertRaises(FileExistsError):
