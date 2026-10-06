@@ -3,6 +3,26 @@
 All notable Ashbi-maintained changes after the immutable upstream import are
 documented here. The original vendor changelog remains at `plugin/changelog.txt`.
 
+## 2.1.0 — 2026-10-03
+
+- Add opt-in variation term mapping without schema changes. Each mapped variation
+  uses its own WooCommerce purchase-time price, including sales; unmapped
+  variations are one-time and inherited product-level relations are suppressed.
+- Auto-select the mapped term for programmatic additions and reject unrelated
+  plan choices. Show a read-only delivery note instead of the multi-term selector.
+- Preserve recurring price/cadence snapshots through renewal, including when the
+  store uses updated-product prices; explicit subscription price overrides remain.
+- Add secure native variation controls, a dry-run-first Migration page and
+  `wp ashbi-subscriptions migrate-variations`, with confirmation, review digests,
+  a shared mutex, transactional writes and guarded last-apply rollback.
+- Parse frequency attributes and legacy metadata, carry supported trials/signup
+  fees, report conflicts and possible DWL simple-product targets, and retain
+  stopgap product relations unless removal is explicitly requested.
+- Recognize plan order snapshots for Stripe payment-method saving before the
+  subscription relation exists. Existing durable renewal claims are unchanged.
+- Document per-site migration, rollback and the required staging checkout,
+  gateway, mobile and desktop verification. No client runtime was exercised.
+
 ## Unreleased
 
 ### Changed

@@ -1,8 +1,9 @@
 import { parse } from "@babel/parser";
-import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const repoRoot = resolve(new URL("..", import.meta.url).pathname);
+const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const pluginRoot = join(repoRoot, "plugin");
 const ignoredDirectories = new Set(["node_modules", "vendor"]);
 

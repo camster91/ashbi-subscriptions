@@ -104,7 +104,7 @@ $worksheet                      = array(
 	'allowed_dispositions' => \Ashbi\Subscriptions\Tools\OverdueDispositionPlan::dispositions(),
 	'records'              => array( $record ),
 );
-$worksheet_path                  = tempnam( sys_get_temp_dir(), 'ashbi-worksheet-' );
+$worksheet_path                 = tempnam( sys_get_temp_dir(), 'ashbi-worksheet-' );
 file_put_contents( $worksheet_path, json_encode( $worksheet ) );
 putenv( 'ASHBI_DISPOSITION_WORKSHEET=' . $worksheet_path );
 putenv( 'ASHBI_EXPECTED_SITE_URL=' . site_url() );

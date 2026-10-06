@@ -16,6 +16,7 @@ namespace {
 	define( 'EP_PAGES', 4096 );
 	define( 'EP_ROOT', 64 );
 	define( 'HOUR_IN_SECONDS', 3600 );
+	define( 'MINUTE_IN_SECONDS', 60 );
 	define( 'WEEK_IN_SECONDS', 604800 );
 	define( 'WP_PLUGIN_DIR', '/wp-content/plugins' );
 	define( 'WC_STRIPE_MAIN_FILE', '/wp-content/plugins/woocommerce-gateway-stripe/woocommerce-gateway-stripe.php' );
@@ -29,6 +30,8 @@ namespace {
 	define( 'SUBSCRPT_ASSETS', 'https://example.test/wp-content/plugins/ashbi-subscriptions/assets' );
 
 	class WP_CLI {
+		public static function confirm( $question, $assoc_args = array() ) {}
+		public static function add_command( $name, $callable, $args = array() ) {}
 		public static function line( $message ) {}
 		public static function success( $message ) {}
 		public static function error( $message ) {}
@@ -97,4 +100,8 @@ namespace Automattic\WooCommerce\Blocks\Domain\Services {
 
 namespace Automattic\WooCommerce\Internal\DataStores\Orders {
 	class CustomOrdersTableController {}
+}
+
+namespace WP_CLI\Utils {
+	function format_items( $format, $items, $fields ) {}
 }

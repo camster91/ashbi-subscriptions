@@ -267,6 +267,7 @@ $subscrpt_icon_plan = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 							</div>
 
 							<div id="subscrpt-connect-existing">
+								<p><a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-subscription-migration' ) ); ?>"><?php esc_html_e( 'Delivery-frequency variations? Scan and map them using their WooCommerce prices in Migration.', 'subscription' ); ?></a></p>
 								<p class="wpsubs-p2-section-desc"><?php esc_html_e( 'Pick a product to attach this plan to.', 'subscription' ); ?></p>
 
 								<div id="subscrpt-product-select-wrap">

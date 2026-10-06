@@ -108,6 +108,9 @@ jobs:
       - name: Check JavaScript and JSX syntax
         run: npm run lint:js
 
+      - name: Check upgraded integration tooling compatibility
+        run: npm run test:tooling
+
       - name: Start disposable WordPress
         run: npm run env:start
 

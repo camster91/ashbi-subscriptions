@@ -1173,6 +1173,9 @@ class Helper {
 
 		$is_subscription_order = false;
 		foreach ( $order->get_items() as $item ) {
+			if ( $item->get_meta( '_subscrpt_plan_id' ) ) {
+				return true;
+			}
 			$item_data         = $item->get_data() ?? array();
 			$item_product_id   = $item_data['product_id'] ?? 0;
 			$item_variation_id = $item_data['variation_id'] ?? 0;

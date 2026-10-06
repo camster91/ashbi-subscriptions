@@ -23,6 +23,7 @@ if ( ! function_exists( 'wc_get_price_decimals' ) ) {
 require_once dirname( __DIR__, 2 ) . '/plugin/includes/functions.php';
 require_once dirname( __DIR__, 2 ) . '/plugin/includes/Illuminate/Plans/PlanRepository.php';
 require_once dirname( __DIR__, 2 ) . '/plugin/includes/Admin/PlanPresenter.php';
+require_once dirname( __DIR__, 2 ) . '/plugin/includes/Illuminate/Plans/PlanPrice.php';
 require_once dirname( __DIR__, 2 ) . '/plugin/includes/Frontend/PlanCheckout.php';
 
 /** Verify plan payment limits and split installment selection. */
@@ -36,6 +37,9 @@ final class PlanBillingRulesTest extends TestCase {
 	public function test_finite_recurring_plan_uses_billing_length_as_payment_limit(): void {
 		$checkout = ( new ReflectionClass( '\SpringDevs\Subscription\Frontend\PlanCheckout' ) )->newInstanceWithoutConstructor();
 		$method   = new ReflectionMethod( $checkout, 'term_terms' );
+		if ( PHP_VERSION_ID < 80100 ) {
+			$method->setAccessible( true );
+		}
 
 		$terms = $method->invoke(
 			$checkout,
@@ -61,6 +65,9 @@ final class PlanBillingRulesTest extends TestCase {
 	public function test_installment_plan_uses_installment_count_as_payment_limit(): void {
 		$checkout = ( new ReflectionClass( '\SpringDevs\Subscription\Frontend\PlanCheckout' ) )->newInstanceWithoutConstructor();
 		$method   = new ReflectionMethod( $checkout, 'term_terms' );
+		if ( PHP_VERSION_ID < 80100 ) {
+			$method->setAccessible( true );
+		}
 
 		$terms = $method->invoke(
 			$checkout,

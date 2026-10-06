@@ -4,7 +4,12 @@
     "https://downloads.wordpress.org/plugin/woocommerce-gateway-stripe.latest-stable.zip",
     "./plugin"
   ],
+  "phpVersion": "8.2",
+  "mappings": {
+    "wp-content/mu-plugins": "./scripts/playground-mu-plugins"
+  },
   "config": {
+    "WP_ENVIRONMENT_TYPE": "local",
     "WP_DEBUG": true,
     "WP_DEBUG_LOG": true
   },

@@ -876,7 +876,20 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 	 */
 	private function order_has_subscription_relation( int $order_id ): bool {
 		$histories = Helper::get_subscriptions_from_order( $order_id );
-		return ! empty( $histories );
+		if ( ! empty( $histories ) ) {
+			return true;
+		}
+		// Blocks/order-pay may run before the subscription relation is written.
+		// The order line's validated snapshot is sufficient to save the method.
+		$order = wc_get_order( $order_id );
+		if ( $order ) {
+			foreach ( $order->get_items() as $item ) {
+				if ( $item->get_meta( '_subscrpt_plan_id' ) ) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	/**

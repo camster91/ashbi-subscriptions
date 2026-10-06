@@ -532,6 +532,10 @@ class PlanController {
 			}
 		}
 
+		if ( PlanRepository::REL_PRODUCT === (int) $params['type'] && 'yes' === get_post_meta( (int) $params['oid'], '_subscrpt_variation_term_mode', true ) ) {
+			return new WP_Error( 'subscrpt_variation_mapping_editor', __( 'Use the Variations editor to change subscription term mappings.', 'subscription' ), array( 'status' => 409 ) );
+		}
+
 		$id = PlanRepository::insert_relation( $params );
 
 		if ( ! $id ) {
@@ -578,6 +582,11 @@ class PlanController {
 
 		if ( ! PlanRepository::get_relation( $id ) ) {
 			return $this->not_found();
+		}
+
+		$existing = PlanRepository::get_relation( $id );
+		if ( 'yes' === get_post_meta( (int) $existing['oid'], '_subscrpt_variation_term_mode', true ) || in_array( $existing['data']['price_source'] ?? '', array( 'variation', 'product' ), true ) ) {
+			return new WP_Error( 'subscrpt_live_price_relation', __( 'Live-price mappings cannot be edited as typed prices. Use the Variations editor or Migration.', 'subscription' ), array( 'status' => 409 ) );
 		}
 
 		PlanRepository::update_relation( $id, $this->read_params( $request ) );

@@ -8,8 +8,16 @@
 
 $integration_file = '/ashbi-integration/security-boundaries.php';
 if ( ! file_exists( $integration_file ) ) {
-	$integration_file = '/wordpress/wp-content/plugins/plugin/tests/integration/security-boundaries.php';
+	$integration_file = WP_PLUGIN_DIR . '/plugin/tests/integration/security-boundaries.php';
 }
+
+// Give the authenticated runner a session-bound REST nonce in both harnesses.
+add_action(
+	'admin_enqueue_scripts',
+	static function () {
+		wp_enqueue_script( 'wp-api' );
+	}
+);
 
 if ( ! function_exists( 'ashbi_run_security_boundary_integration_checks' ) && file_exists( $integration_file ) ) {
 	require_once $integration_file;

@@ -45,7 +45,9 @@ class Admin {
 		}
 
 		new Required();
-		new Menu();
+		$menu = new Menu();
+		new \SpringDevs\Subscription\Admin\VariationMigration( $menu );
+		new Product\VariationTerms();
 		new Dashboard();
 		new Plans();
 		new CancellationFlow();

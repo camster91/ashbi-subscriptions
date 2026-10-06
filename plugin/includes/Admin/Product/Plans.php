@@ -435,6 +435,10 @@ class Plans {
 	 * @return void
 	 */
 	public static function render_plan_view( $product ) {
+		if ( 'yes' === $product->get_meta( '_subscrpt_variation_term_mode' ) ) {
+			echo '<p>' . esc_html__( 'Variation mapping is enabled. Choose one subscription term per variation in the Variations tab. Prices come from WooCommerce; product-level plans are retained but suppressed.', 'subscription' ) . '</p>';
+			return;
+		}
 		$connections = PlanRepository::get_product_connections( $product->get_id() );
 		$connected   = self::group_connections( $connections );
 		$available   = self::available_groups( array_keys( $connected ) );

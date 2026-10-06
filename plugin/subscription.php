@@ -3,7 +3,7 @@
  * Plugin Name: Ashbi Subscriptions
  * Description: Adds recurring purchases, subscription management, and automated renewals to WooCommerce stores.
  *
- * Version: 2.0.0
+ * Version: 2.1.0
  *
  * Author: Ashbi
  *
@@ -54,7 +54,7 @@ final class Sdevs_Subscription {
 	 *
 	 * @var string
 	 */
-	const VERSION = '2.0.0';
+	const VERSION = '2.1.0';
 
 	/**
 	 * Holds various class instances
@@ -295,6 +295,10 @@ final class Sdevs_Subscription {
 		if ( $this->is_request( 'ajax' ) ) {
 			$this->container['ajax']            = new SpringDevs\Subscription\Ajax();
 			$this->container['onboarding_ajax'] = new SpringDevs\Subscription\Admin\OnboardingAjax();
+		}
+
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			WP_CLI::add_command( 'ashbi-subscriptions migrate-variations', new SpringDevs\Subscription\Illuminate\Migration\VariationMigrationCommand() );
 		}
 
 		$this->container['api']    = new SpringDevs\Subscription\API();

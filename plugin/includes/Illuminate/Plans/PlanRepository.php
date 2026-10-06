@@ -169,6 +169,38 @@ class PlanRepository {
 		}
 
 		$variation_id = absint( $variation_id );
+		$resolved = self::filter_context( $resolved, $variation_id, 'yes' === get_post_meta( $product_id, '_subscrpt_variation_term_mode', true ) );
+
+		/**
+		 * Filter the resolved plan rows for a product.
+		 *
+		 * Extension point to inject taxonomy- and variation-resolved rows.
+		 *
+		 * @param array $resolved     Resolved plan rows.
+		 * @param int   $product_id   Product id.
+		 * @param int   $variation_id Variation id (0 for simple).
+		 */
+		$resolved = apply_filters( 'subscrpt_resolve_plans_for_product', $resolved, $product_id, $variation_id );
+		return 'yes' === get_post_meta( $product_id, '_subscrpt_variation_term_mode', true )
+			? self::filter_context( $resolved, $variation_id, true )
+			: $resolved;
+	}
+
+	/**
+	 * Select the purchasable context without changing inherited legacy behavior.
+	 *
+	 * @param array $resolved Cached rows.
+	 * @param int   $variation_id Variation id.
+	 * @param bool  $variation_term_mode Exact mapping mode.
+	 * @return array
+	 */
+	public static function filter_context( array $resolved, $variation_id, $variation_term_mode = false ) {
+		$variation_id = abs( (int) $variation_id );
+		if ( $variation_term_mode ) {
+			return array_values( array_filter( $resolved, static function ( $row ) use ( $variation_id ) {
+				return $variation_id > 0 && $variation_id === (int) $row['vid'];
+			} ) );
+		}
 		if ( $variation_id ) {
 			// vid 0 = applies to the parent / all variations. A variation-specific.
 			// row is more specific and replaces the inherited row for that term.
@@ -199,16 +231,7 @@ class PlanRepository {
 			);
 		}
 
-		/**
-		 * Filter the resolved plan rows for a product.
-		 *
-		 * Extension point to inject taxonomy- and variation-resolved rows.
-		 *
-		 * @param array $resolved     Resolved plan rows.
-		 * @param int   $product_id   Product id.
-		 * @param int   $variation_id Variation id (0 for simple).
-		 */
-		return apply_filters( 'subscrpt_resolve_plans_for_product', $resolved, $product_id, $variation_id );
+		return $resolved;
 	}
 
 	/**
@@ -752,6 +775,9 @@ class PlanRepository {
 		$created = 0;
 
 		foreach ( $seen as $rel ) {
+			if ( 'yes' === get_post_meta( (int) $rel['oid'], '_subscrpt_variation_term_mode', true ) ) {
+				continue;
+			}
 			// Create-only: never touch an existing relation, so a re-run can't.
 			// overwrite a per-product price the merchant already set.
 			if ( self::find_relation( $new_plan_id, (int) $rel['oid'], (int) $rel['vid'], (int) $rel['type'] ) ) {
