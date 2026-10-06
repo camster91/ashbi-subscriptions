@@ -3,6 +3,14 @@
 All notable Ashbi-maintained changes after the immutable upstream import are
 documented here. The original vendor changelog remains at `plugin/changelog.txt`.
 
+## Unreleased
+
+- Reject direct access to the runtime bootstrap before loading bundled vendor code.
+- Opt this fork out of WordPress.org updates with the supported `Update URI: false`
+  header while retaining the legacy basename, storage, hooks, and version 2.1.2.
+  No network updater is provided. Use reviewed, checksum-verified release ZIPs;
+  rollback restores the previous package without a schema migration.
+
 ## 2.1.2 — 2026-10-04
 
 - Display approved legacy Core subscription activity notes alongside current

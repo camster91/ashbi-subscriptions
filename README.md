@@ -43,7 +43,16 @@ order creation, not a requirement for a separate Ashbi payment platform.
 
 The plugin keeps the `subscription/` directory and `subscription.php` basename
 so it can replace the public plugin in place without changing WordPress's plugin
-identity. The first client release will be cut only after independent security
+identity. The main header uses `Update URI: false`, supported since WordPress
+5.8 (below our WordPress 6.2 minimum), to prevent WordPress.org updates from
+replacing this fork through the inherited slug. This is a per-plugin update
+opt-out, not a network updater or a hosted distribution API; it does not disable
+updates for other plugins. Install reviewed Ashbi release ZIPs manually with
+checksum verification and a rollback backup. Refresh the plugin update check
+after installing a new package so previously cached upstream offers are not
+mistaken for current update metadata.
+
+The first client release will be cut only after independent security
 review, green CI, staging migration rehearsals, and an approved pilot.
 
 ## Local verification and packaging
