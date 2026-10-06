@@ -101,6 +101,45 @@ console.log(JSON.stringify(compose.services.cli.volumes));
             with self.assertRaisesRegex(RuntimeError, 'datastore'):
                 module.run_environment(env, output, 'off', 'runtime', invoke)
 
+    def test_update_isolation_requires_real_service_evidence_for_other_plugins(self):
+        checker = SCRIPT.parent / 'package-validation/verify-update-isolation.php'
+        self.assertTrue(checker.exists(), 'Cached update-offer verification is missing')
+        harness = r'''<?php
+class WP_CLI {
+ static function error($message) { throw new RuntimeException($message); }
+ static function success($message) { print $message; }
+}
+define('SUBSCRPT_FILE', __FILE__);
+function wp_get_environment_type() { return 'local'; }
+function plugin_basename($file) { return 'subscription/subscription.php'; }
+function get_plugin_data($file,$markup,$translate) { return array('UpdateURI'=>$GLOBALS['scenario']==='header'?'':'false'); }
+function delete_site_transient($name) { return true; }
+function wp_update_plugins() { $GLOBALS['refreshed']=true; }
+function get_site_transient($name) {
+ if(empty($GLOBALS['refreshed'])) throw new RuntimeException('No refresh');
+ return (object)array('response'=>$GLOBALS['scenario']==='upstream'?array('subscription/subscription.php'=>(object)array('new_version'=>'fabricated')):array(),
+ 'no_update'=>$GLOBALS['scenario']==='empty'?array():array('hello.php'=>(object)array('new_version'=>'fabricated')));
+}
+function wp_json_encode($value,$flags=0) { return json_encode($value,$flags); }
+$GLOBALS['scenario']=$argv[3];
+$args=array($argv[1]);
+require $argv[2];
+'''
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            entry = root / 'fixture.php'
+            entry.write_text(harness)
+            for scenario in ('valid', 'header', 'upstream', 'empty'):
+                result = subprocess.run(['php', str(entry), str(root), str(checker), scenario],
+                                        capture_output=True, text=True)
+                if scenario == 'valid':
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    report = __import__('json').loads((root / 'update-isolation.json').read_text())
+                    self.assertFalse(report['upstream_offer_present'])
+                    self.assertEqual(report['unrelated_checked'], ['hello.php'])
+                else:
+                    self.assertNotEqual(result.returncode, 0, scenario)
+
     def test_rejects_unsafe_members(self):
         module = self.load_module()
         for member in ['../escaped.php', 'subscription/../escaped.php', 'plugin/subscription.php',
