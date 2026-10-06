@@ -42,8 +42,8 @@ require_once dirname( __DIR__, 2 ) . '/plugin/includes/Illuminate/Plans/CachePur
 final class CachePurgeTest extends TestCase {
 	/** Reset recorded hooks. */
 	protected function setUp(): void {
-		$GLOBALS['ashbi_actions'] = array();
-		$GLOBALS['ashbi_cache_purge_calls']   = array();
+		$GLOBALS['ashbi_actions']           = array();
+		$GLOBALS['ashbi_cache_purge_calls'] = array();
 	}
 
 	/** LiteSpeed action and mapping-changed hook fire for each unique id. */
@@ -75,8 +75,8 @@ final class CachePurgeTest extends TestCase {
 	public function testOptionalPurgeFunctionsAreCalledOnlyWhenPresent(): void {
 		require_once dirname( __DIR__ ) . '/fixtures/cache-purge-optional-functions.php';
 
-		$GLOBALS['ashbi_actions'] = array();
-		$GLOBALS['ashbi_cache_purge_calls']   = array();
+		$GLOBALS['ashbi_actions']           = array();
+		$GLOBALS['ashbi_cache_purge_calls'] = array();
 
 		CachePurge::products( array( 5 ) );
 
