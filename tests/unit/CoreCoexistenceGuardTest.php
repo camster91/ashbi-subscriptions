@@ -29,7 +29,7 @@ final class CoreCoexistenceGuardTest extends TestCase {
 		self::assertStringContainsString( "defined( 'SUBSCRPT_FILE' )", $source );
 		self::assertStringContainsString( 'ashbi_subscriptions_', $source );
 		self::assertStringContainsString( "add_action( 'admin_notices'", $source );
-		self::assertStringContainsString( "deactivate_plugins( plugin_basename( __FILE__ ) )", $source );
+		self::assertStringContainsString( 'deactivate_plugins( plugin_basename( __FILE__ ) )', $source );
 		self::assertStringContainsString( "'subscription'", $source );
 	}
 }
