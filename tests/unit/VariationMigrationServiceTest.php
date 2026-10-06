@@ -16,9 +16,12 @@ final class VariationMigrationServiceTest extends TestCase {
 	 * @return array
 	 */
 	private function fixture( $scenario ) {
-		$command   = 'ASHBI_VARIATION_SCENARIO=' . escapeshellarg( $scenario ) . ' ' . escapeshellarg( PHP_BINARY ) . ' ' . escapeshellarg( dirname( __DIR__ ) . '/fixtures/run-variation-migration.php' );
-		$output    = array();
-		$exit_code = 0;
+		$environment = 'Windows' === PHP_OS_FAMILY
+			? 'set ' . escapeshellarg( 'ASHBI_VARIATION_SCENARIO=' . $scenario ) . ' && '
+			: 'ASHBI_VARIATION_SCENARIO=' . escapeshellarg( $scenario ) . ' ';
+		$command     = $environment . escapeshellarg( PHP_BINARY ) . ' ' . escapeshellarg( dirname( __DIR__ ) . '/fixtures/run-variation-migration.php' );
+		$output      = array();
+		$exit_code   = 0;
 		// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec -- Isolated local unit fixture only.
 		exec( $command, $output, $exit_code );
 		self::assertSame( 0, $exit_code );
