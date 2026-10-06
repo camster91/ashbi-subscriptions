@@ -66,8 +66,8 @@ def preflight(mode, inherited=None, occupied=port_in_use):
     if mode not in ('on', 'off'):
         raise ValueError('HPOS must be on or off')
     inherited = os.environ if inherited is None else inherited
-    if any(value for key, value in inherited.items() if key.startswith('WP_ENV_')):
-        raise ValueError('Refusing inherited wp-env ownership/port overrides')
+    if any(value for key, value in inherited.items() if key.upper().startswith(('WP_ENV_', 'COMPOSE_'))):
+        raise ValueError('Refusing inherited wp-env or Compose ownership/configuration overrides')
     if occupied():
         raise RuntimeError('Refusing occupied port 8888; never stop an unknown environment')
 
@@ -112,8 +112,11 @@ def environment_details(output, repo=REPO):
                         (repo / 'scripts/wp-env-compat.cjs').as_posix(),
                         (repo / 'node_modules/@wordpress/env/bin/wp-env').as_posix(),
                         '--config', config.as_posix()],
-            'environ': dict({key: value for key, value in os.environ.items() if not key.startswith('WP_ENV_')},
-                            WP_ENV_HOME=(owned / 'cache').as_posix())}
+            'environ': dict({key: value for key, value in os.environ.items()
+                             if not key.upper().startswith(('WP_ENV_', 'COMPOSE_'))},
+                            WP_ENV_HOME=(owned / 'cache').as_posix(),
+                            COMPOSE_PROJECT_NAME='ashbi-published-' + marker['id'].replace('-', ''),
+                            COMPOSE_DISABLE_ENV_FILE='1')}
 
 
 def cleanup_environment(output, invoke=subprocess.run):
@@ -159,8 +162,12 @@ def run_environment(env, output, mode, kind, invoke=subprocess.run):
                 raise
             (output / 'integration.json').write_text(result.stdout, encoding='utf-8')
             (output / 'integration.exit-code').write_text(str(result.returncode), encoding='utf-8')
-            if json.loads(result.stdout).get('success') is not True:
+            response = json.loads(result.stdout)
+            if response.get('success') is not True:
                 raise RuntimeError('Integration callback did not report success')
+            trace = response.get('data', {})
+            if trace.get('hpos_mode') != mode or trace.get('hpos_enabled') is not (mode == 'on'):
+                raise RuntimeError('Integration callback did not verify the requested actual datastore')
         else:
             run(['run', 'cli', 'bash', '-c',
                  'wp plugin list-checks --format=json > /var/www/html/ashbi-release/plugin-check-checks.json'])

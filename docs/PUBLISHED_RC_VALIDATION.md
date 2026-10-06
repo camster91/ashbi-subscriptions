@@ -35,6 +35,10 @@ Changing the target requires an explicit reviewed code change.
    integration. The existing authenticated HTTP runner retains real admin login,
    REST nonces, and capability/ownership assertions. Tests are mounted externally
    at `/var/www/html/ashbi-integration`, because the published ZIP deliberately excludes them.
+   An explicit HPOS selector persists for the entire disposable callback, rather
+   than being restored midway through lifecycle checks. The response reports the
+   actual WooCommerce datastore at completion; the runner rejects a missing or
+   mismatched trace and reads back installed bytes/datastore again afterward.
 3. **Official Plugin Check / initial nonblocking findings:** a separate fresh
    package installation, after the HPOS jobs, with the official checker installed
    and activated from its own verified ZIP. The exact command is:
@@ -88,6 +92,10 @@ Python `finally` cleanup and an independent workflow `always()` cleanup retry
 remove only the owned environment. They use **`wp-env cleanup --force`**, not
 `destroy`, preserving potentially shared Docker images. Failed cleanup preserves
 ownership state for retry and fails visibly; no global Docker prune is performed.
+Startup rejects inherited `COMPOSE_*` settings. Startup and cleanup both derive a
+unique `COMPOSE_PROJECT_NAME` from the same ownership UUID, strip ambient Compose
+overrides, and set `COMPOSE_DISABLE_ENV_FILE=1` so an unrelated `.env` file cannot
+select a user project.
 
 ## Execute after review/push by the responsible maintainer
 

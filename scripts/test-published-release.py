@@ -31,13 +31,75 @@ class PublishedReleaseTests(unittest.TestCase):
             calls = []
             def invoke(command, **kwargs):
                 calls.append(command)
-                return subprocess.CompletedProcess(command, 0, '{"success":true}\n', '')
+                return subprocess.CompletedProcess(command, 0, '{"success":true,"data":{"hpos_mode":"off","hpos_enabled":false}}\n', '')
             module.run_environment(env, output, 'off', 'runtime', invoke)
             combined = '\n'.join(' '.join(command) for command in calls)
             self.assertIn('/var/www/html/ashbi-release/candidate.zip', combined)
             self.assertIn('/var/www/html/ashbi-tools/verify-installed.php', combined)
             self.assertNotIn(' /ashbi-release', combined)
             self.assertNotIn(' /ashbi-tools', combined)
+
+    def test_compose_project_is_marker_bound_and_ambient_overrides_are_rejected(self):
+        from unittest.mock import patch
+        module = self.load_module()
+        for key in ('COMPOSE_PROJECT_NAME', 'COMPOSE_ENV_FILES', 'COMPOSE_FILE', 'COMPOSE_PROFILES'):
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                module.preflight('off', {key: 'existing-user-project'}, lambda: False)
+        names = []
+        for _ in range(2):
+            with tempfile.TemporaryDirectory() as temp:
+                output = Path(temp)
+                with patch.dict(os.environ, {'COMPOSE_PROJECT_NAME': 'existing-user-project',
+                                             'COMPOSE_ENV_FILES': 'unknown.env'}):
+                    env = module.prepare_environment(output, SCRIPT.parent.parent)
+                    marker = __import__('json').loads((env['owned'] / '.ashbi-owned.json').read_text())
+                    project = 'ashbi-published-' + marker['id'].replace('-', '')
+                    self.assertEqual(env['environ']['COMPOSE_PROJECT_NAME'], project)
+                    self.assertEqual(env['environ']['COMPOSE_DISABLE_ENV_FILE'], '1')
+                    self.assertNotIn('COMPOSE_ENV_FILES', env['environ'])
+                    calls = []
+                    module.cleanup_environment(output, lambda command, **kwargs: calls.append(kwargs))
+                    self.assertEqual(calls[0]['env']['COMPOSE_PROJECT_NAME'], project)
+                    names.append(project)
+        self.assertNotEqual(names[0], names[1])
+
+    def test_real_locked_docker_builder_matches_container_consumers(self):
+        module = self.load_module()
+        with tempfile.TemporaryDirectory() as temp:
+            env = module.prepare_environment(Path(temp), SCRIPT.parent.parent)
+            config = __import__('json').loads(env['config'].read_text())
+            javascript = r'''
+const path = require('node:path');
+const root = path.dirname(require.resolve('@wordpress/env/package.json'));
+const build = require(path.join(root, 'lib/runtime/docker/build-docker-compose-config.js'));
+const mappings = Object.fromEntries(Object.entries(JSON.parse(process.argv[1])).map(([key, value]) => [key, {path: value}]));
+const compose = build({testsEnvironment:false,workDirectoryPath:'/offline-cache',env:{development:{mappings,pluginSources:[],themeSources:[],port:8888},tests:{}}});
+console.log(JSON.stringify(compose.services.cli.volumes));
+'''
+            result = subprocess.run([shutil.which('node'), '-e', javascript,
+                                     __import__('json').dumps(config['mappings'])],
+                                    cwd=SCRIPT.parent.parent, capture_output=True, text=True, check=True)
+            mounts = __import__('json').loads(result.stdout)
+            destinations = [mount.rsplit(':', 1)[-1] for mount in mounts]
+            for name in ('release', 'tools', 'integration'):
+                self.assertIn('/var/www/html/ashbi-' + name, destinations)
+                self.assertNotIn('/ashbi-' + name, destinations)
+
+    def test_matrix_fixture_keeps_selected_datastore_through_all_checks(self):
+        source = (SCRIPT.parent.parent / 'plugin/tests/integration/security-boundaries.php').read_text()
+        self.assertNotIn('$previous_hpos_setting', source,
+                         'The explicit disposable matrix mode must not be restored midway through lifecycle checks')
+        self.assertIn("'hpos_enabled'", source)
+
+    def test_runtime_rejects_success_without_actual_datastore_trace(self):
+        module = self.load_module()
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            env = module.prepare_environment(output, SCRIPT.parent.parent)
+            def invoke(command, **kwargs):
+                return subprocess.CompletedProcess(command, 0, '{"success":true}\n', '')
+            with self.assertRaisesRegex(RuntimeError, 'datastore'):
+                module.run_environment(env, output, 'off', 'runtime', invoke)
 
     def test_rejects_unsafe_members(self):
         module = self.load_module()
