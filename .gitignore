@@ -4,6 +4,7 @@
 node_modules/
 vendor/
 coverage/
+__pycache__/
 .phpunit.result.cache
 dist/
 build/
