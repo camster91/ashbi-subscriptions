@@ -9,7 +9,7 @@
 // phpcs:disable WordPress.NamingConventions.PrefixAllGlobals, WordPress.WP.AlternativeFunctions, WordPress.Security.EscapeOutput.OutputNotEscaped
 
 define( 'ABSPATH', __DIR__ . '/' );
-$main         = dirname( __DIR__, 2 ) . '/plugin/subscription.php';
+$main         = realpath( dirname( __DIR__, 2 ) . '/plugin/subscription.php' );
 $scenario     = $argv[1];
 $hooks        = array();
 $activation   = array();
@@ -62,7 +62,7 @@ if ( $conflict ) {
 		verify( 'Deactivate WP Subscription Core first, then activate Ashbi Subscriptions' === $error->getMessage() );
 	}
 } else {
-	verify( ( new ReflectionClass( 'Sdevs_Subscription' ) )->getFileName() === dirname( $main ) . '/bootstrap.php' );
+	verify( ( new ReflectionClass( 'Sdevs_Subscription' ) )->getFileName() === realpath( dirname( $main ) . '/bootstrap.php' ) );
 	verify( SUBSCRPT_FILE === $main && WP_SUBSCRIPTION_FILE === $main );
 	verify( SUBSCRPT_PATH === dirname( $main ) );
 	verify( isset( $deactivation[ $main ], $hooks['plugins_loaded'] ) );
