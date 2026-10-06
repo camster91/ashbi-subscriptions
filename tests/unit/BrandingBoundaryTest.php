@@ -5,6 +5,7 @@
  * @package Ashbi_Subscriptions
  */
 
+// phpcs:disable WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Offline local source contracts.
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -168,7 +169,7 @@ final class BrandingBoundaryTest extends TestCase {
 		$composer    = file_get_contents( $root . '/plugin/composer.json' );
 		$identifiers = array(
 			'Text Domain: subscription'           => $main,
-			'final class Sdevs_Subscription'      => $main,
+			'final class Sdevs_Subscription'      => file_get_contents( $root . '/plugin/bootstrap.php' ),
 			"'wp-subscription'"                   => $menu,
 			"'wp-subscription-list'"              => $menu,
 			"'wp-subscription-details'"           => $menu,

@@ -1,5 +1,9 @@
 *** Ashbi Subscriptions Changelog ***
 
+2026-10-04 - version 2.1.2
+* fixed: Prevent self-conflict at bootstrap and refuse conflicting activation cleanly.
+* fixed: Restore administrator Migration access and support custom WooCommerce folders.
+
 2026-10-03 - version 2.1.1
 * fixed: Refuse coexistence with WP Subscription Core / WPSubscription to avoid a fatal class clash.
 * fixed: Purge product page caches after variation mapping apply, rollback, and editor saves.

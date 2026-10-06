@@ -43,7 +43,7 @@ final class StandalonePlanCapabilityTest extends TestCase {
 		$root = dirname( __DIR__, 2 );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Read-only local source contract fixture.
 		$composer     = json_decode( (string) file_get_contents( $root . '/plugin/composer.json' ), true );
-		$plugin       = $this->source( 'plugin/subscription.php' );
+		$plugin       = $this->source( 'plugin/bootstrap.php' );
 		$legacy       = $this->source( 'plugin/includes/LegacyCompat.php' );
 		$architecture = $this->source( 'docs/ARCHITECTURE.md' );
 
@@ -287,11 +287,11 @@ final class StandalonePlanCapabilityTest extends TestCase {
 
 	/** Verify plugin lifecycle has a safe opt-in uninstall path. */
 	public function test_plugin_lifecycle_has_a_safe_opt_in_uninstall_path(): void {
-		$plugin    = $this->source( 'plugin/subscription.php' );
+		$plugin    = $this->source( 'plugin/bootstrap.php' );
 		$uninstall = $this->source( 'plugin/uninstall.php' );
 
-		self::assertStringContainsString( 'register_activation_hook( __FILE__', $plugin );
-		self::assertStringContainsString( 'register_deactivation_hook( __FILE__', $plugin );
+		self::assertStringContainsString( 'register_activation_hook( SUBSCRPT_FILE', $plugin );
+		self::assertStringContainsString( 'register_deactivation_hook( SUBSCRPT_FILE', $plugin );
 		self::assertStringContainsString( "'subscrpt_hourly_cron'", $plugin );
 		self::assertStringContainsString( "defined( 'WP_UNINSTALL_PLUGIN' )", $uninstall );
 		self::assertStringContainsString( "get_option( 'subscrpt_remove_data_on_uninstall', false )", $uninstall );
@@ -317,7 +317,7 @@ final class StandalonePlanCapabilityTest extends TestCase {
 
 	/** Verify deactivation clears queues without touching business records. */
 	public function test_deactivation_clears_plugin_owned_queues_without_touching_business_records(): void {
-		$plugin    = $this->source( 'plugin/subscription.php' );
+		$plugin    = $this->source( 'plugin/bootstrap.php' );
 		$uninstall = $this->source( 'plugin/uninstall.php' );
 		$hooks     = array(
 			'subscrpt_scheduled_grace_end',
