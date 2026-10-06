@@ -30,7 +30,7 @@ class VariationMigration {
 
 	/** Add migration below the existing Ashbi menu. */
 	public function menu() {
-		add_submenu_page( 'wp-subscription', __( 'Migration', 'subscription' ), __( 'Migration', 'subscription' ), 'manage_woocommerce', 'wp-subscription-migration', array( $this, 'render' ) );
+		add_submenu_page( 'wp-subscription', __( 'Migration', 'subscription' ), __( 'Migration', 'subscription' ), 'manage_options', 'wp-subscription-migration', array( $this, 'render' ) );
 	}
 
 	/**
@@ -49,7 +49,7 @@ class VariationMigration {
 	 * @throws \RuntimeException Internally caught and rendered as form errors.
 	 */
 	public function render() {
-		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+		if ( ! current_user_can( 'manage_options' ) && ! current_user_can( 'manage_woocommerce' ) ) {
 			wp_die( esc_html__( 'You cannot manage subscription migrations.', 'subscription' ), 403 );
 		}
 		$migrator      = new Migrator();
@@ -127,6 +127,9 @@ class VariationMigration {
 			<?php if ( $report ) : ?>
 				<p><?php echo esc_html( ( $report['mode'] ?? '' ) . ' — ' . ( $report['timestamp'] ?? '' ) ); ?></p>
 				<p><?php echo esc_html( wp_json_encode( $report['totals'] ?? array() ) ); ?></p>
+				<?php if ( isset( $report['cache_purged'] ) ) : ?>
+					<p><?php esc_html_e( 'Product page caches are purged for touched products; if a page still lacks the delivery note, purge the page cache manually.', 'subscription' ); ?></p>
+				<?php endif; ?>
 				<?php
 				foreach ( $report['errors'] ?? array() as $error ) :
 					?>

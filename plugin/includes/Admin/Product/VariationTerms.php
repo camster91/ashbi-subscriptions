@@ -7,8 +7,9 @@
 
 namespace SpringDevs\Subscription\Admin\Product;
 
-use SpringDevs\Subscription\Illuminate\Plans\PlanRepository as Repository;
 use SpringDevs\Subscription\Illuminate\Migration\VariationPlanMigrator;
+use SpringDevs\Subscription\Illuminate\Plans\CachePurge;
+use SpringDevs\Subscription\Illuminate\Plans\PlanRepository as Repository;
 
 /** A single existing term per variation, using its WooCommerce price. */
 class VariationTerms {
@@ -41,14 +42,15 @@ class VariationTerms {
 	 */
 	public function save_mode( $id ) {
 		$nonce = isset( $_POST['ashbi_variation_mode_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['ashbi_variation_mode_nonce'] ) ) : '';
-		if ( ! current_user_can( 'manage_woocommerce' ) || ! current_user_can( 'edit_post', $id ) || ! wp_verify_nonce( $nonce, 'ashbi_variation_mode' ) ) {
+		if ( ( ! current_user_can( 'manage_options' ) && ! current_user_can( 'manage_woocommerce' ) ) || ! current_user_can( 'edit_post', $id ) || ! wp_verify_nonce( $nonce, 'ashbi_variation_mode' ) ) {
 			return;
 		}
 		$product = wc_get_product( $id );
 		if ( ! $product || ! $product->is_type( 'variable' ) ) {
 			return;
 		}
-		$lock = '';
+		$lock    = '';
+		$success = false;
 		try {
 			$lock = VariationPlanMigrator::acquire_lock();
 			if ( isset( $_POST['_subscrpt_variation_term_mode'] ) ) {
@@ -68,12 +70,16 @@ class VariationTerms {
 			$product->update_meta_data( '_subscrpt_variation_term_mode', isset( $_POST['_subscrpt_variation_term_mode'] ) ? 'yes' : 'no' );
 			$product->save_meta_data();
 			Repository::flush_cache( $id );
+			$success = true;
 		} catch ( \Throwable $error ) {
 			\WC_Admin_Meta_Boxes::add_error( $error->getMessage() );
 		} finally {
 			if ( $lock ) {
 				VariationPlanMigrator::release_lock( $lock );
 			}
+		}
+		if ( $success ) {
+			self::purge_product_pages( array( $id ) );
 		}
 	}
 
@@ -129,7 +135,7 @@ class VariationTerms {
 	 */
 	public function save( $id ) {
 		$nonce = isset( $_POST['ashbi_variation_term_nonce'][ $id ] ) ? sanitize_text_field( wp_unslash( $_POST['ashbi_variation_term_nonce'][ $id ] ) ) : '';
-		if ( ! current_user_can( 'manage_woocommerce' ) || ! current_user_can( 'edit_post', $id ) || ! wp_verify_nonce( $nonce, 'ashbi_variation_term_' . $id ) || ! isset( $_POST['ashbi_variation_term'][ $id ] ) ) {
+		if ( ( ! current_user_can( 'manage_options' ) && ! current_user_can( 'manage_woocommerce' ) ) || ! current_user_can( 'edit_post', $id ) || ! wp_verify_nonce( $nonce, 'ashbi_variation_term_' . $id ) || ! isset( $_POST['ashbi_variation_term'][ $id ] ) ) {
 			return;
 		}
 		$variation = wc_get_product( $id );
@@ -147,7 +153,8 @@ class VariationTerms {
 			\WC_Admin_Meta_Boxes::add_error( __( 'Choose an active subscription term.', 'subscription' ) );
 			return;
 		}
-		$lock = '';
+		$lock    = '';
+		$success = false;
 		try {
 			$lock     = VariationPlanMigrator::acquire_lock();
 			$migrator = new VariationPlanMigrator();
@@ -202,6 +209,7 @@ class VariationTerms {
 				}
 			);
 			Repository::flush_cache( $parent );
+			$success = true;
 		} catch ( \Throwable $error ) {
 			\WC_Admin_Meta_Boxes::add_error( $error->getMessage() );
 		} finally {
@@ -219,5 +227,28 @@ class VariationTerms {
 				VariationPlanMigrator::release_lock( $lock );
 			}
 		}
+		if ( $success ) {
+			self::purge_product_pages( array( $parent ) );
+		}
+	}
+
+	/**
+	 * Clear object and full-page caches for parent products after mapping changes.
+	 *
+	 * @param array $ids Parent product ids.
+	 * @return void
+	 */
+	private static function purge_product_pages( array $ids ) {
+		foreach ( $ids as $id ) {
+			$id = absint( $id );
+			if ( ! $id ) {
+				continue;
+			}
+			if ( function_exists( 'clean_post_cache' ) ) {
+				clean_post_cache( $id );
+			}
+			wc_delete_product_transients( $id );
+		}
+		CachePurge::products( $ids );
 	}
 }

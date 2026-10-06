@@ -5,6 +5,7 @@
  * @package Ashbi_Subscriptions
  */
 
+// phpcs:disable WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Offline local source contracts.
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -81,6 +82,15 @@ final class BrandingBoundaryTest extends TestCase {
 			self::assertFileExists( $file );
 			$contents = file_get_contents( $file );
 			self::assertNotFalse( $contents, 'Unable to read ' . $file );
+			// Coexistence guard (and its catalog entry) must name the conflicting products.
+			$contents = str_replace(
+				array(
+					'Ashbi Subscriptions is inactive because another subscription plugin (WP Subscription Core / WPSubscription) is active and must be deactivated first.',
+					'WP Subscription Core / WPSubscription',
+				),
+				'',
+				$contents
+			);
 
 			foreach ( self::PROHIBITED_PATTERNS as $pattern ) {
 				if ( preg_match( $pattern, $contents ) ) {
@@ -159,7 +169,7 @@ final class BrandingBoundaryTest extends TestCase {
 		$composer    = file_get_contents( $root . '/plugin/composer.json' );
 		$identifiers = array(
 			'Text Domain: subscription'           => $main,
-			'final class Sdevs_Subscription'      => $main,
+			'final class Sdevs_Subscription'      => file_get_contents( $root . '/plugin/bootstrap.php' ),
 			"'wp-subscription'"                   => $menu,
 			"'wp-subscription-list'"              => $menu,
 			"'wp-subscription-details'"           => $menu,

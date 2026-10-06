@@ -44,6 +44,10 @@ class Required {
 	 * @return void
 	 */
 	public function check_plugins() {
+		if ( class_exists( 'WooCommerce' ) ) {
+			return;
+		}
+
 		if ( ! function_exists( 'is_plugin_active' ) ) {
 			include_once ABSPATH . 'wp-admin/includes/plugin.php';
 		}

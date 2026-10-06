@@ -7,6 +7,7 @@
 
 namespace SpringDevs\Subscription\Illuminate\Migration;
 
+use SpringDevs\Subscription\Illuminate\Plans\CachePurge;
 use SpringDevs\Subscription\Illuminate\Plans\PlanRepository as Repository;
 
 /** Bounded scan, locked apply and guarded rollback of the last apply. */
@@ -301,7 +302,8 @@ class VariationPlanMigrator {
 				throw $error;
 			}
 			$this->clear_caches( $report );
-			return $report;
+			$report['cache_purged'] = self::purge_touched_products( $journal['products'] );
+			return $this->save_report( $report, 'apply' );
 		} finally {
 			self::release_lock( $lock );
 		}
@@ -369,6 +371,7 @@ class VariationPlanMigrator {
 				return $this->save_report( $report, 'rollback_dry_run' );
 			}
 			$this->begin();
+			$committed = false;
 			try {
 				foreach ( $journal['relations'] as $relation ) {
 					self::require_write( Repository::delete_relation( $relation['id'] ) );
@@ -402,6 +405,7 @@ class VariationPlanMigrator {
 				self::store_option( self::JOURNAL, $journal );
 				$report = $this->save_report( $report, 'rollback_apply' );
 				$this->transaction( 'COMMIT' );
+				$committed = true;
 			} catch ( \Throwable $error ) {
 				$this->transaction( 'ROLLBACK' );
 				throw $error;
@@ -419,6 +423,10 @@ class VariationPlanMigrator {
 				}
 				wp_cache_delete( self::JOURNAL, 'options' );
 				wp_cache_delete( self::REPORT, 'options' );
+			}
+			if ( $committed ) {
+				$report['cache_purged'] = self::purge_touched_products( $journal['products'] );
+				$report                 = $this->save_report( $report, 'rollback_apply' );
 			}
 			return $report;
 		} finally {
@@ -539,6 +547,9 @@ class VariationPlanMigrator {
 	private function clear_caches( array $report ) {
 		foreach ( $report['products'] ?? array() as $plan ) {
 			Repository::flush_cache( $plan['product']['id'] );
+			if ( function_exists( 'clean_post_cache' ) ) {
+				clean_post_cache( $plan['product']['id'] );
+			}
 			foreach ( array_merge( array( array( 'id' => $plan['product']['id'] ) ), $plan['product']['entities'] ) as $entity ) {
 				wp_cache_delete( $entity['id'], 'post_meta' );
 				wc_delete_product_transients( $entity['id'] );
@@ -550,5 +561,22 @@ class VariationPlanMigrator {
 		}
 		wp_cache_delete( self::JOURNAL, 'options' );
 		wp_cache_delete( self::REPORT, 'options' );
+	}
+
+	/**
+	 * Drop object/page caches for parent products after a successful mapping commit.
+	 *
+	 * @param array $ids Parent product ids.
+	 * @return int
+	 */
+	private static function purge_touched_products( array $ids ) {
+		$ids = array_values( array_unique( array_filter( array_map( 'absint', $ids ) ) ) );
+		foreach ( $ids as $id ) {
+			if ( function_exists( 'clean_post_cache' ) ) {
+				clean_post_cache( $id );
+			}
+			wc_delete_product_transients( $id );
+		}
+		return CachePurge::products( $ids );
 	}
 }

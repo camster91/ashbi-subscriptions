@@ -33,7 +33,7 @@ final class FrontendRewriteContractTest extends TestCase {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 		$this->my_account_source = (string) file_get_contents( $root . '/plugin/includes/Frontend/MyAccount.php' );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-		$this->bootstrap_source = (string) file_get_contents( $root . '/plugin/subscription.php' );
+		$this->bootstrap_source = (string) file_get_contents( $root . '/plugin/bootstrap.php' );
 	}
 
 	/**

@@ -49,7 +49,7 @@ function ashbi_read( $path ) {
 	return $contents;
 }
 
-$bootstrap   = ashbi_read( $ashbi_plugin_directory . '/subscription.php' );
+$bootstrap   = ashbi_read( $ashbi_plugin_directory . '/subscription.php' ) . ashbi_read( $ashbi_plugin_directory . '/bootstrap.php' );
 $composer    = json_decode( ashbi_read( $ashbi_plugin_directory . '/composer.json' ), true );
 $installer   = ashbi_read( $ashbi_plugin_directory . '/includes/Installer.php' );
 $post_source = ashbi_read( $ashbi_plugin_directory . '/includes/Illuminate/Post.php' );
