@@ -103,9 +103,9 @@ try {
 		}
 		OverdueDispositionPlan::assert_current( $record, $current );
 		if ( 'advance_without_charge' === $record['operator_disposition'] ) {
-			$recurrence     = OverdueDispositionPlan::recurrence_string( $record );
-			$anchor         = strtotime( (string) $record['next_date_utc'] );
-			$next           = OverdueDispositionPlan::future_anchor(
+			$recurrence                  = OverdueDispositionPlan::recurrence_string( $record );
+			$anchor                      = strtotime( (string) $record['next_date_utc'] );
+			$next                        = OverdueDispositionPlan::future_anchor(
 				(int) $anchor,
 				$now,
 				static function ( int $from ) use ( $recurrence ): int {

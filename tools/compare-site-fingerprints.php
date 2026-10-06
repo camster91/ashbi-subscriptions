@@ -17,7 +17,7 @@ if ( $argument_count < 3 || $argument_count > 4 ) {
 }
 
 $comparison_mode = $arguments[3] ?? 'activation';
-$key  = (string) getenv( 'ASHBI_FINGERPRINT_KEY' );
+$key             = (string) getenv( 'ASHBI_FINGERPRINT_KEY' );
 if ( strlen( $key ) < 32 ) {
 	fwrite( STDERR, "ASHBI_FINGERPRINT_KEY must contain at least 32 bytes.\n" );
 	exit( 2 );

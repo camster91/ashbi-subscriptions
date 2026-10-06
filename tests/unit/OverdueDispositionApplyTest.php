@@ -17,15 +17,12 @@ final class OverdueDispositionApplyTest extends TestCase {
 	 * @return array<string,mixed>
 	 */
 	private function runFixture( string $mode, string $scenario = 'normal' ): array {
-		$command = sprintf(
-			'ASHBI_FIXTURE_MODE=%s ASHBI_FIXTURE_SCENARIO=%s %s %s',
-			escapeshellarg( $mode ),
-			escapeshellarg( $scenario ),
-			escapeshellarg( PHP_BINARY ),
-			escapeshellarg( dirname( __DIR__ ) . '/fixtures/run-overdue-apply.php' )
-		);
-		$output  = array();
-		$exit    = 0;
+		$environment = 'Windows' === PHP_OS_FAMILY
+			? 'set ' . escapeshellarg( 'ASHBI_FIXTURE_MODE=' . $mode ) . ' && set ' . escapeshellarg( 'ASHBI_FIXTURE_SCENARIO=' . $scenario ) . ' && '
+			: 'ASHBI_FIXTURE_MODE=' . escapeshellarg( $mode ) . ' ASHBI_FIXTURE_SCENARIO=' . escapeshellarg( $scenario ) . ' ';
+		$command     = $environment . escapeshellarg( PHP_BINARY ) . ' ' . escapeshellarg( dirname( __DIR__ ) . '/fixtures/run-overdue-apply.php' );
+		$output      = array();
+		$exit        = 0;
 		exec( $command, $output, $exit );
 		$this->assertSame( 0, $exit );
 		$result = json_decode( implode( "\n", $output ), true );

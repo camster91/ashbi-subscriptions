@@ -49,7 +49,7 @@ class Order {
 	 * Related Subscriptions meta box on Orders.
 	 */
 	public function add_meta_boxes() {
-		$screen    = wps_subscription_is_wc_order_hpos_enabled()
+		$screen = wps_subscription_is_wc_order_hpos_enabled()
 				? wc_get_page_screen_id( 'shop-order' )
 				: 'shop_order';
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- The WooCommerce order screen identifier is read-only here; this callback performs no mutation.
