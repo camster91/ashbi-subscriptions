@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+plugin_dir="${ASHBI_INTEGRATION_PLUGIN_DIR:-plugin}"
+if [[ "$plugin_dir" != plugin && "$plugin_dir" != subscription ]]; then
+	printf 'ASHBI_INTEGRATION_PLUGIN_DIR must be plugin or subscription.\n' >&2
+	exit 2
+fi
+plugin_status_prefix="\"plugin\":\"${plugin_dir}\\\\/subscription\",\"status\":"
+
 cookie_jar="$(mktemp)"
 callback_cookie_jar="$(mktemp)"
 trap 'rm -f "$cookie_jar" "$callback_cookie_jar"' EXIT
@@ -48,17 +55,17 @@ for attempt in $(seq 1 60); do
 			-H "X-WP-Nonce: $rest_nonce" http://localhost:8888/wp-json/wp/v2/plugins || true)"
 
 		if [[ "$activation_attempted" != true ]] && \
-			printf '%s' "$plugins_json" | grep --quiet '"plugin":"plugin\\/subscription","status":"inactive"'; then
+			printf '%s' "$plugins_json" | grep --quiet "${plugin_status_prefix}\"inactive\""; then
 			curl --silent --show-error --max-time 30 --cookie "$cookie_jar" --cookie-jar "$cookie_jar" \
 				-H "X-WP-Nonce: $rest_nonce" \
 				--data 'status=active' \
-				"http://localhost:8888/wp-json/wp/v2/plugins/plugin/subscription" >/dev/null || true
+				"http://localhost:8888/wp-json/wp/v2/plugins/${plugin_dir}/subscription" >/dev/null || true
 			activation_attempted=true
 		fi
 
 		if printf '%s' "$plugins_json" | grep --extended-regexp --quiet '"plugin":"woocommerce(\.latest-stable)?\\/woocommerce","status":"active"' && \
 			printf '%s' "$plugins_json" | grep --extended-regexp --quiet '"plugin":"woocommerce-gateway-stripe(\.latest-stable)?\\/woocommerce-gateway-stripe","status":"active"' && \
-			printf '%s' "$plugins_json" | grep --quiet '"plugin":"plugin\\/subscription","status":"active"'; then
+			printf '%s' "$plugins_json" | grep --quiet "${plugin_status_prefix}\"active\""; then
 			dependencies_ready=true
 			break
 		fi
