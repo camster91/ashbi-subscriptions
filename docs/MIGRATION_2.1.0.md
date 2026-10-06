@@ -1,5 +1,21 @@
 # Variation plans in 2.1.0
 
+## Saved carts when upgrading to 2.1.2
+
+Cart lines saved before variation mapping have no plan snapshot. On the next
+WooCommerce session load, 2.1.2 resolves each opted-in variation's exact term
+and adds the same snapshot used for a new addition, retaining its quantity,
+variation attributes and cart key. One-time lines and existing plan snapshots
+are unchanged. Existing classic snapshots must agree with the mapped price and
+cadence; unavailable, ambiguous or conflicting terms keep the saved line and
+block checkout with a review notice. No orders or subscriptions are changed.
+Roll back by deactivating Ashbi and reactivating Core, then purging cache;
+cart-only snapshots do not migrate existing order/subscription records.
+
+QA: save monthly and multi-month variations under Core, switch plugins after
+mapping, load the cart, and confirm no lines disappear. Confirm an unchanged
+one-time line and a fresh two-month addition. Remove only test additions.
+
 Ashbi Subscriptions can map one concrete variation to one existing plan term.
 The relation uses the unchanged `subscrpt_plan_relation` table: parent `oid`,
 variation `vid`, term `plan_id`, and `data={"price_source":"variation"}`. There
@@ -181,6 +197,13 @@ catalogues edited after apply or for broader multi-batch rollback.
 
 ## Verification boundary
 
+For 2.1.2, verify the admin detail view against cancelled and active records.
+Only an active subscription with a valid future date outside a grace period
+shows Upcoming renewal and the scheduled-payment header. Historical dates stay
+in the Next Payment summary tile; this display correction changes no stored
+date, status, order, scheduler, or email behavior. Reverting the package restores
+the prior display and requires no database migration.
+
 The unit suite exercises parser/planner behavior, production plan resolution,
 programmatic cart selection and purchase pricing, mapped-trial initial pricing,
 Stripe order-only force-save, immutable renewal filters, and migration apply/
@@ -188,3 +211,11 @@ rollback using isolated transactional storage doubles. These are offline tests,
 not a real WordPress database or Stripe sandbox proof. Complete
 [the staging checklist](QA_VARIATION_PLANS_2.1.0.md) on mobile and desktop before
 client rollout, especially WooCommerce Blocks and the installed DWL/Stripe stack.
+# Legacy activity history in 2.1.2
+
+The subscription detail page reads both Core `subscription_note` and current
+`order_note` comments for the selected subscription. Historical activity labels
+are displayed from their original metadata when the current label is absent.
+This is a read-only compatibility change: no comments, subscriptions or orders
+are rewritten. Verify existing renewal notes after switching. Rollback uses the
+previous plugin package without a database migration.

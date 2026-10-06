@@ -36,6 +36,7 @@ class PlanCheckout {
 	 */
 	public function __construct() {
 		add_filter( 'woocommerce_add_cart_item_data', array( $this, 'add_plan_to_cart' ), 20, 4 );
+		add_filter( 'woocommerce_get_cart_item_from_session', array( $this, 'restore_mapped_cart_item' ), 20, 3 );
 		add_action( 'woocommerce_before_calculate_totals', array( $this, 'set_cart_item_price' ), 20 );
 		add_action( 'woocommerce_cart_calculate_fees', array( $this, 'add_signup_fee' ), 20 );
 		add_action( 'woocommerce_checkout_create_order_line_item', array( $this, 'save_plan_order_item' ), 20, 3 );
@@ -221,7 +222,75 @@ class PlanCheckout {
 			return $cart_item_data;
 		}
 
-		$terms = $this->term_terms( $row );
+		return $this->stamp_plan( $cart_item_data, $row, $variation_id );
+	}
+
+	/**
+	 * Restore a pre-migration variation cart from its exact mapped term.
+	 * Existing plan snapshots and ordinary one-time/classic carts stay unchanged.
+	 * A conflicting legacy snapshot blocks checkout without deleting the line.
+	 *
+	 * @param array  $item Restored WooCommerce cart item.
+	 * @param array  $values Saved session values.
+	 * @param string $key Cart key.
+	 * @return array
+	 */
+	public function restore_mapped_cart_item( $item, $values, $key ) {
+		if ( ! empty( $item['subscrpt_plan_id'] ) || empty( $item['variation_id'] ) || empty( $item['product_id'] ) ) {
+			return $item;
+		}
+		if ( 'yes' !== get_post_meta( (int) $item['product_id'], '_subscrpt_variation_term_mode', true ) ) {
+			return $item;
+		}
+		unset( $item['ashbi_cart_restore_error'] );
+		try {
+			$rows = PlanRepository::resolve_for_product( (int) $item['product_id'], (int) $item['variation_id'] );
+			if ( ! self::mapped_plan_id( $rows ) ) {
+				if ( isset( $item['subscription'] ) ) {
+					throw new \UnexpectedValueException( 'Saved subscription has no exact variation term.' );
+				}
+				return $item;
+			}
+			$restored = $this->stamp_plan( $item, $rows[0], (int) $item['variation_id'] );
+			if ( isset( $item['subscription'] ) ) {
+				$before = $item['subscription'];
+				$after  = $restored['subscription'];
+				if ( ! is_array( $before ) ) {
+					throw new \UnexpectedValueException( 'Saved subscription snapshot is invalid.' );
+				}
+				foreach ( array( 'time', 'trial', 'signup_fee', 'per_cost', 'max_no_payment' ) as $field ) {
+					if ( ! isset( $before[ $field ] ) ) {
+						continue;
+					}
+					$matches = 'trial' === $field
+						? ( is_scalar( $before[ $field ] ) && (string) $before[ $field ] === (string) $after[ $field ] )
+						: ( ( is_numeric( $before[ $field ] ) || '' === $before[ $field ] ) && (float) $before[ $field ] === (float) $after[ $field ] );
+					if ( ! $matches ) {
+						throw new \UnexpectedValueException( 'Saved subscription terms changed.' );
+					}
+				}
+				if ( ! isset( $before['type'] ) || ! is_string( $before['type'] ) || Helper::get_typos( 1, $before['type'] ) !== Helper::get_typos( 1, $after['type'] ) ) {
+					throw new \UnexpectedValueException( 'Saved subscription interval changed.' );
+				}
+			}
+			return $restored;
+		} catch ( \UnexpectedValueException $error ) {
+			$item['ashbi_cart_restore_error'] = true;
+			return $item;
+		}
+	}
+
+	/**
+	 * Snapshot one resolved term for both new and restored cart lines.
+	 *
+	 * @param array $cart_item_data Cart data.
+	 * @param array $row Resolved exact term.
+	 * @param int   $variation_id Variation id.
+	 * @return array
+	 */
+	private function stamp_plan( $cart_item_data, $row, $variation_id ) {
+		$plan_id = (int) $row['plan_id'];
+		$terms   = $this->term_terms( $row );
 
 		$cart_item_data['subscrpt_plan_id']        = $plan_id;
 		$cart_item_data['subscrpt_plan_group_id']  = (int) $row['plan_group_id'];

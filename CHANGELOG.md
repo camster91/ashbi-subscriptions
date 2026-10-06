@@ -5,6 +5,14 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 
 ## 2.1.2 — 2026-10-04
 
+- Display approved legacy Core subscription activity notes alongside current
+  order notes, preserving historical labels without rewriting any records.
+- Restore pre-migration variation cart lines through their exact mapped terms.
+  Keep conflicting saved snapshots and block checkout for review, without deleting
+  cart lines. Normalize singular/plural units during classic cart validation.
+- Only show the admin Upcoming renewal notice and scheduled-payment header for
+  active subscriptions with a valid future date outside grace periods. Retain
+  historical dates in the summary without changing records or renewal workers.
 - Fix the early-bound class falsely detecting its own runtime as a conflict.
 - Refuse conflicting activation without deactivating plugins on unrelated requests.
 - Restore administrator Migration access and recognize custom WooCommerce folders.

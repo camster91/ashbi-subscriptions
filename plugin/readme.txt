@@ -83,6 +83,7 @@ the administrator or support contact responsible for your managed site.
 = 2.1.2 =
 * Fix self-conflict during bootstrap and refuse conflicting Core activation cleanly.
 * Restore administrator Migration access and recognize custom WooCommerce folders.
+* Restore saved variation carts through exact migrated terms; preserve conflicting lines and block checkout for review.
 
 = 2.1.1 =
 

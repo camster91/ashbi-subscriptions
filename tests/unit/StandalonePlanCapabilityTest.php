@@ -266,7 +266,7 @@ final class StandalonePlanCapabilityTest extends TestCase {
 		$details = $this->source( 'plugin/includes/Admin/views/subscription-details.php' );
 
 		self::assertStringContainsString( 'get_comments(', $details );
-		self::assertStringContainsString( "'type'    => 'order_note'", $details );
+		self::assertStringContainsString( "'type__in' => array( 'order_note', 'subscription_note' )", $details );
 		self::assertStringNotContainsString( 'Activity history is unavailable', $details );
 		self::assertStringNotContainsString( 'subscrpt_pro_activated()', $details );
 	}
