@@ -60,15 +60,15 @@ function ashbi_run_security_boundary_integration_checks() {
 			$check( array( 'sdevs_subscrpt_cart_block' ) === $block_integration->get_editor_script_handles(), 'WooCommerce block integration omitted the editor script.' );
 		}
 
-		$hpos_mode             = '';
-		$previous_hpos_setting = null;
+		$hpos_mode = '';
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- The local-only runner uses this fabricated mode selector; the route remains administrator-gated.
 		if ( isset( $_GET['ashbi_hpos'] ) ) {
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- The local-only runner uses this fabricated mode selector; the route remains administrator-gated.
 			$requested_hpos = sanitize_key( wp_unslash( $_GET['ashbi_hpos'] ) );
 			if ( in_array( $requested_hpos, array( 'on', 'off' ), true ) ) {
-				$hpos_mode             = $requested_hpos;
-				$previous_hpos_setting = get_option( 'woocommerce_custom_orders_table_enabled', null );
+				// Persist the explicit matrix mode through this entire disposable run.
+				// The owned test environment is destroyed by the runner after verification.
+				$hpos_mode = $requested_hpos;
 				update_option( 'woocommerce_custom_orders_table_enabled', 'on' === $hpos_mode ? 'yes' : 'no', false );
 				$check(
 					function_exists( 'wps_subscription_is_wc_order_hpos_enabled' )
@@ -354,13 +354,6 @@ function ashbi_run_security_boundary_integration_checks() {
 			wp_delete_post( $plan_subscription_id, true );
 		}
 		PlanRepository::delete_group( (int) $plan_group_id );
-		if ( '' !== $hpos_mode ) {
-			if ( null === $previous_hpos_setting ) {
-				delete_option( 'woocommerce_custom_orders_table_enabled' );
-			} else {
-				update_option( 'woocommerce_custom_orders_table_enabled', $previous_hpos_setting, false );
-			}
-		}
 
 		// The activation request should leave durable schema markers behind. These.
 		// checks prove the candidate was actually activated in the disposable site,.
@@ -1323,7 +1316,13 @@ function ashbi_run_security_boundary_integration_checks() {
 			wp_send_json_error( array( 'failures' => $failures ), 500 );
 		}
 
-		wp_send_json_success( array( 'message' => 'Ashbi security-boundary integration checks passed.' ) );
+		wp_send_json_success(
+			array(
+				'message'      => 'Ashbi security-boundary integration checks passed.',
+				'hpos_mode'    => $hpos_mode,
+				'hpos_enabled' => \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled(),
+			)
+		);
 	} catch ( \Throwable $error ) {
 		wp_send_json_error(
 			array(
