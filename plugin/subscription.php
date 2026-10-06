@@ -4,6 +4,7 @@
  * Description: Adds recurring purchases, subscription management, and automated renewals to WooCommerce stores.
  *
  * Version: 2.1.2
+ * Update URI: false
  *
  * Author: Ashbi
  *

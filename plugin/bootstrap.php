@@ -9,6 +9,11 @@
 use Automattic\WooCommerce\Blocks\Payments\PaymentMethodRegistry;
 use SpringDevs\Subscription\Illuminate\Gateways\Paypal\Paypal_Blocks_Integration;
 
+// Do not load the runtime outside WordPress.
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
 require_once __DIR__ . '/vendor/autoload.php';
 
 // Disposable integration endpoint. Its callback is local-environment/admin-only,.
