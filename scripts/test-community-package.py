@@ -121,5 +121,28 @@ class DomainTransformTests(unittest.TestCase):
             self.builder.verify_members(canonical, {**approved, 'ashbi-subscriptions/subscription.php': approved[main]})
 
 
+    def test_built_checksum_is_portable_lf(self):
+        import os
+        import shutil
+        import subprocess
+        import tempfile
+        scratch = ROOT / 'dist'
+        scratch.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=scratch) as temporary:
+            canonical = Path(temporary) / 'canonical.zip'
+            destination = canonical.as_posix()
+            if os.name == 'nt':
+                destination = '/' + destination[0].lower() + destination[2:]
+            env = dict(os.environ)
+            env.pop('MSYS_NO_PATHCONV', None)
+            env.pop('MSYS2_ARG_CONV_EXCL', None)
+            subprocess.run([shutil.which('bash'), 'scripts/build-release.sh', destination], cwd=ROOT, env=env, capture_output=True, check=True)
+            output = Path(temporary) / 'community.zip'
+            self.builder.build(canonical, output)
+            checksum = output.with_suffix('.sha256').read_bytes()
+            self.assertNotIn(b'\r', checksum, 'CRLF makes sha256sum treat CR as part of the archive filename')
+            self.assertTrue(checksum.endswith(b'  community.zip\n'))
+
+
 if __name__ == '__main__':
     unittest.main()

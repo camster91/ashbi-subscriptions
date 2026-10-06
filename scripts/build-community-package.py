@@ -156,7 +156,7 @@ def build(canonical_path, output):
             archive.writestr(info, data)
     verify_members(canonical, read_archive(output))
     digest = hashlib.sha256(output.read_bytes()).hexdigest()
-    output.with_suffix('.sha256').write_text(f'{digest}  {output.name}\n', encoding='utf-8')
+    output.with_suffix('.sha256').write_bytes(f'{digest}  {output.name}\n'.encode('utf-8'))
     git = lambda *args: subprocess.check_output(['git', '-C', str(ROOT), *args], text=True).strip()
     scripts = [Path(__file__), ROOT / 'scripts/community-php-domains.php', ROOT / 'scripts/community-js-domains.cjs', ROOT / 'scripts/community-installation.txt']
     evidence = {

@@ -109,8 +109,11 @@ missing distinct builder; missing PHP domain transform; missing JS source and
 compiled transform; missing distinct archive API; missing canonical completeness
 gate; missing independent checker; then composite JS and shadowed-alias failures.
 Each expected failure was executed before its implementation and followed by a
-passing rerun. Negative checks reject corrupt business bytes, unexpected roots,
-changed canonical update policy and unsafe traversal members.
+passing rerun. A real Windows checksum verification exposed CRLF output; a
+13th regression reproduced the filename corruption before switching checksum
+writes to literal LF bytes. Negative checks reject corrupt business bytes,
+unexpected roots, duplicate ZIP entries, misleading headers, changed canonical
+update policy and unsafe traversal members.
 
 Local canonical verification passed PHPUnit **228 tests / 2,017 assertions**,
 PHPStan, the **10 metadata-key / 5 hook** compatibility contract, PHP syntax,
