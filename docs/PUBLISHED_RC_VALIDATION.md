@@ -5,8 +5,8 @@ It supplements, and does not replace, the source-tree CI workflow.
 
 ## Immutable target and tool provenance
 
-- Public release: `v2.1.2-rc.1`, asset `ashbi-subscriptions-2.1.2-rc.1.zip`.
-- SHA-256: `5341eb57819315157c330ec4746459e240224f70d814883226981153c767fa45`.
+- Public release: `v2.1.2-rc.2`, asset `ashbi-subscriptions-2.1.2-rc.2.zip`.
+- SHA-256: `d3021e5b019cafe2e1d149277b91509d2ba106355fb53d308e90d73774b4a054`.
 - Installed basename: **`subscription/subscription.php`**. No rename to `plugin/`.
 - Official WordPress.org Plugin Check ZIP: `plugin-check.2.1.0.zip`.
 - Plugin Check SHA-256: `6ff4bd2145f3befcf907df158cc466b1649dafed5686de8369907403c3013fc4`.
@@ -39,6 +39,11 @@ Changing the target requires an explicit reviewed code change.
    than being restored midway through lifecycle checks. The response reports the
    actual WooCommerce datastore at completion; the runner rejects a missing or
    mismatched trace and reads back installed bytes/datastore again afterward.
+   RC2 additionally verifies WordPress's parsed `UpdateURI` value, clears cached
+   plugin-update offers, and performs a real update-service refresh. The runner
+   requires no upstream offer for the fork plus a response/no-update result for
+   at least one unrelated plugin, refusing a pass based on an empty or failed
+   service response. This is update isolation, not an automatic-update client.
 3. **Official Plugin Check / initial nonblocking findings:** a separate fresh
    package installation, after the HPOS jobs, with the official checker installed
    and activated from its own verified ZIP. The exact command is:

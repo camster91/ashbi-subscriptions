@@ -14,8 +14,8 @@ import zipfile
 REPO = Path(__file__).resolve().parent.parent
 
 RELEASE_URL = ('https://github.com/camster91/ashbi-subscriptions/releases/download/'
-               'v2.1.2-rc.1/ashbi-subscriptions-2.1.2-rc.1.zip')
-RELEASE_SHA256 = '5341eb57819315157c330ec4746459e240224f70d814883226981153c767fa45'
+               'v2.1.2-rc.2/ashbi-subscriptions-2.1.2-rc.2.zip')
+RELEASE_SHA256 = 'd3021e5b019cafe2e1d149277b91509d2ba106355fb53d308e90d73774b4a054'
 
 
 PLUGIN_CHECK_URL = 'https://downloads.wordpress.org/plugin/plugin-check.2.1.0.zip'
@@ -142,6 +142,7 @@ def run_environment(env, output, mode, kind, invoke=subprocess.run):
         run(['run', 'cli', 'wp', 'option', 'update', 'woocommerce_custom_orders_table_enabled',
              'yes' if mode == 'on' else 'no'])
         run(['run', 'cli', 'wp', 'eval-file', '/var/www/html/ashbi-tools/verify-installed.php'])
+        run(['run', 'cli', 'wp', 'eval-file', '/var/www/html/ashbi-tools/verify-update-isolation.php'])
         if kind == 'plugin-check':
             run(['run', 'cli', 'wp', 'plugin', 'install',
                  '/var/www/html/ashbi-release/plugin-check.zip', '--activate'])
