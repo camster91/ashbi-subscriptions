@@ -87,8 +87,7 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 			return;
 		}
 
-		$is_auto_renew = get_post_meta( $subscription_id, '_subscrpt_auto_renew', true );
-		$is_auto_renew = in_array( $is_auto_renew, array( 1, '1' ), true );
+		$is_auto_renew = subscrpt_subscription_auto_renew_enabled( $subscription_id );
 
 		$is_global_auto_renew = get_option( 'wp_subscription_stripe_auto_renew', '1' );
 		$is_global_auto_renew = in_array( $is_global_auto_renew, array( 1, '1' ), true );
@@ -123,6 +122,11 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 	 * @param int       $subscription_id Subscription ID.
 	 */
 	public function copy_stripe_metadata( $new_order, $old_order, $subscription_id ) {
+		if ( ! subscrpt_subscription_auto_renew_enabled( $subscription_id ) || ! subscrpt_is_auto_renew_enabled()
+			|| ! in_array( get_option( 'wp_subscription_stripe_auto_renew', '1' ), array( 1, '1' ), true ) ) {
+			return $new_order;
+		}
+
 		$stripe_supported_methods = self::WPSUBS_SUPPORTED_METHODS;
 		$old_method               = $old_order->get_payment_method();
 		$is_stripe_pm             = ! empty( $old_method ) && in_array( $old_method, $stripe_supported_methods, true );
@@ -194,6 +198,18 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 	 * @throws \WC_Stripe_Exception $e exception.
 	 */
 	public function pay_renew_order( $renewal_order, int $subscription_id = 0 ) {
+		if ( ! $subscription_id ) {
+			$relations       = Helper::get_subscriptions_from_order( $renewal_order->get_id() );
+			$relation        = ! empty( $relations ) ? reset( $relations ) : null;
+			$subscription_id = (int) ( $relation->subscription_id ?? 0 );
+		}
+		// Recheck current consent at the final entry point, including delayed retries.
+		if ( ! $subscription_id || ! subscrpt_subscription_auto_renew_enabled( $subscription_id ) || ! subscrpt_is_auto_renew_enabled()
+			|| ! in_array( get_option( 'wp_subscription_stripe_auto_renew', '1' ), array( 1, '1' ), true ) ) {
+			subscrpt_write_log( 'Automatic renewal payment skipped: customer consent or store configuration does not permit it.' );
+			return new \WP_Error( 'stripe_renewal_consent', __( 'Automatic renewal is not enabled for this subscription.', 'subscription' ) );
+		}
+
 		subscrpt_write_log( "Processing renewal order #{$renewal_order->get_id()} for payment." );
 		subscrpt_write_debug_log( "Processing renewal order #{$renewal_order->get_id()} for payment." );
 
@@ -214,11 +230,6 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 				subscrpt_write_log( "Customer not found for renewal order #{$renewal_order->get_id()}. Skipping payment." );
 				$this->trigger_renewal_payment_failed( $renewal_order );
 				return new \WP_Error( 'stripe_error', __( 'Customer not found', 'subscription' ) );
-			}
-			if ( ! $subscription_id ) {
-				$relations       = Helper::get_subscriptions_from_order( $renewal_order->get_id() );
-				$relation        = ! empty( $relations ) ? reset( $relations ) : null;
-				$subscription_id = (int) ( $relation->subscription_id ?? 0 );
 			}
 			if ( ! $subscription_id || ! RenewalClaim::mark_payment_pending( $subscription_id, (int) $renewal_order->get_id(), 'Stripe dispatch started.' ) ) {
 				subscrpt_write_log( "Could not persist Stripe payment-dispatch state for renewal order #{$renewal_order->get_id()}. No charge was attempted." );

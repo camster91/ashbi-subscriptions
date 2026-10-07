@@ -5,6 +5,13 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 
 ## Unreleased
 
+- Validate renewal modes as exact `auto`/`manual` values rather than customer
+  roles. Present corrupt modes resolve to Manual without option migration;
+  genuinely absent settings retain the historical Automatic default.
+- Preserve customer auto-renew opt-outs across account refresh, renewal metadata
+  preparation, canonical-order resume, and Stripe dispatch. Recheck consent and
+  store availability at the final payment entry and before Bancontact lookup.
+  See `docs/BILLING_CONSENT.md` for compatibility and verification boundaries.
 - Reject direct access to the runtime bootstrap before loading bundled vendor code.
 - Opt this fork out of WordPress.org updates with the supported `Update URI: false`
   header while retaining the legacy basename, storage, hooks, and version 2.1.2.
