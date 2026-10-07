@@ -19,6 +19,34 @@ $domains = array(
 	'translate_with_gettext_context' => 2, 'wp_set_script_translations' => 1,
 	'load_plugin_textdomain' => 0, 'load_textdomain' => 0,
 );
+// Inspect the entire file before selecting edits: declarations can appear later.
+// Function imports (including grouped imports) require a namespace resolver.
+// Reject them rather than guessing identities or certifying omitted gettext calls.
+$in_use = false;
+foreach ( $tokens as $i => $token ) {
+	if ( T_USE === $token[0] ) {
+		$in_use = true;
+	}
+	if ( ';' === $token[1] ) {
+		$in_use = false;
+	}
+	if ( T_FUNCTION === $token[0] ) {
+		$j = $i + 1;
+		if ( '&' === ( $tokens[ $j ][1] ?? '' ) ) {
+			++$j;
+		}
+		$name = strtolower( $tokens[ $j ][1] ?? '' );
+		if ( $in_use || isset( $domains[ $name ] ) ) {
+			throw new RuntimeException( 'Ambiguous translation function binding/import' );
+		}
+	}
+	if ( in_array( $token[0], array( T_NAME_QUALIFIED, T_NAME_RELATIVE, T_NAME_FULLY_QUALIFIED ), true ) && '(' === ( $tokens[ $i + 1 ][1] ?? '' ) ) {
+		$parts = explode( '\\', strtolower( ltrim( $token[1], '\\' ) ) );
+		if ( count( $parts ) > 1 && isset( $domains[ end( $parts ) ] ) ) {
+			throw new RuntimeException( 'Ambiguous qualified translation function' );
+		}
+	}
+}
 $edits = array();
 foreach ( $tokens as $i => $token ) {
 	$name = strtolower( ltrim( $token[1], '\\' ) );

@@ -36,10 +36,20 @@ The only approved differences are:
   positions** in WordPress gettext functions and translation registrations.
   Function/method lookalikes, text arguments, comments, hooks and storage values
   are not replaced. Composite legacy domains fail instead of being guessed.
+  Files declaring gettext-name functions, function imports (including aliases /
+  grouped imports), or qualified namespace gettext lookalikes fail closed before
+  any edits. Unshadowed global calls and PHP's unqualified global fallback inside
+  the existing SpringDevs namespaces remain recognized.
 - Existing locked `@babel/parser` examines source and compiled JS; lexical
   bindings recognize imported i18n functions, `wp.i18n`/`window.wp.i18n`, and
-  their compiled aliases/sequence calls. Shadowed aliases and other methods
-  are not translated. Only domain literal byte ranges change; no bundler
+  their compiled aliases/sequence calls. All bindings are collected before alias
+  classification, including later hoisted declarations. Direct function aliases
+  and namespace-alias chains are recognized; destructuring known i18n aliases is
+  explicitly unsupported and fails closed. Writes/redeclarations affecting known
+  translation aliases, global namespace ancestors or namespace members also fail
+  before edits, rather than erasing identity and falsely passing the archive
+  checker's remaining-domain scan. Shadowed aliases and other custom calls retain
+  business literals. Only domain literal byte ranges change; no bundler
   installation or claimed recompilation is involved.
 - Compiled JS asset versions are derived from the transformed bundle SHA-256;
   dependency handles stay unchanged. The two installer CSS basename selectors
