@@ -67,7 +67,7 @@ function ashbi_run_security_boundary_integration_checks() {
 				$settings_readback->register_settings();
 				foreach ( array( 'auto', 'manual' ) as $mode ) {
 					update_option( 'wp_subscription_renewal_process', $mode );
-					$check( $mode === get_option( 'wp_subscription_renewal_process' ) && $mode === subscrpt_get_renewal_process(), 'Renewal mode did not survive actual WordPress setting save/readback.' );
+					$check( get_option( 'wp_subscription_renewal_process' ) === $mode && subscrpt_get_renewal_process() === $mode, 'Renewal mode did not survive actual WordPress setting save/readback.' );
 				}
 				update_option( 'wp_subscription_renewal_process', 'subscriber' );
 				$check( 'manual' === get_option( 'wp_subscription_renewal_process' ) && ! subscrpt_is_auto_renew_enabled(), 'Invalid role-like renewal mode was not safely rejected.' );
@@ -92,7 +92,7 @@ function ashbi_run_security_boundary_integration_checks() {
 					$before_consent = get_post_meta( $consent_post, '_subscrpt_auto_renew', true );
 					$check( metadata_exists( 'post', $consent_post, '_subscrpt_auto_renew' ) && ! subscrpt_subscription_auto_renew_enabled( $consent_post ), 'Explicit stored opt-out inherited Automatic in real WordPress.' );
 					Helper::clone_stripe_metadata_for_renewal( $consent_post, $consent_old_order, $consent_new_order );
-					$check( $before_consent === get_post_meta( $consent_post, '_subscrpt_auto_renew', true ), 'Stripe preparation rewrote stored opt-out.' );
+					$check( get_post_meta( $consent_post, '_subscrpt_auto_renew', true ) === $before_consent, 'Stripe preparation rewrote stored opt-out.' );
 					$check( '' === $consent_new_order->get_meta( '_stripe_customer_id' ) && '' === $consent_new_order->get_meta( '_stripe_source_id' ), 'Opted-out renewal inherited Stripe identifiers.' );
 				}
 				add_filter( 'pre_http_request', $deny_provider, PHP_INT_MAX, 3 );
