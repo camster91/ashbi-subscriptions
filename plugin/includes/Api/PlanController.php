@@ -406,6 +406,10 @@ class PlanController {
 			return new WP_Error( 'subscrpt_plan_group_missing', __( 'A valid plan_group_id is required.', 'subscription' ), array( 'status' => 400 ) );
 		}
 
+		$guard = $this->validate_installment_commitment( $params, PlanRepository::get_group( $params['plan_group_id'] ) );
+		if ( is_wp_error( $guard ) ) {
+			return $guard;
+		}
 		$id = PlanRepository::insert_plan( $params );
 
 		if ( ! $id ) {
@@ -450,7 +454,18 @@ class PlanController {
 			return $this->not_found();
 		}
 
-		PlanRepository::update_plan( $id, $this->read_params( $request ) );
+		$existing = PlanRepository::get_plan( $id );
+		$params   = $this->read_params( $request );
+		$group_id = $params['plan_group_id'] ?? $existing['plan_group_id'];
+		$group    = PlanRepository::get_group( $group_id );
+		if ( ! $group ) {
+			return new WP_Error( 'subscrpt_plan_group_missing', __( 'A valid plan_group_id is required.', 'subscription' ), array( 'status' => 400 ) );
+		}
+		$guard = $this->validate_installment_commitment( array_replace( $existing, $params ), $group );
+		if ( is_wp_error( $guard ) ) {
+			return $guard;
+		}
+		PlanRepository::update_plan( $id, $params );
 
 		return rest_ensure_response( PlanRepository::get_plan( $id ) );
 	}
@@ -542,7 +557,20 @@ class PlanController {
 			return new WP_Error( 'subscrpt_relation_create_failed', __( 'Could not attach the product.', 'subscription' ), array( 'status' => 500 ) );
 		}
 
-		// Connecting a plan enables the subscription on the product / variation.
+		if ( 'active' === ( $params['status'] ?? 'active' ) ) {
+			$this->enable_relation_product( $params );
+		}
+		return rest_ensure_response( PlanRepository::get_relation( $id ) );
+	}
+
+	/**
+	 * Enable a product only for an active relation, leaving its native status/prices alone.
+	 *
+	 * @param array $params Saved relation fields.
+	 * @return void
+	 */
+	protected function enable_relation_product( array $params ) {
+		// Connecting an active plan enables the subscription on the product / variation.
 		// (it stays on until a product save explicitly clears the toggle). For a.
 		// variation, the parent's "any variation enabled" flag is turned on too.
 		// Marker: product has been plan-connected at least once (keeps the editor.
@@ -567,7 +595,6 @@ class PlanController {
 			update_post_meta( $oid, '_subscrpt_limit', 'unlimited' );
 		}
 
-		return rest_ensure_response( PlanRepository::get_relation( $id ) );
 	}
 
 	/**
@@ -590,8 +617,11 @@ class PlanController {
 		}
 
 		PlanRepository::update_relation( $id, $this->read_params( $request ) );
-
-		return rest_ensure_response( PlanRepository::get_relation( $id ) );
+		$saved = PlanRepository::get_relation( $id );
+		if ( $saved && 'active' !== $existing['status'] && 'active' === $saved['status'] ) {
+			$this->enable_relation_product( $saved );
+		}
+		return rest_ensure_response( $saved );
 	}
 
 	/**
@@ -883,6 +913,28 @@ class PlanController {
 	}
 
 	/* ---- Compatibility hooks ---- */
+
+	/**
+	 * Require an explicit integer commitment for installment term writes.
+	 *
+	 * The legacy JSON column has no business maximum. Use the cross-language
+	 * exact-integer range, not a hidden preset or an invented payment-count cap.
+	 * Existing checkout snapshots and ordinary recurring terms are unchanged.
+	 *
+	 * @param array $params Complete effective term (data replacement is intentional).
+	 * @param array $group Owning group.
+	 * @return true|WP_Error
+	 */
+	protected function validate_installment_commitment( array $params, array $group ) {
+		if ( PlanRepository::TYPE_MAP['installments'] !== (int) $group['type'] ) {
+			return true;
+		}
+		$count = $params['data']['installment_count'] ?? null;
+		if ( ! is_int( $count ) || $count < 2 || $count > min( PHP_INT_MAX, 9007199254740991 ) ) {
+			return new WP_Error( 'subscrpt_installment_count_invalid', __( 'Choose a whole number of payments (minimum 2).', 'subscription' ), array( 'status' => 400 ) );
+		}
+		return true;
+	}
 
 	/**
 	 * Validate a plan group type.
