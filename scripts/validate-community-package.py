@@ -82,11 +82,50 @@ def validate_candidate(bundle):
 
 
 def fixture_hashes():
-    names = ('plugin/tests/integration/security-boundaries.php',
-             'scripts/playground-mu-plugins/ashbi-integration-loader.php',
-             'scripts/package-validation/safety.php', 'scripts/run-integration.sh',
-             'scripts/package-validation/verify-installed.php')
-    return {name: digest(REPO / name) for name in names}
+    names = {'scripts/playground-mu-plugins/ashbi-integration-loader.php',
+             'scripts/run-integration.sh', 'scripts/wp-env-compat.cjs'}
+    # These entire directories are mounted, not only the primary entry points.
+    for directory in ('plugin/tests/integration', 'scripts/package-validation'):
+        names.update(path.relative_to(REPO).as_posix() for path in (REPO / directory).rglob('*') if path.is_file())
+    return {name: digest(REPO / name) for name in sorted(names)}
+
+
+def integrity_readback(expected, directories):
+    after, mismatches = {}, []
+    for name, (path, checksum) in expected.items():
+        try:
+            if path.is_symlink() or any(parent.is_symlink() for parent in path.parents):
+                raise ValueError('Symbolic link in trusted input path')
+            after[name] = digest(path)
+        except (OSError, ValueError) as error:
+            after[name] = {'error': type(error).__name__, 'message': str(error)}
+        if after[name] != checksum:
+            mismatches.append(name)
+    for directory, names in directories.items():
+        try:
+            actual = {path.relative_to(directory).as_posix() for path in directory.rglob('*') if path.is_file() or path.is_symlink()}
+            if actual != names:
+                mismatches.append(str(directory) + ': member set changed')
+        except OSError as error:
+            mismatches.append(str(directory) + ': ' + str(error))
+    return {'before': {name: checksum for name, (_, checksum) in expected.items()},
+            'after': after, 'mismatches': mismatches,
+            'fixture_and_candidate_unchanged': not mismatches}
+
+
+def write_integrity(output, evidence):
+    # Replace rather than follow a container-created report-file symlink.
+    import os
+    import tempfile
+    if output.is_symlink() or any(parent.is_symlink() for parent in output.parents):
+        raise ValueError('Refusing symlinked integrity report directory')
+    with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=output, delete=False) as report:
+        json.dump(evidence, report, indent=2)
+        temporary = report.name
+    try:
+        os.replace(temporary, output / 'harness-integrity.json')
+    finally:
+        Path(temporary).unlink(missing_ok=True)
 
 
 def main():
@@ -99,7 +138,7 @@ def main():
     args = parser.parse_args()
     output = args.output.resolve()
     if args.operation == 'cleanup':
-        release.cleanup_environment(output)
+        release.cleanup_environment(output, profile='community')
         return
     manifest = validate_candidate(args.bundle.resolve())
     if args.operation == 'verify':
@@ -134,18 +173,59 @@ def main():
             raise ValueError('Official Plugin Check checksum mismatch')
         (output / 'plugin-check-provenance.json').write_text(json.dumps({
             'url': release.PLUGIN_CHECK_URL, 'sha256': release.PLUGIN_CHECK_SHA256, 'version': '2.1.0'}), encoding='utf-8')
+    # Expected digests live only in this host process, never in a WP-writable report.
+    expected = {name: (REPO / name, checksum) for name, checksum in before.items()}
+    for name in ('candidate.zip', 'candidate.manifest.json', 'members.json', 'provenance.json'):
+        expected['input/' + name] = (output / name, digest(output / name))
+    if args.kind == 'plugin-check':
+        expected['input/plugin-check.zip'] = (output / 'plugin-check.zip', release.PLUGIN_CHECK_SHA256)
+    directories = {}
+    for directory in ('plugin/tests/integration', 'scripts/package-validation'):
+        path = REPO / directory
+        directories[path] = {name[len(directory) + 1:] for name in before if name.startswith(directory + '/')}
+    owned = release.owned_path(output, profile='community')
+    for name, source in [('safety.php', 'scripts/package-validation/safety.php'),
+                         ('ashbi-integration-loader.php', 'scripts/playground-mu-plugins/ashbi-integration-loader.php')]:
+        expected['executed-mu/' + name] = (owned / 'mu' / name, before[source])
+    directories[owned / 'mu'] = {'safety.php', 'ashbi-integration-loader.php'}
+    errors = []
+    evidence = {'fixture_and_candidate_unchanged': False, 'mismatches': ['Integrity readback did not complete']}
+    def record_error(phase, error):
+        errors.append((phase, error))
+        evidence['errors'] = [{'phase': label, 'type': type(value).__name__, 'message': str(value)} for label, value in errors]
     try:
         env = release.prepare_environment(output, REPO, profile='community')
-        release.run_environment(env, output, args.hpos, args.kind, profile='community')
+        initial = integrity_readback(expected, directories)
+        if not initial['fixture_and_candidate_unchanged']:
+            raise ValueError('Pre-start harness integrity mismatch: ' + str(initial['mismatches']))
+        release.run_environment(env, output, args.hpos, args.kind, profile='community', defer_cleanup=True)
+    except BaseException as error:
+        record_error('validation', error)
     finally:
-        # Retry only our UUID/config-hash owned environment after interruptions.
-        release.cleanup_environment(output)
-        after = fixture_hashes()
-        unchanged = before == after and digest(output / 'candidate.zip') == manifest['archive_sha256']
-        (output / 'harness-integrity.json').write_text(json.dumps({
-            'before': before, 'after': after, 'fixture_and_candidate_unchanged': unchanged}, indent=2), encoding='utf-8')
-        if not unchanged:
-            raise ValueError('Validation modified the external fixtures or candidate ZIP')
+        try:
+            evidence = integrity_readback(expected, directories)
+            evidence['errors'] = [{'phase': label, 'type': type(value).__name__, 'message': str(value)} for label, value in errors]
+            if not evidence['fixture_and_candidate_unchanged']:
+                record_error('integrity', ValueError('Harness/trusted-input integrity mismatch: ' + str(evidence['mismatches'])))
+            write_integrity(output, evidence)
+        except BaseException as error:
+            record_error('integrity-evidence', error)
+        finally:
+            # Readback precedes deletion; retry only the separate UUID/config-owned env.
+            try:
+                release.cleanup_environment(output, profile='community')
+            except BaseException as error:
+                record_error('cleanup', error)
+            finally:
+                try:
+                    write_integrity(output, evidence)
+                except BaseException as error:
+                    record_error('final-evidence', error)
+    if len(errors) == 1:
+        raise errors[0][1]
+    if errors:
+        raise RuntimeError('; '.join(label + ': ' + type(error).__name__ + ': ' + str(error)
+                                     for label, error in errors)) from errors[0][1]
 
 
 if __name__ == '__main__':

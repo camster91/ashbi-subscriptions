@@ -43,6 +43,43 @@ prevent adoption/cleanup of unrelated environments. Occupied port 8888 or inheri
 Compose/wp-env overrides fail closed. Cleanup runs in `finally` and in an always
 workflow step; never replace it with `docker prune`, `destroy` or user-app cleanup.
 
+### Mounted-input trust boundary
+
+The locked wp-env Docker builder emits mappings as
+`source.path:/var/www/html/<mapping-key>` with **no read-only option**. Its parser
+accepts mapping values only as source strings. Appending `:ro` to a source is not
+an approved mount-policy DSL; this runner does not claim read-only enforcement.
+The offline suite calls the real locked builder and verifies the generated mounts.
+
+For community jobs, ownership/configuration/cache live in a deterministic sibling
+`.ashbi-community-owned-<SHA256 of resolved output identity>`, **outside** the
+writable report mount. Run and cleanup derive this path on the host, never from a
+mutable report pointer. Only its `mu` subdirectory is mapped as the executed MU
+harness; wp-env also mounts its required cache subdirectories, not the ownership
+marker or configuration. Published-RC default paths and package behavior remain
+unchanged. Forged ownership files under reports are ignored; unknown config hashes
+and ambient Compose/wp-env overrides still fail closed.
+
+Before startup the host snapshots candidate ZIP, member manifest, provenance,
+candidate manifest, all mounted integration/helper files, the runner/compatibility
+helper and the two actual MU copies. MU expectations come from the original source
+hashes, not from mutable copies. Plugin Check's ZIP is also checked when used.
+Expected hashes remain in host process memory: a plugin cannot update expectations
+by forging a provenance or integrity report. Immediately after validation and
+**before any cleanup deletes the executed copies**, exact bytes, missing files,
+symlinks and changes to mounted fixture/MU member sets are checked again. Detected
+drift fails the job even if WordPress commands reported success. This is final
+readback, not a sandbox against transient changes restored before readback.
+
+`harness-integrity.json` is saved before cleanup and updated in nested `finally`
+with primary validation, integrity and cleanup errors. Mutation plus cleanup timeout
+and primary failure plus cleanup failure remain separate evidence entries and both
+appear in the raised error. Evidence-write failures also fail the job; cleanup is
+still attempted. Report replacement does not follow a forged report-file symlink.
+Failed cleanup retains only the UUID/config-hash-owned environment for an explicit
+retry using the same Compose project. Installed-byte readback's PHP helper treats
+incomplete/unwritable evidence as failure, never as a successful verification.
+
 ## Official Plugin Check
 
 The same candidate is installed in a new owned WP environment. Official Plugin

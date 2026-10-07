@@ -50,6 +50,227 @@ class CommunityRuntimeTests(unittest.TestCase):
             integration = [kwargs for command, kwargs in calls if command[-1].endswith('run-integration.sh')][0]
             self.assertEqual(integration['env']['ASHBI_INTEGRATION_PLUGIN_MAIN'], 'ashbi-subscriptions.php')
 
+    def run_integrity_case(self, mutation=None, primary=None, cleanup_error=None):
+        from unittest.mock import patch
+        module = load('validate-community-package')
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            bundle = root / 'bundle'
+            bundle.mkdir()
+            (bundle / 'community-candidate.zip').write_bytes(b'offline immutable candidate')
+            repo = root / 'source-fixture'
+            for directory in ('plugin/tests/integration', 'scripts/package-validation', 'scripts/playground-mu-plugins'):
+                shutil.copytree(ROOT / directory, repo / directory)
+            for filename in ('run-integration.sh', 'wp-env-compat.cjs'):
+                shutil.copyfile(ROOT / 'scripts' / filename, repo / 'scripts' / filename)
+            output = root / 'reports'
+            manifest = {'source_commit': 'offline', 'archive_sha256': module.digest(bundle / 'community-candidate.zip'),
+                        'canonical_archive_sha256': 'offline', 'members_sha256': {'offline': 'hash'}}
+            original_cleanup = module.release.cleanup_environment
+            def run(env, *args, **kwargs):
+                self.assertTrue(kwargs.get('defer_cleanup'), 'Wrapper must retain executed copies until integrity readback')
+                if mutation:
+                    mutation(env, output)
+                if primary:
+                    raise primary
+            def cleanup(*args, **kwargs):
+                # Integrity must already be durable before removal or a timeout.
+                self.assertTrue((output / 'harness-integrity.json').exists())
+                if cleanup_error:
+                    raise cleanup_error
+                return original_cleanup(*args, invoke=lambda *a, **k: None, **kwargs)
+            caught = None
+            with patch.object(module, 'REPO', repo), \
+                 patch.object(module, 'validate_candidate', return_value=manifest), \
+                 patch.object(module.release, 'preflight'), \
+                 patch.object(module.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, '', '')), \
+                 patch.object(module.release, 'run_environment', side_effect=run), \
+                 patch.object(module.release, 'cleanup_environment', side_effect=cleanup), \
+                 patch('sys.argv', ['validator', 'run', '--bundle', str(bundle), '--output', str(output)]):
+                try:
+                    module.main()
+                except Exception as error:
+                    caught = error
+            evidence = json.loads((output / 'harness-integrity.json').read_text()) if (output / 'harness-integrity.json').exists() else None
+            # Failed cleanup deliberately retains only this test's owned fixture.
+            for owned in root.glob('.ashbi-community-owned-*'):
+                shutil.rmtree(owned)
+            return caught, evidence
+
+    def test_executed_mu_mutation_and_removal_fail_closed_before_cleanup(self):
+        for filename in ('safety.php', 'ashbi-integration-loader.php'):
+            for remove in (False, True):
+                with self.subTest(filename=filename, remove=remove):
+                    def mutate(env, output):
+                        path = env['owned'] / 'mu' / filename
+                        path.unlink() if remove else path.write_text('<?php // disabled offline fixture')
+                    error, evidence = self.run_integrity_case(mutate)
+                    self.assertIsNotNone(error)
+                    self.assertIsNotNone(evidence)
+                    self.assertFalse(evidence['fixture_and_candidate_unchanged'])
+                    self.assertIn(filename, str(evidence['mismatches']))
+                    for name, checksum in evidence['before'].items():
+                        if not name.startswith(('input/', 'executed-mu/')):
+                            self.assertEqual(evidence['after'][name], checksum, 'Repro must leave source harness unchanged')
+
+    def test_mutable_trusted_inputs_fail_closed(self):
+        for filename in ('candidate.zip', 'members.json', 'provenance.json', 'candidate.manifest.json'):
+            with self.subTest(filename=filename):
+                error, evidence = self.run_integrity_case(lambda env, output: (output / filename).write_bytes(b'forged'))
+                self.assertIsNotNone(error)
+                self.assertIsNotNone(evidence)
+                self.assertFalse(evidence['fixture_and_candidate_unchanged'])
+                self.assertIn(filename, str(evidence['mismatches']))
+
+    def test_source_fixture_helper_and_added_mu_are_checked(self):
+        for target in ('ashbi-integration', 'ashbi-tools', 'added-mu'):
+            with self.subTest(target=target):
+                def mutate(env, output):
+                    mappings = json.loads(env['config'].read_text())['mappings']
+                    if target == 'added-mu':
+                        path = env['owned'] / 'mu/extra.php'
+                    else:
+                        filename = 'security-boundaries.php' if target == 'ashbi-integration' else 'verify-installed.php'
+                        path = Path(mappings[target]) / filename
+                    path.write_text('<?php // forged offline helper')
+                    # Forging the public hash report cannot change host-held expectations.
+                    (output / 'provenance.json').write_text('{"fixture_sha256":{}}')
+                    (output / 'harness-integrity.json').write_text('{"fixture_and_candidate_unchanged":true}')
+                error, evidence = self.run_integrity_case(mutate)
+                self.assertIsNotNone(error)
+                self.assertFalse(evidence['fixture_and_candidate_unchanged'])
+                self.assertGreaterEqual(len(evidence['mismatches']), 2)
+
+    def test_unmodified_integrity_survives_successful_cleanup(self):
+        error, evidence = self.run_integrity_case()
+        self.assertIsNone(error)
+        self.assertTrue(evidence['fixture_and_candidate_unchanged'])
+        self.assertEqual(evidence['errors'], [])
+
+    def test_real_runner_defers_cleanup_on_primary_error(self):
+        module = load('validate-published-release')
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / 'reports'
+            output.mkdir()
+            env = module.prepare_environment(output, ROOT, profile='community')
+            calls = []
+            def invoke(command, **kwargs):
+                calls.append(command)
+                raise RuntimeError('offline startup failed')
+            try:
+                with self.assertRaisesRegex(RuntimeError, 'offline startup failed'):
+                    module.run_environment(env, output, 'off', 'runtime', invoke,
+                                           profile='community', defer_cleanup=True)
+                self.assertFalse(any('cleanup' in command for command in calls))
+                self.assertTrue((env['owned'] / 'mu/safety.php').exists())
+                module.cleanup_environment(output, lambda *a, **k: None, profile='community')
+            finally:
+                if env['owned'].exists():
+                    shutil.rmtree(env['owned'])
+
+    def test_locked_builder_exposes_mu_but_not_community_ownership(self):
+        module = load('validate-published-release')
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / 'reports'
+            output.mkdir()
+            env = module.prepare_environment(output, ROOT, profile='community')
+            try:
+                javascript = r'''
+const path = require('node:path');
+const root = path.dirname(require.resolve('@wordpress/env/package.json'));
+const build = require(path.join(root, 'lib/runtime/docker/build-docker-compose-config.js'));
+const mappings = Object.fromEntries(Object.entries(JSON.parse(process.argv[1])).map(([key, value]) => [key, {path: value}]));
+const compose = build({testsEnvironment:false,workDirectoryPath:process.argv[2],env:{development:{mappings,pluginSources:[],themeSources:[],port:8888},tests:{}}});
+console.log(JSON.stringify(compose.services.cli.volumes));
+'''
+                result = subprocess.run([shutil.which('node'), '-e', javascript,
+                                         json.dumps(json.loads(env['config'].read_text())['mappings']),
+                                         (env['owned'] / 'cache').as_posix()],
+                                        cwd=ROOT, capture_output=True, text=True, check=True)
+                mounts = json.loads(result.stdout)
+                self.assertIn((env['owned'] / 'mu').as_posix() + ':/var/www/html/wp-content/mu-plugins', mounts)
+                self.assertIn(output.as_posix() + ':/var/www/html/ashbi-release', mounts)
+                self.assertFalse(any(mount.endswith(':ro') for mount in mounts))
+                for mount in mounts:
+                    source = Path(mount.rsplit(':/', 1)[0])
+                    self.assertFalse(env['config'].is_relative_to(source))
+                    self.assertFalse((env['owned'] / '.ashbi-owned.json').is_relative_to(source))
+                module.cleanup_environment(output, lambda *a, **k: None, profile='community')
+            finally:
+                if env['owned'].exists():
+                    shutil.rmtree(env['owned'])
+
+    def test_mutation_and_cleanup_failure_preserve_both_errors(self):
+        error, evidence = self.run_integrity_case(
+            lambda env, output: (env['owned'] / 'mu/safety.php').unlink(),
+            cleanup_error=subprocess.TimeoutExpired('offline cleanup', 180))
+        self.assertIsNotNone(evidence)
+        self.assertFalse(evidence['fixture_and_candidate_unchanged'])
+        self.assertIn('integrity', str(error).lower())
+        self.assertIn('cleanup', str(error).lower())
+        self.assertIn('TimeoutExpired', str(evidence['errors']))
+
+    def test_cleanup_failure_keeps_evidence_and_is_retryable_with_same_owner(self):
+        module = load('validate-published-release')
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / 'reports'
+            output.mkdir()
+            env = module.prepare_environment(output, ROOT, profile='community')
+            projects = []
+            def fail(command, **kwargs):
+                projects.append(kwargs['env']['COMPOSE_PROJECT_NAME'])
+                raise subprocess.TimeoutExpired(command, 180)
+            try:
+                with self.assertRaises(subprocess.TimeoutExpired):
+                    module.cleanup_environment(output, fail, profile='community')
+                self.assertTrue(env['owned'].exists())
+                def retry(command, **kwargs):
+                    projects.append(kwargs['env']['COMPOSE_PROJECT_NAME'])
+                module.cleanup_environment(output, retry, profile='community')
+                self.assertEqual(projects, [env['environ']['COMPOSE_PROJECT_NAME']] * 2)
+                self.assertFalse(env['owned'].exists())
+                module.cleanup_environment(output, lambda *a, **k: self.fail('Already removed'), profile='community')
+            finally:
+                if env['owned'].exists():
+                    shutil.rmtree(env['owned'])
+        error, evidence = self.run_integrity_case(cleanup_error=RuntimeError('offline cleanup-only failure'))
+        self.assertIsNotNone(error)
+        self.assertTrue(evidence['fixture_and_candidate_unchanged'])
+        self.assertEqual(evidence['errors'][0]['phase'], 'cleanup')
+
+    def test_primary_and_cleanup_failure_preserve_both_errors(self):
+        error, evidence = self.run_integrity_case(primary=RuntimeError('offline primary validation failure'),
+                                                cleanup_error=RuntimeError('offline cleanup failure'))
+        self.assertIsNotNone(evidence)
+        self.assertTrue(evidence['fixture_and_candidate_unchanged'])
+        self.assertIn('offline primary validation failure', str(error))
+        self.assertIn('offline cleanup failure', str(error))
+        self.assertEqual(len(evidence['errors']), 2)
+
+    def test_community_ownership_is_not_under_writable_report_mount(self):
+        module = load('validate-published-release')
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / 'reports'
+            output.mkdir()
+            env = module.prepare_environment(output, ROOT, profile='community')
+            try:
+                config = json.loads(env['config'].read_text())
+                self.assertFalse(env['owned'].is_relative_to(output))
+                for source in config['mappings'].values():
+                    self.assertFalse(env['config'].is_relative_to(Path(source)))
+                    self.assertFalse((env['owned'] / '.ashbi-owned.json').is_relative_to(Path(source)))
+                    self.assertFalse((env['owned'] / 'cache').is_relative_to(Path(source)))
+                # Container report spoofing cannot redirect ownership/configuration.
+                forged = output / 'owned-environment'
+                forged.mkdir()
+                (forged / '.ashbi-owned.json').write_text('{"id":"foreign"}')
+                self.assertEqual(module.environment_details(output, profile='community')['owned'], env['owned'])
+                module.cleanup_environment(output, lambda *a, **k: None, profile='community')
+                self.assertTrue(forged.exists())
+            finally:
+                if env['owned'].exists():
+                    shutil.rmtree(env['owned'])
+
     def test_community_installed_headers_and_bytes_are_checked(self):
         checker = ROOT / 'scripts/package-validation/verify-installed.php'
         harness = r'''<?php
@@ -81,7 +302,12 @@ $args=[$argv[1]]; require $argv[2];
             (output / 'provenance.json').write_text(json.dumps({'hpos':'off','distribution':'community-directory-candidate'}))
             entry = output / 'fixture.php'
             entry.write_text(harness)
-            for scenario in ('valid', 'uri', 'domain', 'dependency', 'empty-uri', 'bytes'):
+            for scenario in ('valid', 'write-error', 'uri', 'domain', 'dependency', 'empty-uri', 'bytes'):
+                if scenario == 'write-error':
+                    (output / 'installed-package.json').unlink()
+                    (output / 'installed-package.json').mkdir()
+                elif (output / 'installed-package.json').is_dir():
+                    (output / 'installed-package.json').rmdir()
                 if scenario == 'empty-uri':
                     main.write_text('<?php\n/**\n * Update URI: \n */')
                     (output / 'members.json').write_text(json.dumps({'ashbi-subscriptions/ashbi-subscriptions.php':hashlib.sha256(main.read_bytes()).hexdigest()}))

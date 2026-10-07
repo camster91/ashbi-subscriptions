@@ -65,6 +65,12 @@ if ( $community ) {
 	$report['requires_plugins'] = $metadata['RequiresPlugins'];
 	$report['update_policy'] = 'Ordinary Core WordPress.org checks; candidate is not a directory listing or reserved slug.';
 }
-// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Write the disposable local CI report without credential-dependent WordPress filesystem setup.
-file_put_contents( $evidence_dir . '/installed-package.json', wp_json_encode( $report, JSON_PRETTY_PRINT ) );
+$encoded_report = wp_json_encode( $report, JSON_PRETTY_PRINT );
+if ( false === $encoded_report ) {
+	WP_CLI::error( 'Installed package evidence could not be encoded.' );
+}
+// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Fail closed if the disposable local CI report cannot be saved completely.
+if ( strlen( $encoded_report ) !== file_put_contents( $evidence_dir . '/installed-package.json', $encoded_report ) ) {
+	WP_CLI::error( 'Installed package evidence could not be saved completely.' );
+}
 WP_CLI::success( 'Exact installed package bytes and HPOS datastore verified.' );

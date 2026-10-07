@@ -72,10 +72,20 @@ def preflight(mode, inherited=None, occupied=port_in_use):
         raise RuntimeError('Refusing occupied port 8888; never stop an unknown environment')
 
 
+def owned_path(output, profile='published'):
+    if profile == 'community':
+        # Stable host-derived identity, never a pointer read from writable reports.
+        identity = hashlib.sha256(str(output.resolve()).encode('utf-8')).hexdigest()
+        return output.resolve().parent / ('.ashbi-community-owned-' + identity)
+    if profile != 'published':
+        raise ValueError('Unknown package validation profile')
+    return output / 'owned-environment'
+
+
 def prepare_environment(output, repo, profile='published'):
     if profile not in ('published', 'community'):
         raise ValueError('Unknown package validation profile')
-    owned = output / 'owned-environment'
+    owned = owned_path(output, profile)
     owned.mkdir()  # Refuse to adopt an earlier or unknown environment.
     mu = owned / 'mu'
     mu.mkdir()
@@ -97,11 +107,11 @@ def prepare_environment(output, repo, profile='published'):
     }, indent=2), encoding='utf-8')
     marker = {'id': str(uuid.uuid4()), 'config_sha256': hashlib.sha256(config.read_bytes()).hexdigest()}
     (owned / '.ashbi-owned.json').write_text(json.dumps(marker), encoding='utf-8')
-    return environment_details(output, repo)
+    return environment_details(output, repo, profile)
 
 
-def environment_details(output, repo=REPO):
-    owned = output / 'owned-environment'
+def environment_details(output, repo=REPO, profile='published'):
+    owned = owned_path(output, profile)
     config = owned / '.wp-env.json'
     marker = json.loads((owned / '.ashbi-owned.json').read_text(encoding='utf-8'))
     if (str(uuid.UUID(marker['id'])) != marker['id'] or owned.is_symlink()
@@ -121,16 +131,16 @@ def environment_details(output, repo=REPO):
                             COMPOSE_DISABLE_ENV_FILE='1')}
 
 
-def cleanup_environment(output, invoke=subprocess.run):
-    if not (output / 'owned-environment').exists():
+def cleanup_environment(output, invoke=subprocess.run, profile='published'):
+    if not owned_path(output, profile).exists():
         return
-    env = environment_details(output)
+    env = environment_details(output, profile=profile)
     invoke(env['command'] + ['cleanup', '--force'], env=env['environ'],
            check=True, timeout=180)
     shutil.rmtree(env['owned'])
 
 
-def run_environment(env, output, mode, kind, invoke=subprocess.run, profile='published'):
+def run_environment(env, output, mode, kind, invoke=subprocess.run, profile='published', defer_cleanup=False):
     if profile not in ('published', 'community'):
         raise ValueError('Unknown package validation profile')
     root = 'ashbi-subscriptions' if profile == 'community' else 'subscription'
@@ -240,7 +250,8 @@ def run_environment(env, output, mode, kind, invoke=subprocess.run, profile='pub
         if profile == 'community':
             shutil.copyfile(output / 'installed-package.json', output / 'installed-package.after.json')
     finally:
-        cleanup_environment(output, invoke)
+        if not defer_cleanup:
+            cleanup_environment(output, invoke, profile=profile)
 
 
 def main():
