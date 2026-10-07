@@ -123,8 +123,21 @@ jobs:
       - name: Start disposable WordPress
         run: npm run env:start
 
-      - name: Run security-boundary integration checks
-        run: npm run test:integration
+      - name: Run security-boundary and billing-consent readback checks
+        run: |
+          set -o pipefail
+          mkdir -p reports
+          bash scripts/run-integration.sh | tee reports/source-integration.json
+          python3 -c 'import json; from pathlib import Path; d=json.loads(Path("reports/source-integration.json").read_text()); assert d.get("success") is True; assert d.get("data", {}).get("billing_consent_readbacks") is True'
+
+      - name: Preserve source integration readback evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: source-billing-readbacks-${{ github.sha }}
+          path: reports/source-integration.json
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Stop disposable WordPress
         if: always()

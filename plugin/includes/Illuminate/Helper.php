@@ -1916,14 +1916,7 @@ class Helper {
 	 * @return void
 	 */
 	public static function clone_stripe_metadata_for_renewal( $subscription_id, $old_order, $new_order ) {
-		$is_auto_renew = get_post_meta( $subscription_id, '_subscrpt_auto_renew', true );
-		if ( empty( $is_auto_renew ) && subscrpt_is_auto_renew_enabled() ) {
-			$is_auto_renew = true;
-			update_post_meta( $subscription_id, '_subscrpt_auto_renew', true );
-		}
-
-		$is_auto_renew = get_post_meta( $subscription_id, '_subscrpt_auto_renew', true );
-		$is_auto_renew = in_array( $is_auto_renew, array( 1, '1' ), true );
+		$is_auto_renew = subscrpt_subscription_auto_renew_enabled( $subscription_id );
 
 		$is_global_auto_renew = get_option( 'wp_subscription_stripe_auto_renew', '1' );
 		$is_global_auto_renew = in_array( $is_global_auto_renew, array( 1, '1' ), true );
@@ -2056,8 +2049,7 @@ class Helper {
 		$trial_timing_option = get_post_meta( $subscription_id, '_subscrpt_trial_timing_option', true );
 		$trial_timing_option = empty( $trial_timing_option ) ? get_post_meta( $chk_product_id, '_subscrpt_trial_timing_option', true ) : $trial_timing_option;
 
-		$is_auto_renew = in_array( get_post_meta( $subscription_id, '_subscrpt_auto_renew', true ), array( 1, '1', 'true', 'yes' ), true );
-		$is_auto_renew = ! empty( $is_auto_renew ) ? $is_auto_renew : subscrpt_is_auto_renew_enabled();
+		$is_auto_renew = subscrpt_subscription_auto_renew_enabled( $subscription_id );
 
 		$default_grace_period = (int) get_option( 'subscrpt_default_payment_grace_period', '7' );
 		$grace_end_datetime   = $next_datetime + ( $default_grace_period * DAY_IN_SECONDS );
