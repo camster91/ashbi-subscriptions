@@ -39,7 +39,19 @@ order creation, not a requirement for a separate Ashbi payment platform.
 - Keep distributed derivative code GPL-2.0-or-later.
 - Never deploy payment lifecycle changes without automated integration tests and a staged renewal test.
 
-## Current release candidate
+## Parallel community-directory candidate
+
+A separately built community variant uses
+`ashbi-subscriptions/ashbi-subscriptions.php`, its own `ashbi-subscriptions`
+translation domain, and no Update URI header. It is not the GitHub in-place
+replacement ZIP and is not WordPress.org approved or hosted. Storage, hooks,
+REST namespaces, legacy aliases, and billing logic are preserved; deactivate
+Core/the GitHub fork before activating Community. Do not run them together.
+See [community package contracts and switching gates](docs/COMMUNITY_PACKAGE.md)
+for the exact build, English-only translation boundary, local verification,
+and pending real WordPress/Plugin Check/approval gates.
+
+## Current GitHub release candidate
 
 The plugin keeps the `subscription/` directory and `subscription.php` basename
 so it can replace the public plugin in place without changing WordPress's plugin

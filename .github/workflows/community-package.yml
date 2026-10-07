@@ -1,0 +1,48 @@
+name: Community package contracts
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: community-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  community-package:
+    name: Distinct community archive (no WordPress runtime)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked parser dependencies
+        run: npm ci --ignore-scripts
+      - name: Test presentation transform and negative contracts
+        run: python3 scripts/test-community-package.py
+      - name: Build both archives without changing canonical source
+        run: |
+          bash scripts/build-release.sh dist/github-compatibility.zip
+          bash scripts/build-release-evidence.sh dist/github-compatibility.zip dist/github-compatibility
+          bash scripts/test-release-package.sh dist/github-compatibility.zip
+          python3 scripts/build-community-package.py build --canonical dist/github-compatibility.zip --output dist/community-candidate.zip
+          python3 scripts/build-community-package.py verify --canonical dist/github-compatibility.zip --output dist/community-candidate.zip
+          python3 scripts/check-community-package.py --canonical dist/github-compatibility.zip --community dist/community-candidate.zip --report dist/community-local-checks.json
+          (cd dist && sha256sum --check community-candidate.sha256)
+          python3 -c 'import json; from pathlib import Path; m=json.loads(Path("dist/community-candidate.manifest.json").read_text()); assert not m["dirty_tree"]'
+
+# This job intentionally cannot certify real WordPress, WooCommerce HPOS,
+# directory Plugin Check, gateway payments or a database/package rollback.
+# The existing required security/source/WordPress workflows are unchanged.
