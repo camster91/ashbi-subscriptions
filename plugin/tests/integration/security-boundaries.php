@@ -63,6 +63,10 @@ function ashbi_run_security_boundary_integration_checks() {
 				return $response;
 			};
 			try {
+				// REST readbacks explicitly load the same Core helper available on the settings screen.
+				if ( ! function_exists( 'add_settings_error' ) ) {
+					require_once ABSPATH . 'wp-admin/includes/template.php';
+				}
 				$settings_readback = new \SpringDevs\Subscription\Admin\Settings();
 				$settings_readback->register_settings();
 				foreach ( array( 'auto', 'manual' ) as $mode ) {
