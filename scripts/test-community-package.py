@@ -24,6 +24,63 @@ class DomainTransformTests(unittest.TestCase):
         cls.builder = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.builder)
 
+    def test_javascript_loop_assignment_rejects_known_namespace(self):
+        import subprocess
+        sources = (
+            b'let i=wp.i18n; for(i of [business]){} i.__("business","subscription");',
+            b'let tr=wp.i18n.__; for(tr in business){} tr("business","subscription");',
+            b'const i=wp.i18n; for(i.__ of things){} i.__("business","subscription");',
+            b'const i=wp.i18n; for({x:i.__} of things){} i.__("business","subscription");',
+            b'for(window.wp of things){} wp.i18n.__("business","subscription");',
+            b'for([wp.i18n] of things){} wp.i18n.__("business","subscription");',
+        )
+        for source in sources:
+            with self.subTest(source=source):
+                with self.assertRaises(subprocess.CalledProcessError) as failure:
+                    self.builder.domain_transform('sample.js', source)
+                self.assertEqual(b'', failure.exception.stdout)
+
+    def test_javascript_loop_let_shadow_does_not_escape(self):
+        source = b'for(let wp of things) { wp.i18n.__("business","subscription"); } wp.i18n.__("label","subscription");'
+        expected = source.replace(b'"label","subscription"', b'"label","ashbi-subscriptions"')
+        self.assertEqual(expected, self.builder.domain_transform('sample.js', source))
+
+    def test_javascript_sequence_function_alias_rewrites_domain(self):
+        source = b'const tr=(0,wp.i18n.__); tr("label","subscription");'
+        expected = source.replace(b'"label","subscription"', b'"label","ashbi-subscriptions"')
+        self.assertEqual(expected, self.builder.domain_transform('sample.js', source))
+
+    def test_javascript_named_class_expression_shadows_global_wp(self):
+        source = b'const C=class wp { method(){ wp.i18n.__("business","subscription"); } };'
+        self.assertEqual(source, self.builder.domain_transform('sample.js', source))
+
+    def test_javascript_optional_and_static_computed_translation_domains(self):
+        source = b'const i=window["wp"]?.i18n; const tr=(0,i["__"]); tr?.("label","subscription"); i?.["__"]("label","subscription");'
+        expected = source.replace(b'"label","subscription"', b'"label","ashbi-subscriptions"')
+        self.assertEqual(expected, self.builder.domain_transform('sample.js', source))
+
+    def test_javascript_dynamic_computed_known_namespace_fails_closed(self):
+        import subprocess
+        for source in (
+            b'const i=wp.i18n; i[method]("label","subscription");',
+            b'const tr=wp.i18n[method]; tr("label","subscription");',
+            b'window[which].i18n.__("label","subscription");',
+        ):
+            with self.subTest(source=source):
+                with self.assertRaises(subprocess.CalledProcessError) as failure:
+                    self.builder.domain_transform('sample.js', source)
+                self.assertEqual(b'', failure.exception.stdout)
+
+    def test_javascript_loop_var_is_function_scoped(self):
+        source = b'function f(){ for(var wp of things){} wp.i18n.__("business","subscription"); } wp.i18n.__("label","subscription");'
+        expected = source.replace(b'"label","subscription"', b'"label","ashbi-subscriptions"')
+        self.assertEqual(expected, self.builder.domain_transform('sample.js', source))
+
+    def test_javascript_unrelated_window_exports_preserve_bytes(self):
+        source = '// café\nwindow.Chart=business; window.UI=business; wp.other=business; wp.i18n.__("subscription","subscription");'.encode()
+        expected = source.replace(b'"subscription","subscription"', b'"subscription","ashbi-subscriptions"')
+        self.assertEqual(expected, self.builder.domain_transform('sample.js', source))
+
     def test_php_shadowed_translation_identity_is_rejected(self):
         import subprocess
         for source in (
@@ -81,6 +138,9 @@ class DomainTransformTests(unittest.TestCase):
             b'import {__ as tr} from "@wordpress/i18n"; tr=business; tr("business","subscription");',
             b'const tr=wp.i18n.__; tr("label","subscription");',
             b'const i=wp.i18n; const j=i; j.__("label","subscription");',
+            b'let i=wp.i18n; for(i of [business]){} i.__("business","subscription");',
+            b'for(let wp of things) { wp.i18n.__("business","subscription"); } wp.i18n.__("label","subscription");',
+            b'const tr=(0,wp.i18n.__); tr("label","subscription");',
         )
         (ROOT / 'dist').mkdir(exist_ok=True)
         for source in sources:

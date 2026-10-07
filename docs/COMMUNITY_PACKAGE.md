@@ -40,10 +40,17 @@ The only approved differences are:
   grouped imports), or qualified namespace gettext lookalikes fail closed before
   any edits. Unshadowed global calls and PHP's unqualified global fallback inside
   the existing SpringDevs namespaces remain recognized.
-- Existing locked `@babel/parser` examines source and compiled JS; lexical
-  bindings recognize imported i18n functions, `wp.i18n`/`window.wp.i18n`, and
-  their compiled aliases/sequence calls. All bindings are collected before alias
-  classification, including later hoisted declarations. Direct function aliases
+- Locked Babel 7 `@babel/parser` and explicitly pinned `@babel/traverse`
+  7.29.8 examine source and compiled JS. Babel NodePath scopes and bindings
+  recognize imported i18n functions, `wp.i18n`/`window.wp.i18n`, and their
+  compiled aliases/sequence calls, including sequence-valued initializers.
+  Babel owns hoisting, lexical loop bindings, function-scoped `var`, and local
+  named class/function expressions; there is no hand-built scope collector.
+  Binding `constantViolations` plus explicit member/root-write visitors reject
+  assignment, update, delete, destructuring and `for-in`/`for-of` mutation.
+  Static string-computed and optional translation calls are supported when
+  identity is provable; dynamic computed access on known roots/aliases fails
+  closed. Unrelated named window exports retain their original bytes. Direct function aliases
   and namespace-alias chains are recognized; destructuring known i18n aliases is
   explicitly unsupported and fails closed. Writes/redeclarations affecting known
   translation aliases, global namespace ancestors or namespace members also fail
