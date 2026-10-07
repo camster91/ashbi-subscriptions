@@ -23,7 +23,9 @@ function path(node) {
 }
 function bind(pattern, scope, value = { kind: 'other' }) {
   if (!pattern) return;
-  if (pattern.type === 'Identifier') scope.bindings.set(pattern.name, value);
+  if (pattern.type === 'Identifier') {
+    scope.bindings.set(pattern.name, { ...value, declarations: (scope.bindings.get(pattern.name)?.declarations || 0) + 1 });
+  }
   else if (pattern.type === 'RestElement') bind(pattern.argument, scope);
   else if (pattern.type === 'AssignmentPattern') bind(pattern.left, scope);
   else if (pattern.type === 'ObjectPattern') pattern.properties.forEach(p => bind(p.value || p.argument, scope));
@@ -63,16 +65,84 @@ function collect(node, parent, functionScope = null, declarationKind = null) {
   if (node.type === 'VariableDeclaration') declarationKind = node.kind;
   if (node.type === 'VariableDeclarator') {
     const target = declarationKind === 'var' ? functionScope : scope;
-    bind(node.id, target, globalNamespace(node.init, scope) ? { kind: 'namespace' } : { kind: 'other' });
+    bind(node.id, target);
+    declarations.push({ node, target, scope });
   }
   children(node, child => collect(child, scope, functionScope, declarationKind));
 }
+const declarations = [];
 collect(ast, null);
-// Mutable alias reassignment is ambiguous; never silently treat it as i18n.
+// Classify only after every lexical/hoisted binding has been collected.
+function identity(node, scope) {
+  if (globalNamespace(node, scope)) return { kind: 'namespace' };
+  if (node?.type === 'Identifier') return resolve(node.name, scope);
+  if (node?.type === 'MemberExpression' && !node.computed &&
+      identity(node.object, scope)?.kind === 'namespace' && Object.hasOwn(domains, node.property.name)) {
+    return { kind: 'function', name: node.property.name };
+  }
+  return null;
+}
+// Resolve alias chains to a fixed point without allowing declaration order to
+// determine lexical identity. Unsupported patterns fail before any edits emit.
+let changed;
+do {
+  changed = false;
+  for (const { node, target, scope } of declarations) {
+    const value = identity(node.init, scope);
+    if (!value || value.kind === 'other') continue;
+    if (node.id.type !== 'Identifier') throw new Error('Unsupported translation alias pattern');
+    const binding = target.bindings.get(node.id.name);
+    if (binding.declarations > 1) throw new Error('Ambiguous translation alias redeclaration');
+    if (binding.kind !== value.kind || binding.name !== value.name) {
+      if (binding.kind !== 'other') throw new Error('Ambiguous translation alias redeclaration');
+      target.bindings.set(node.id.name, { ...value, declarations: binding.declarations });
+      changed = true;
+    }
+  }
+} while (changed);
+function namespaceIdentity(node, scope) {
+  return globalNamespace(node, scope) ||
+    (node?.type === 'Identifier' && resolve(node.name, scope)?.kind === 'namespace');
+}
+function affectsNamespace(node, scope) {
+  if (!node) return false;
+  if (node.type === 'ObjectPattern') return node.properties.some(p => affectsNamespace(p.value || p.argument, scope));
+  if (node.type === 'ArrayPattern') return node.elements.some(p => affectsNamespace(p, scope));
+  if (node.type === 'RestElement') return affectsNamespace(node.argument, scope);
+  if (node.type === 'AssignmentPattern') return affectsNamespace(node.left, scope);
+  if (node.type === 'Identifier') {
+    const binding = resolve(node.name, scope);
+    return (binding && binding.kind !== 'other') ||
+      (['wp', 'window'].includes(node.name) && !resolve(node.name, scope));
+  }
+  if (node.type === 'MemberExpression') {
+    const name = path(node);
+    if (['wp.i18n', 'window.wp', 'window.wp.i18n'].includes(name) && !resolve(name.split('.')[0], scope)) return true;
+    if (namespaceIdentity(node.object, scope)) return true;
+    // Computed writes on a global ancestor could replace wp/i18n itself.
+    if (node.computed && affectsNamespace(node.object, scope)) return true;
+  }
+  return false;
+}
 walk(ast, node => {
-  if (node.type === 'AssignmentExpression' && node.left.type === 'Identifier') {
-    const binding = resolve(node.left.name, scopes.get(node));
-    if (binding) binding.kind = 'other';
+  const target = node.type === 'AssignmentExpression' ? node.left :
+    node.type === 'UpdateExpression' || (node.type === 'UnaryExpression' && node.operator === 'delete') ? node.argument : null;
+  if (target && affectsNamespace(target, scopes.get(node))) {
+    throw new Error('Ambiguous write to translation namespace/member');
+  }
+});
+// Reassignment may be genuine gettext again or custom business code: reject
+// both instead of erasing identity and allowing the checker to certify omission.
+walk(ast, node => {
+  if (node.type === 'AssignmentExpression' && identity(node.right, scopes.get(node))?.kind &&
+      identity(node.right, scopes.get(node)).kind !== 'other') {
+    throw new Error('Unsupported assignment of translation alias');
+  }
+  const target = node.type === 'AssignmentExpression' ? node.left :
+    node.type === 'UpdateExpression' ? node.argument : null;
+  if (target?.type === 'Identifier') {
+    const binding = resolve(target.name, scopes.get(node));
+    if (binding && binding.kind !== 'other') throw new Error('Ambiguous translation alias reassignment');
   }
 });
 const edits = [];

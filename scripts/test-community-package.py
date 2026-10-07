@@ -24,12 +24,96 @@ class DomainTransformTests(unittest.TestCase):
         cls.builder = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.builder)
 
+    def test_php_shadowed_translation_identity_is_rejected(self):
+        import subprocess
+        for source in (
+            b"<?php namespace Local; function __($value,$kind){return $kind;} __('business','subscription');",
+            b"<?php namespace Local; use function Business\\kind as __; __('business','subscription');",
+            b"<?php namespace Local; use function \\__ as tr; tr('label','subscription');",
+        ):
+            with self.subTest(source=source), self.assertRaises(subprocess.CalledProcessError):
+                self.builder.domain_transform('sample.php', source)
+
+    def test_php_namespaced_global_gettext_fallback_is_retained(self):
+        source = b"<?php namespace SpringDevs\\Subscription; __('label','subscription'); \\__('label','subscription'); custom('business','subscription');"
+        expected = source.replace(b"'label','subscription'", b"'label','ashbi-subscriptions'")
+        self.assertEqual(expected, self.builder.domain_transform('sample.php', source))
+
+    def test_javascript_known_aliases_rewrite_only_domains(self):
+        source = b'const i=wp.i18n; const j=i; const tr=j.__; tr("subscription","subscription"); j.__("label","subscription"); business("subscription","subscription");'
+        expected = source.replace(b'tr("subscription","subscription")', b'tr("subscription","ashbi-subscriptions")').replace(b'j.__("label","subscription")', b'j.__("label","ashbi-subscriptions")')
+        self.assertEqual(expected, self.builder.domain_transform('sample.js', source))
+
     def test_php_only_domain_argument_changes(self):
         source = b"<?php __('subscription', 'subscription'); _n('subscription','many',f(1,2),'subscription'); update_option('subscription', 'subscription'); $o->__('x','subscription');"
         expected = source.replace(b"'subscription'); _n", b"'ashbi-subscriptions'); _n", 1).replace(b"f(1,2),'subscription'", b"f(1,2),'ashbi-subscriptions'", 1)
         self.assertTrue(hasattr(self.builder, 'domain_transform'), 'Token/AST domain transform is missing')
         self.assertEqual(expected, self.builder.domain_transform('sample.php', source))
 
+
+    def test_javascript_hoisted_wp_shadow_preserves_business_call(self):
+        source = b'const i=wp.i18n; i.__("business","subscription"); function wp() {}'
+        self.assertEqual(source, self.builder.domain_transform('sample.js', source))
+
+    def test_javascript_translation_member_writes_are_rejected(self):
+        import subprocess
+        for source in (
+            b'const i=wp.i18n; i.__=business; i.__("business","subscription");',
+            b'wp.i18n.__=business; wp.i18n.__("business","subscription");',
+            b'wp.i18n=business; wp.i18n.__("business","subscription");',
+            b'const i=wp.i18n; delete i.__; i.__("business","subscription");',
+            b'const i=wp.i18n; i[method]=business; i.__("business","subscription");',
+        ):
+            with self.subTest(source=source), self.assertRaises(subprocess.CalledProcessError):
+                self.builder.domain_transform('sample.js', source)
+
+    def test_checker_cannot_certify_unsupported_or_invalidated_aliases(self):
+        import subprocess
+        import tempfile
+        import zipfile
+        from unittest.mock import patch
+        spec = importlib.util.spec_from_file_location('checker', ROOT / 'scripts/check-community-package.py')
+        checker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(checker)
+        sources = (
+            b'const {__:tr}=wp.i18n; tr("label","subscription");',
+            b'let i=wp.i18n; i=wp.i18n; i.__("label","subscription");',
+            b'import {__ as tr} from "@wordpress/i18n"; tr=business; tr("business","subscription");',
+            b'const tr=wp.i18n.__; tr("label","subscription");',
+            b'const i=wp.i18n; const j=i; j.__("label","subscription");',
+        )
+        (ROOT / 'dist').mkdir(exist_ok=True)
+        for source in sources:
+            with self.subTest(source=source), tempfile.TemporaryDirectory(dir=ROOT / 'dist') as temporary:
+                archive = Path(temporary) / 'fixture.zip'
+                with zipfile.ZipFile(archive, 'w') as output:
+                    output.writestr('ashbi-subscriptions/ashbi-subscriptions.php',
+                                    b'<?php // Text Domain: ashbi-subscriptions\n')
+                    output.writestr('ashbi-subscriptions/fixture.js', source)
+                # Isolate the real checker scan from completeness/exact-transform gates;
+                # these fabricated archives are NOT valid build evidence.
+                real_run = checker.run
+                def scan_only(command):
+                    if '-l' in command:
+                        return real_run(command)
+                    self.fail('Checker accepted legacy alias and advanced beyond the domain scan')
+                with patch.object(checker.builder, 'validate_canonical'), patch.object(checker.builder, 'verify_members'), patch.object(checker, 'run', side_effect=scan_only):
+                    with self.assertRaises((subprocess.CalledProcessError, ValueError)):
+                        checker.check(archive, archive)
+
+    def test_javascript_alias_redeclaration_and_pattern_writes_fail_closed(self):
+        import subprocess
+        for source in (
+            b'var i=wp.i18n; var i=business; i.__("business","subscription");',
+            b'var i=wp.i18n; function i() {} i.__("business","subscription");',
+            b'const i=wp.i18n; ({__: i.__}=business); i.__("business","subscription");',
+            b'let i=wp.i18n; ({i}=business); i.__("business","subscription");',
+        ):
+            with self.subTest(source=source):
+                with self.assertRaises(subprocess.CalledProcessError) as failure:
+                    self.builder.domain_transform('sample.js', source)
+                self.assertEqual(b'', failure.exception.stdout, 'Reject before emitting edits')
+                self.assertIn(b'translation', failure.exception.stderr)
 
     def test_javascript_source_and_compiled_domain_only(self):
         source = b'import { __ as tr } from "@wordpress/i18n"; const i=window.wp.i18n; tr("subscription", "subscription"); (0,i.__)("x", "subscription"); wp.i18n.__("y", "subscription"); other.__("z", "subscription"); registerPlugin("subscription", {});'
