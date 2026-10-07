@@ -5,6 +5,19 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 
 ## Unreleased
 
+- Require reviewed, explicit installment counts in onboarding and installment
+  term writes; label total commitments versus recurring payment prices and show
+  currency-aware base checkout/final-payment estimates before creation.
+- Resume known onboarding groups and individually completed terms/relations,
+  freeze retry intent and stop ambiguous writes with check-existing guidance
+  rather than blindly creating duplicates. Checkpoints remain page-local.
+- Add review-only Continue, default draft creation and explicit activation/new
+  product publication choices. Read back stored commitments before activation;
+  never change a linked existing product's publication status. Draft linking no
+  longer enables its legacy subscription metadata. See
+  `docs/ONBOARDING_REVIEW.md` for side effects, non-transactional failure recovery,
+  local fixture versus hosted-runtime verification and rollback boundaries.
+
 - Validate renewal modes as exact `auto`/`manual` values rather than customer
   roles. Present corrupt modes resolve to Manual without option migration;
   genuinely absent settings retain the historical Automatic default.
