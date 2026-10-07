@@ -45,6 +45,80 @@ function ashbi_run_security_boundary_integration_checks() {
 			}
 		};
 
+		$billing_consent_readbacks = false;
+		if ( function_exists( 'subscrpt_subscription_auto_renew_enabled' ) ) {
+			$missing_mode      = new stdClass();
+			$old_mode          = get_option( 'wp_subscription_renewal_process', $missing_mode );
+			$old_stripe_mode   = get_option( 'wp_subscription_stripe_auto_renew', '1' );
+			$consent_post      = 0;
+			$consent_old_order = null;
+			$consent_new_order = null;
+			$provider_requests = 0;
+			$deny_provider     = static function ( $response, $args, $url ) use ( &$provider_requests ) {
+				$provider_host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+				if ( preg_match( '/(^|\.)(stripe|paypal)\.com$/', $provider_host ) ) {
+					++$provider_requests;
+					return new WP_Error( 'ashbi_readback_no_provider', 'Provider requests are forbidden in billing readback checks.' );
+				}
+				return $response;
+			};
+			try {
+				$settings_readback = new \SpringDevs\Subscription\Admin\Settings();
+				$settings_readback->register_settings();
+				foreach ( array( 'auto', 'manual' ) as $mode ) {
+					update_option( 'wp_subscription_renewal_process', $mode );
+					$check( $mode === get_option( 'wp_subscription_renewal_process' ) && $mode === subscrpt_get_renewal_process(), 'Renewal mode did not survive actual WordPress setting save/readback.' );
+				}
+				update_option( 'wp_subscription_renewal_process', 'subscriber' );
+				$check( 'manual' === get_option( 'wp_subscription_renewal_process' ) && ! subscrpt_is_auto_renew_enabled(), 'Invalid role-like renewal mode was not safely rejected.' );
+				update_option( 'wp_subscription_renewal_process', 'auto' );
+				update_option( 'wp_subscription_stripe_auto_renew', '1' );
+				$consent_post = wp_insert_post(
+					array(
+						'post_type'   => 'subscrpt_order',
+						'post_status' => 'active',
+						'post_title'  => 'Fabricated consent readback',
+						'post_author' => $administrator_id,
+					)
+				);
+				$check( $consent_post > 0, 'Could not create disposable consent readback record.' );
+				$consent_old_order = wc_create_order();
+				$consent_new_order = wc_create_order();
+				$consent_old_order->set_payment_method( 'stripe' );
+				$consent_old_order->update_meta_data( '_stripe_customer_id', 'cus_ashbi_fixture_readback' );
+				$consent_old_order->update_meta_data( '_stripe_source_id', 'pm_ashbi_fixture_readback' );
+				foreach ( array( 0, '0', false, '', 'no' ) as $opt_out ) {
+					update_post_meta( $consent_post, '_subscrpt_auto_renew', $opt_out );
+					$before_consent = get_post_meta( $consent_post, '_subscrpt_auto_renew', true );
+					$check( metadata_exists( 'post', $consent_post, '_subscrpt_auto_renew' ) && ! subscrpt_subscription_auto_renew_enabled( $consent_post ), 'Explicit stored opt-out inherited Automatic in real WordPress.' );
+					Helper::clone_stripe_metadata_for_renewal( $consent_post, $consent_old_order, $consent_new_order );
+					$check( $before_consent === get_post_meta( $consent_post, '_subscrpt_auto_renew', true ), 'Stripe preparation rewrote stored opt-out.' );
+					$check( '' === $consent_new_order->get_meta( '_stripe_customer_id' ) && '' === $consent_new_order->get_meta( '_stripe_source_id' ), 'Opted-out renewal inherited Stripe identifiers.' );
+				}
+				add_filter( 'pre_http_request', $deny_provider, PHP_INT_MAX, 3 );
+				$stripe_readback = ( new ReflectionClass( \SpringDevs\Subscription\Illuminate\Gateways\Stripe\Stripe::class ) )->newInstanceWithoutConstructor();
+				$refused_payment = $stripe_readback->pay_renew_order( $consent_new_order, (int) $consent_post );
+				$check( is_wp_error( $refused_payment ) && 'stripe_renewal_consent' === $refused_payment->get_error_code() && 0 === $provider_requests, 'Opted-out final dispatch did not refuse before provider HTTP.' );
+				update_post_meta( $consent_post, '_subscrpt_auto_renew', 1 );
+				$check( subscrpt_subscription_auto_renew_enabled( $consent_post ), 'Explicit opt-in was not recognized.' );
+				delete_post_meta( $consent_post, '_subscrpt_auto_renew' );
+				$check( subscrpt_subscription_auto_renew_enabled( $consent_post ), 'Missing legacy consent did not retain documented Automatic inheritance.' );
+				$billing_consent_readbacks = true;
+			} finally {
+				remove_filter( 'pre_http_request', $deny_provider, PHP_INT_MAX );
+				if ( $consent_old_order instanceof \WC_Order ) {
+					$consent_old_order->delete( true ); }
+				if ( $consent_new_order instanceof \WC_Order ) {
+					$consent_new_order->delete( true ); }
+				if ( $consent_post > 0 ) {
+					wp_delete_post( $consent_post, true ); }
+				if ( $old_mode === $missing_mode ) {
+					delete_option( 'wp_subscription_renewal_process' ); } else {
+					update_option( 'wp_subscription_renewal_process', $old_mode ); }
+					update_option( 'wp_subscription_stripe_auto_renew', $old_stripe_mode );
+			}
+		}
+
 		$subscription_type = get_post_type_object( 'subscrpt_order' );
 		$item_type         = get_post_type_object( 'subscrpt_order_item' );
 		$check( $subscription_type && ! $subscription_type->show_in_rest, 'Subscription records are exposed through core REST.' );
@@ -1318,9 +1392,10 @@ function ashbi_run_security_boundary_integration_checks() {
 
 		wp_send_json_success(
 			array(
-				'message'      => 'Ashbi security-boundary integration checks passed.',
-				'hpos_mode'    => $hpos_mode,
-				'hpos_enabled' => \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled(),
+				'message'                   => 'Ashbi security-boundary integration checks passed.',
+				'hpos_mode'                 => $hpos_mode,
+				'billing_consent_readbacks' => $billing_consent_readbacks,
+				'hpos_enabled'              => \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled(),
 			)
 		);
 	} catch ( \Throwable $error ) {
