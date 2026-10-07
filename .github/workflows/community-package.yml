@@ -1,4 +1,4 @@
-name: Community package contracts
+name: Community ZIP / hosted WordPress validation
 
 on:
   pull_request:
@@ -9,13 +9,15 @@ permissions:
 
 concurrency:
   group: community-package-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   community-package:
-    name: Distinct community archive (no WordPress runtime)
+    name: Single community candidate producer / offline contracts
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
+    outputs:
+      artifact-id: ${{ steps.candidate.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -28,12 +30,19 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-      - name: Install locked parser dependencies
-        run: npm ci --ignore-scripts
+      - run: npm ci --ignore-scripts
+      - run: npm audit --audit-level=moderate
+      - run: npm run test:tooling
+      - name: Offline orchestration regressions (not WordPress proof)
+        run: |
+          python3 scripts/test-published-release.py
+          python3 scripts/test-community-runtime.py
+          bash -n scripts/run-integration.sh
       - name: Test presentation transform and negative contracts
         run: python3 scripts/test-community-package.py
-      - name: Build both archives without changing canonical source
+      - name: Build exactly one community candidate from this clean checkout
         run: |
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
           bash scripts/build-release.sh dist/github-compatibility.zip
           bash scripts/build-release-evidence.sh dist/github-compatibility.zip dist/github-compatibility
           bash scripts/test-release-package.sh dist/github-compatibility.zip
@@ -41,8 +50,131 @@ jobs:
           python3 scripts/build-community-package.py verify --canonical dist/github-compatibility.zip --output dist/community-candidate.zip
           python3 scripts/check-community-package.py --canonical dist/github-compatibility.zip --community dist/community-candidate.zip --report dist/community-local-checks.json
           (cd dist && sha256sum --check community-candidate.sha256)
-          python3 -c 'import json; from pathlib import Path; m=json.loads(Path("dist/community-candidate.manifest.json").read_text()); assert not m["dirty_tree"]'
+          python3 scripts/validate-community-package.py verify --bundle dist
+      - name: Upload the immutable candidate, canonical reference, hash and source manifest
+        id: candidate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: community-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            dist/github-compatibility.zip
+            dist/github-compatibility.*
+            dist/community-candidate.zip
+            dist/community-candidate.sha256
+            dist/community-candidate.manifest.json
+            dist/community-local-checks.json
+          if-no-files-found: error
+          retention-days: 14
 
-# This job intentionally cannot certify real WordPress, WooCommerce HPOS,
-# directory Plugin Check, gateway payments or a database/package rollback.
-# The existing required security/source/WordPress workflows are unchanged.
+  community-runtime:
+    name: Exact community ZIP / HPOS ${{ matrix.hpos }}
+    needs: community-package
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        hpos: ['off', 'on']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm audit --audit-level=moderate
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.community-package.outputs.artifact-id }}
+          merge-multiple: true
+          path: candidate
+      - name: Install downloaded ZIP in real owned WordPress and exercise authenticated fixture
+        run: |
+          set -o pipefail
+          mkdir -p reports
+          python3 scripts/validate-community-package.py run --bundle candidate --hpos '${{ matrix.hpos }}' --kind runtime --output 'reports/community-${{ matrix.hpos }}' 2> >(tee 'reports/community-${{ matrix.hpos }}.stderr' >&2) | tee 'reports/community-${{ matrix.hpos }}.stdout'
+      - name: Cleanup only the UUID/config-hash owned environment
+        if: always()
+        run: python3 scripts/validate-community-package.py cleanup --output 'reports/community-${{ matrix.hpos }}'
+      - name: Preserve raw runtime evidence even after failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: community-hpos-${{ matrix.hpos }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            reports/community-${{ matrix.hpos }}.stdout
+            reports/community-${{ matrix.hpos }}.stderr
+            reports/community-${{ matrix.hpos }}/*.json
+            reports/community-${{ matrix.hpos }}/*.txt
+            reports/community-${{ matrix.hpos }}/*.stderr
+            reports/community-${{ matrix.hpos }}/*.stdout
+            reports/community-${{ matrix.hpos }}/*.exit-code
+          if-no-files-found: warn
+          retention-days: 14
+
+  community-plugin-check:
+    name: Official Plugin Check 2.1.0 / initial nonblocking findings
+    needs: [community-package, community-runtime]
+    if: ${{ !cancelled() && needs.community-package.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm audit --audit-level=moderate
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.community-package.outputs.artifact-id }}
+          merge-multiple: true
+          path: candidate
+      - name: Exact same candidate / official PCP static and runtime CLI bootstrap
+        run: |
+          set -o pipefail
+          mkdir -p reports
+          python3 scripts/validate-community-package.py run --bundle candidate --hpos off --kind plugin-check --output reports/community-plugin-check 2> >(tee reports/community-plugin-check.stderr >&2) | tee reports/community-plugin-check.stdout
+      - name: Expose unsuppressed findings policy (initial nonblocking diagnostic)
+        continue-on-error: true
+        run: |
+          status="$(cat reports/community-plugin-check/plugin-check.exit-code)"
+          policy_status="$(cat reports/community-plugin-check/plugin-check.policy-exit-code)"
+          printf '### Community: official Plugin Check diagnostic\n\nRaw status: `%s`; errors-present policy status: `%s`. All findings remain in raw/JSON artifacts. Not WordPress.org approval, submission, listing or slug reservation.\n' "$status" "$policy_status" >> "$GITHUB_STEP_SUMMARY"
+          exit "$policy_status"
+      - name: Cleanup only the UUID/config-hash owned environment
+        if: always()
+        run: python3 scripts/validate-community-package.py cleanup --output reports/community-plugin-check
+      - name: Preserve every PCP finding and raw diagnostic even after failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: community-plugin-check-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            reports/community-plugin-check.stdout
+            reports/community-plugin-check.stderr
+            reports/community-plugin-check/*.json
+            reports/community-plugin-check/*.txt
+            reports/community-plugin-check/*.stderr
+            reports/community-plugin-check/*.stdout
+            reports/community-plugin-check/*.exit-code
+          if-no-files-found: warn
+          retention-days: 14
+
+# Existing GitHub compatibility / exact published-RC workflows are unchanged.
+# Real runtime evidence requires a completed hosted run; offline contracts alone
+# prove no WP/HPOS/payment/rollback behavior. No directory submission is performed.
