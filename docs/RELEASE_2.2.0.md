@@ -17,9 +17,11 @@ Do not infer source identity from the plugin version alone.
 
 Build with `scripts/build-release.sh` and `scripts/build-release-evidence.sh`.
 Record the full source commit, clean-tree state, archive SHA-256 and per-file
-manifest. Source CI builds evidence for its exact commit. The historical published
-ZIP workflow currently targets `v2.1.2-rc.2`; its result is not validation of this
-candidate. Validate the actual new archive independently before publishing.
+manifest. Source CI builds evidence for its exact commit. The package workflow validates both the immutable historical `v2.1.2-rc.2` ZIP
+with its pinned release-era fixture and the actual current candidate archive with
+current consent/cancellation integration coverage. Historical results are not
+candidate validation. Retain the candidate archive, commit and member manifest
+before publishing.
 
 ## Compatibility and rollback
 
@@ -54,3 +56,10 @@ Admin cancellation retains its existing lifecycle semantics; this correction doe
 not introduce a new admin cancellation request workflow or permission model.
 Customer durable intent and billing barriers remain authoritative. Independent
 review and passing checks are required on the corrective commit before deployment.
+
+Test-only formatting and harness/documentation hygiene can create a later source
+commit without changing packaged runtime members. Compare every candidate member
+hash against the deployed package manifest before asserting runtime identity.
+Archive SHA-256 may differ when the canonical build timestamp changes; matching
+version labels alone do not prove identity. Do not redeploy production merely for
+excluded test/documentation changes.
