@@ -5,6 +5,11 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 
 ## 2.2.0 candidate - 2026-10-10
 
+- Require verified durable cancellation intent before displaying a recorded-request
+  receipt; retain fail-closed billing on storage errors. Export accepted payment
+  type, billing length and installment total. Guard admin status transitions before
+  status-related email and order completion, preserving existing permissions.
+
 - Add immutable cancellation barriers, append-only evidence, durable repair and
   review of already-dispatched payments. Keep finalization independent of mail
   availability and preserve previous survey feedback.

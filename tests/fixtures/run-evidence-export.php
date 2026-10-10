@@ -33,6 +33,7 @@ class ExportDatabase {
 require dirname(__DIR__,2).'/plugin/includes/Frontend/ContractConsent.php';
 require dirname(__DIR__,2).'/plugin/includes/Illuminate/EvidenceExport.php';
 $snapshot=SpringDevs\Subscription\Frontend\ContractConsent::order_snapshot(new ExportOrder());
+$snapshot['items'][0]['payment_type']='split_payment';$snapshot['items'][0]['billing_length']=4;$snapshot['items'][0]['plan_total']='50.00';
 $snapshot['customer_email']='private-customer@example.test';$snapshot['items'][0]['plan']['payment_token']='private-plan-token';
 $GLOBALS['ex_payload']=array('document'=>array('version'=>'approved-1','text'=>'Previously approved subscription terms.','hash'=>hash('sha256','Previously approved subscription terms.'),'approval_ref'=>'approved-ref','secret'=>'private-document-secret'),'snapshot'=>$snapshot,'accepted_at'=>'2026-10-09 12:00:00','actor_id'=>7,'payment_outcome'=>'succeeded','raw_card'=>'4242424242424242');
 $GLOBALS['wpdb']=new ExportDatabase();$case=$GLOBALS['export_case']??'build';

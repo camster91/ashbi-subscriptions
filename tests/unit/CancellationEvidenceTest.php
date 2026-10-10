@@ -81,4 +81,16 @@ final class CancellationEvidenceTest extends TestCase {
   $serialized=json_encode($d['events']);foreach(array('fixture-secret','private@example.test','4242424242424242','fixture-token','nested-secret','unnecessary personal data') as $secret){self::assertStringNotContainsString($secret,$serialized);}
   foreach($d['mutations'] as $mutation){self::assertNotSame('forbidden',$mutation[0]);}
  }
+ public function test_customer_notice_never_claims_receipt_on_unrecorded_storage_failure():void {
+  $d=$this->fixture();foreach(array('read_failure','write_failure','throw_failure') as $case){$x=$d['notices'][$case];self::assertSame(array(),$x['barriers']);self::assertSame('error',$x['notices'][0]['type']);self::assertStringNotContainsString('request is recorded',$x['notices'][0]['text']);}
+  self::assertTrue($d['notices']['read_failure']['blocked'],'Storage errors must still fail closed for dispatch.');
+  foreach(array('pending','confirmed') as $case){self::assertCount(1,$d['notices'][$case]['barriers']);self::assertSame('success',$d['notices'][$case]['notices'][0]['type']);}
+ }
+ public function test_admin_cannot_mutate_status_or_side_effects_before_barrier_guard():void {
+  $case=$this->fixture()['admin_reopen'];self::assertSame($case['before'],$case['after']);
+ }
+ public function test_admin_legitimate_transition_completes_order_only_after_guarded_success():void {
+  $cases=$this->fixture()['admin_status'];self::assertSame('active',$cases['normal']['status']);self::assertSame(array('completed'),$cases['normal']['order_writes']);self::assertContains('subscrpt_status_changed_admin_email_notification',$cases['normal']['hooks']);
+  foreach(array('write_failure','storage_failure') as $case){self::assertSame('on_hold',$cases[$case]['status']);self::assertSame(array(),$cases[$case]['order_writes']);self::assertNotContains('subscrpt_status_changed_admin_email_notification',$cases[$case]['hooks']);}
+ }
 }

@@ -29,8 +29,9 @@ function subscrpt_is_max_payments_reached( $id ) { return false; }
 function wp_insert_comment( $data ) { $GLOBALS['ce_comments'][]=$data; return $GLOBALS['ce_comment_fail'] ? false : 1; }
 function update_comment_meta( $id, $key, $value ) { return true; }
 function subscrpt_write_log( $message ) {}
+function get_post_status_object($status){return (object)array('label'=>$status);}
 function WC() { return new class { public function mailer() { if ( $GLOBALS['ce_mail_fail'] ) { throw new RuntimeException( 'fixture mail failure' ); } return true; } }; }
-function wc_get_order( $id ) { return new class { public function get_payment_method() { return 'stripe'; } public function get_meta( $key, $single = true ) { return ''; } }; }
+function wc_get_order( $id ) { return new class { public function update_status($status){$GLOBALS['ce_order_status_writes'][]=$status;} public function get_payment_method() { return 'stripe'; } public function get_meta( $key, $single = true ) { return ''; } }; }
 function do_action( $hook, ...$args ) { $GLOBALS['ce_hooks'][] = $hook; foreach($GLOBALS['ce_action_callbacks'][$hook]??array() as $callback){$callback(...$args);} }
 function add_action( $hook, $callback, ...$args ) { $GLOBALS['ce_action_callbacks'][$hook][]=$callback; }
 function as_schedule_single_action( $time, $hook, $args, $group='', $unique=false ) { $GLOBALS['ce_queued'][]=array('hook'=>$hook,'args'=>$args);return $GLOBALS['ce_queue_fail']?0:count($GLOBALS['ce_queued']); }
@@ -47,6 +48,7 @@ class CancellationEvidenceDatabase {
  public $queries = array();
  public $prepared = array();
  public $fail_read = false;
+ public $throw_read = false;
  public $fail_barrier = false;
  public $fail_audit = false;
  public $fail_audit_at = 0;
@@ -62,7 +64,7 @@ class CancellationEvidenceDatabase {
   if ($this->fail_read) { $this->last_error='fixture read unavailable'; return null; }
   $id=(int)end($args); return isset($this->barriers[$id]) ? $id : null;
  }
- public function get_row( $prepared, $output = null ) { list($sql,$args)=$this->unpack($prepared); $this->last_error=$this->fail_read?'fixture read unavailable':''; $row=$this->barriers[(int)end($args)]??null; return $this->fail_read?null:('ARRAY_A'===$output?$row:($row?(object)$row:null)); }
+ public function get_row( $prepared, $output = null ) { if($this->throw_read){throw new RuntimeException('fixture read exception');} list($sql,$args)=$this->unpack($prepared); $this->last_error=$this->fail_read?'fixture read unavailable':''; $row=$this->barriers[(int)end($args)]??null; return $this->fail_read?null:('ARRAY_A'===$output?$row:($row?(object)$row:null)); }
  public function get_results( $prepared, $output = null ) { list($sql,$args)=$this->unpack($prepared);$this->last_error=$this->fail_read?'fixture read unavailable':'';if($this->fail_read){return array();}if(strpos($sql,'SELECT b.subscription_id')===0){$rows=array();foreach($this->barriers as $id=>$barrier){if(($GLOBALS['ce_meta']['_ashbi_cancellation_confirmed']??0)!=1 || ((int)$barrier['access_end']<=time() && 'cancelled'!==$GLOBALS['ce_status'])){$rows[]=(object)array('subscription_id'=>$id);}}return $rows;}return array(); }
  public function insert( $table, $data, $formats = null ) { $this->last_error=''; $this->mutations[]=array('insert',$table,$data); if(false!==strpos($table,'evidence_event')) { ++$this->audit_attempts; if($this->fail_audit || $this->fail_audit_at === $this->audit_attempts){$this->last_error='fixture audit unavailable';return false;} $this->events[]=$data; $this->insert_id=count($this->events);return 1; } return false; }
  public function query( $prepared ) {
@@ -81,7 +83,7 @@ function reset_cancellation_evidence_fixture() {
  $GLOBALS['ce_meta']=array('_subscrpt_auto_renew'=>1,'_subscrpt_next_date'=>time()+86400,'_subscrpt_order_id'=>1);
  foreach(array('ce_meta_fail','ce_status_fail','ce_comment_fail','ce_mail_fail') as $key){$GLOBALS[$key]=false;} $GLOBALS['ce_hooks']=array();
  $GLOBALS['ce_status_writes']=array(); $GLOBALS['ce_comments']=array();
- $GLOBALS['ce_action_callbacks']=array();$GLOBALS['ce_queued']=array();$GLOBALS['ce_queue_fail']=false;
+ $GLOBALS['ce_order_status_writes']=array();$GLOBALS['ce_action_callbacks']=array();$GLOBALS['ce_queued']=array();$GLOBALS['ce_queue_fail']=false;
  $GLOBALS['ce_parent_order']=new class { public function get_payment_method() { return 'stripe'; } };
 }
 $source=dirname(__DIR__,2).'/plugin/includes/Illuminate/CancellationEvidence.php';
@@ -155,4 +157,32 @@ $results['record_first']=$service::record('request_received',99,7,'audit-request
 $results['record_second']=$service::record('cancel_failed',99,7,'audit-request',array('code'=>'failed'));
 $results['events']=$GLOBALS['wpdb']->events; $results['mutations']=$GLOBALS['wpdb']->mutations;
 $GLOBALS['wpdb']->fail_audit=true; $results['record_failure']=$service::record('cancel_failed',99,7,'audit-failure',array());
+
+require dirname(__DIR__,2).'/plugin/includes/Frontend/ActionController.php';
+require dirname(__DIR__,2).'/plugin/includes/Admin/Subscriptions.php';
+class ControllerSubscriptionFixture {public static function get_user_endpoint($key){return 'view-subscription';}}
+class_alias('ControllerSubscriptionFixture','SpringDevs\\Subscription\\Illuminate\\Subscription\\Subscription');
+function wp_unslash($value){return $value;}
+function wp_verify_nonce($value,$action){return true;}
+function wc_add_notice($text,$type){$GLOBALS['ce_notices'][]=array('text'=>$text,'type'=>$type);}
+function wc_get_page_permalink($key){return '/my-account/';}
+function wc_get_endpoint_url($key,$id,$url){return $url.$key.'/'.$id;}
+function wp_safe_redirect($url){throw new RuntimeException('fixture_redirect');}
+foreach(array('read_failure'=>'fail_read','throw_failure'=>'throw_read','write_failure'=>'fail_barrier','pending'=>'fail_lock','confirmed'=>'') as $case=>$flag){
+ reset_cancellation_evidence_fixture();$GLOBALS['ce_notices']=array();if($flag){$GLOBALS['wpdb']->$flag=true;}
+ $_GET=array('subscrpt_id'=>'99','action'=>'cancelled','wpnonce'=>'fixture');
+ $controller=(new ReflectionClass('SpringDevs\\Subscription\\Frontend\\ActionController'))->newInstanceWithoutConstructor();
+ try{$controller->control_action_subscrpt();}catch(RuntimeException $error){if('fixture_redirect'!==$error->getMessage()){throw $error;}}
+ $results['notices'][$case]=array('notices'=>$GLOBALS['ce_notices'],'barriers'=>$GLOBALS['wpdb']->barriers,'blocked'=>$service::blocked(99));
+}
+reset_cancellation_evidence_fixture();$service::request(99,7,'admin-barrier');
+$GLOBALS['ce_admin']=true;$GLOBALS['ce_user']=8;$before=array('status'=>$GLOBALS['ce_status'],'meta'=>$GLOBALS['ce_meta'],'writes'=>$GLOBALS['ce_status_writes'],'hooks'=>$GLOBALS['ce_hooks'],'barriers'=>$GLOBALS['wpdb']->barriers);
+SpringDevs\Subscription\Admin\Subscriptions::process_status_change(99,'active');
+$results['admin_reopen']=array('before'=>$before,'after'=>array('status'=>$GLOBALS['ce_status'],'meta'=>$GLOBALS['ce_meta'],'writes'=>$GLOBALS['ce_status_writes'],'hooks'=>$GLOBALS['ce_hooks'],'barriers'=>$GLOBALS['wpdb']->barriers));
+foreach(array('normal','write_failure','storage_failure') as $case){
+ reset_cancellation_evidence_fixture();$GLOBALS['ce_status']='on_hold';$GLOBALS['ce_admin']=true;$GLOBALS['ce_user']=8;
+ if('write_failure'===$case){$GLOBALS['ce_status_fail']=true;}if('storage_failure'===$case){$GLOBALS['wpdb']->fail_read=true;}
+ SpringDevs\Subscription\Admin\Subscriptions::process_status_change(99,'active');
+ $results['admin_status'][$case]=array('status'=>$GLOBALS['ce_status'],'order_writes'=>$GLOBALS['ce_order_status_writes'],'hooks'=>$GLOBALS['ce_hooks']);
+}
 echo json_encode($results);

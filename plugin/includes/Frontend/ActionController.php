@@ -111,10 +111,11 @@ class ActionController {
 			$this->manual_renew_product( $subscrpt_id );
 		} elseif ( 'cancelled' === $action ) {
 			$result = CancellationEvidence::request( (int) $subscrpt_id, (int) $current_user_id, $request_id );
-			$message = 'confirmed' === $result['state']
+			$recorded = ! empty( $result['recorded'] );
+			$message = $recorded && 'confirmed' === $result['state']
 				? __( 'Cancellation confirmed. Future automatic billing is blocked. Any payment already sent for processing requires separate review.', 'subscription' )
-				: ( ! empty( $result['barrier'] ) ? __( 'Your cancellation request is recorded and local renewal billing is blocked. Confirmation is pending; any provider-managed billing or payment already in progress requires review.', 'subscription' ) : __( 'Cancellation could not be confirmed. Please retry from a fresh account session or contact support.', 'subscription' ) );
-			wc_add_notice( $message, ! empty( $result['barrier'] ) ? 'success' : 'error' );
+				: ( $recorded && ! empty( $result['barrier'] ) ? __( 'Your cancellation request is recorded and local renewal billing is blocked. Confirmation is pending; any provider-managed billing or payment already in progress requires review.', 'subscription' ) : __( 'Cancellation could not be confirmed. Please retry from a fresh account session or contact support.', 'subscription' ) );
+			wc_add_notice( $message, $recorded && ! empty( $result['barrier'] ) ? 'success' : 'error' );
 		} elseif ( 'reactivate' === $action ) {
 			if ( ! self::can_reactivate_subscription( (int) $subscrpt_id ) ) {
 				wc_add_notice( __( 'This subscription can no longer be reactivated without completing a renewal payment.', 'subscription' ), 'error' );

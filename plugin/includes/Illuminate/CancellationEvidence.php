@@ -122,6 +122,7 @@ final class CancellationEvidence {
 			);
 		}
 		$locked = false;
+		$recorded = false;
 		try {
 			$existing = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE subscription_id = %d', $wpdb->prefix . 'subscrpt_cancellation_barrier', $subscription_id ) );
 			if ( ! empty( $wpdb->last_error ) ) {
@@ -143,6 +144,7 @@ final class CancellationEvidence {
 			if ( ! $winner || ! empty( $wpdb->last_error ) ) {
 				return array( 'state' => 'pending', 'barrier' => true );
 			}
+			$recorded = true;
 			$access_end = (int) $winner->access_end;
 			$existing = $existing || 0 === $insert;
 			$audit = self::record(
@@ -161,13 +163,13 @@ final class CancellationEvidence {
 			$locked = self::lock( $subscription_id );
 			if ( ! $locked ) {
 				self::record( 'dispatch_review', $subscription_id, $actor_id, $request_id, array( 'code' => 'dispatch_in_progress' ) );
-				return array( 'state' => 'pending', 'barrier' => true, 'access_end' => $access_end );
+				return array( 'state' => 'pending', 'barrier' => true, 'recorded' => true, 'access_end' => $access_end );
 			}
 			$barrier = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE subscription_id = %d', $wpdb->prefix . 'subscrpt_cancellation_barrier', $subscription_id ) );
-			return $barrier && empty( $wpdb->last_error ) ? self::apply_recorded( $subscription_id, $actor_id, $request_id, (int) $barrier->access_end, $audit ) : array( 'state' => 'pending', 'barrier' => true );
+			return $barrier && empty( $wpdb->last_error ) ? self::apply_recorded( $subscription_id, $actor_id, $request_id, (int) $barrier->access_end, $audit ) : array( 'state' => 'pending', 'barrier' => true, 'recorded' => $recorded );
 		} catch ( \Throwable $error ) {
 			self::queue_repair( $subscription_id );
-			return array( 'state' => 'pending', 'barrier' => self::blocked( $subscription_id ) );
+			return array( 'state' => 'pending', 'barrier' => self::blocked( $subscription_id ), 'recorded' => $recorded );
 		} finally {
 			if ( $locked ) {
 				self::unlock( $subscription_id );
@@ -231,6 +233,7 @@ final class CancellationEvidence {
 			return array(
 				'state'          => $state,
 				'barrier'        => true,
+				'recorded'       => true,
 				'access_end'     => $access_end,
 				'audit_complete' => $audit,
 			);
@@ -241,6 +244,7 @@ final class CancellationEvidence {
 			return array(
 				'state'   => 'pending',
 				'barrier' => self::blocked( $subscription_id ),
+				'recorded' => true,
 			);
 		}
 	}

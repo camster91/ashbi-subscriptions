@@ -120,7 +120,7 @@ final class EvidenceExport {
 		$clean          = array_intersect_key( $snapshot, array_flip( array( 'currency', 'total', 'shipping', 'discount' ) ) );
 		$clean['items'] = array();
 		foreach ( array_slice( (array) ( $snapshot['items'] ?? array() ), 0, 100 ) as $item ) {
-			$line             = array_intersect_key( (array) $item, array_flip( array( 'product_id', 'variation_id', 'plan_id', 'quantity', 'initial_total', 'tax', 'signup_fee', 'payment_count' ) ) );
+			$line             = array_intersect_key( (array) $item, array_flip( array( 'product_id', 'variation_id', 'plan_id', 'quantity', 'initial_total', 'tax', 'signup_fee', 'payment_count', 'payment_type', 'billing_length', 'plan_total' ) ) );
 			$line['plan']     = array_intersect_key( (array) ( $item['plan'] ?? array() ), array_flip( array( 'price', 'time', 'type', 'trial' ) ) );
 			$clean['items'][] = $line;
 		}

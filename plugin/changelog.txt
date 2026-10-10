@@ -1,6 +1,7 @@
 *** Ashbi Subscriptions Changelog ***
 
 2026-10-10 - version 2.2.0 (candidate; review pending)
+* Fix cancellation receipt accuracy, retain contractual export fields and guard admin status side effects.
 * new: Durable customer cancellation barriers, repair and private evidence export.
 * new: Opt-in approved contract snapshots and immutable order-bound acceptance.
 * fixed: Preserve renewal opt-outs and validate automatic/manual settings.

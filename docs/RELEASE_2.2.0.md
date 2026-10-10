@@ -9,8 +9,8 @@ plugin header, runtime, stable tag and Composer package version are plain `2.2.0
 
 The implementation baseline is
 `f8d2e143d5994c7a122690a706d9f67c48117b8f`, which advertised `2.1.2`.
-The candidate preparation changes only version and release metadata relative to
-that baseline. Bundled Composer `reference` identifies this implementation
+The candidate includes corrective changes for truthful cancellation receipts,
+complete contractual exports and guarded admin transitions, plus release metadata. Bundled Composer `reference` identifies this implementation
 baseline, not the eventual release commit. The exact candidate source commit must
 be taken from the clean checkout and recorded in the generated release manifest.
 Do not infer source identity from the plugin version alone.
@@ -39,14 +39,18 @@ Run required PHP 7.4/8.2/8.5 tests, static and security checks, deterministic pa
 checks and WordPress/WooCommerce integration with HPOS on and off for the exact
 candidate commit. Independent review remains a separate gate from passing CI.
 
-Two feature findings need resolution before unconditional merge approval:
+The candidate corrects the independent review findings:
 
-- A barrier-storage read failure can produce a customer notice claiming the
-  cancellation request was recorded even though receipt was not persisted.
-- Private contract evidence export omits accepted `payment_type`, `billing_length`
-  and `plan_total` fields.
+- Customer receipt notices require verified durable intent, separately from a
+  fail-closed dispatch barrier when storage is unavailable. Exceptions before
+  receipt verification do not claim recorded intent.
+- Private exports retain accepted `payment_type`, `billing_length` and `plan_total`
+  while preserving the existing private-data allowlist.
+- Admin transitions invoke the shared status/barrier guard before status-related
+  email or order completion. Failed guards leave status and related orders intact.
+  Existing capability and nonce boundaries remain unchanged.
 
-The existing admin status mutation path also bypasses the new cancellation intent
-and status guard. Limit protection claims to verified paths until this integration
-debt is addressed. Keep the PR draft while these findings are unresolved. Do not
-publish a tag, merge, deploy or activate consent based only on metadata preparation.
+Admin cancellation retains its existing lifecycle semantics; this correction does
+not introduce a new admin cancellation request workflow or permission model.
+Customer durable intent and billing barriers remain authoritative. Independent
+review and passing checks are required on the corrective commit before deployment.

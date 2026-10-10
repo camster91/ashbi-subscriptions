@@ -81,6 +81,7 @@ the administrator or support contact responsible for your managed site.
 == Changelog ==
 
 = 2.2.0 =
+* Fix cancellation receipt accuracy, retain contractual export fields and guard admin status side effects.
 * Add durable customer cancellation barriers, repair and private evidence export.
 * Add opt-in approved billing contracts and immutable order-bound checkout acceptance.
 * Preserve renewal opt-outs and validate automatic/manual settings.

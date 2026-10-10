@@ -314,12 +314,11 @@ class Subscriptions {
 	public static function process_status_change( $post_id, $action ) {
 		$old_status = get_post_status( $post_id );
 
-		wp_update_post(
-			array(
-				'ID'          => $post_id,
-				'post_status' => $action,
-			)
-		);
+		// Apply the shared barrier guard before any status or order/email side effect.
+		if ( ! Action::status( $action, (int) $post_id ) ) {
+			return;
+		}
+		$action = get_post_status( $post_id );
 
 		if ( $old_status !== $action ) {
 			$old_status_object = get_post_status_object( $old_status );
@@ -334,9 +333,6 @@ class Subscriptions {
 			if ( $order ) {
 				$order->update_status( 'completed' );
 			}
-			Action::status( $action, $post_id );
-		} else {
-			Action::status( $action, $post_id );
 		}
 	}
 
