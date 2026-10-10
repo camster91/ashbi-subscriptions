@@ -214,11 +214,17 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 		subscrpt_write_debug_log( "Processing renewal order #{$renewal_order->get_id()} for payment." );
 
 		$stripe_order_helper   = new \WC_Stripe_Order_Helper();
+		if ( ! \SpringDevs\Subscription\Illuminate\CancellationEvidence::lock( $subscription_id ) ) {
+			return new \WP_Error( 'cancellation_lock', __( 'Subscription billing is being reviewed. Please try again later.', 'subscription' ) );
+		}
 		$order_locked          = false;
 		$payment_pending       = false;
 		$deterministic_failure = false;
 
 		try {
+			if ( \SpringDevs\Subscription\Illuminate\CancellationEvidence::blocked( $subscription_id ) ) {
+				return new \WP_Error( 'cancellation_barrier', __( 'Future billing is blocked by a cancellation request.', 'subscription' ) );
+			}
 			$stripe_order_helper->validate_minimum_order_amount( $renewal_order );
 
 			$amount   = $renewal_order->get_total();
@@ -309,6 +315,8 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 				do_action( 'wc_gateway_stripe_process_payment_error', $e, $renewal_order );
 				$this->trigger_renewal_payment_failed( $renewal_order );
 			}
+		} finally {
+			\SpringDevs\Subscription\Illuminate\CancellationEvidence::unlock( $subscription_id );
 		}
 	}
 

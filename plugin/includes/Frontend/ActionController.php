@@ -12,6 +12,7 @@ namespace SpringDevs\Subscription\Frontend;
 
 use SpringDevs\Subscription\Illuminate\Action;
 use SpringDevs\Subscription\Illuminate\Helper;
+use SpringDevs\Subscription\Illuminate\CancellationEvidence;
 use SpringDevs\Subscription\Illuminate\Subscription\Subscription;
 
 /**
@@ -39,6 +40,10 @@ class ActionController {
 		$subscrpt_id = sanitize_text_field( wp_unslash( $_GET['subscrpt_id'] ) );
 		$action      = sanitize_text_field( wp_unslash( $_GET['action'] ) );
 		$wpnonce     = sanitize_text_field( wp_unslash( $_GET['wpnonce'] ) );
+		$request_id = 'cancelled' === $action ? wp_generate_uuid4() : '';
+		if ( 'cancelled' === $action ) {
+			CancellationEvidence::record( 'request_received', 0, 0, $request_id );
+		}
 
 		// A guest-owned subscription has author ID 0. Never let an anonymous request
 		// inherit that ownership merely because get_current_user_id() also returns 0.
@@ -93,15 +98,11 @@ class ActionController {
 		if ( 'renew' === $action && ! subscrpt_is_auto_renew_enabled() ) {
 			$this->manual_renew_product( $subscrpt_id );
 		} elseif ( 'cancelled' === $action ) {
-			$status      = get_post_status( $subscrpt_id );
-			$user_cancel = get_post_meta( $subscrpt_id, '_subscrpt_user_cancel', true );
-			if ( 'no' === $user_cancel ) {
-				return;
-			} elseif ( 'active' === $status ) {
-				Action::status( 'pe_cancelled', $subscrpt_id );
-			} else {
-				Action::status( $action, $subscrpt_id );
-			}
+			$result = CancellationEvidence::request( (int) $subscrpt_id, (int) $current_user_id, $request_id );
+			$message = 'confirmed' === $result['state']
+				? __( 'Cancellation confirmed. Future automatic billing is blocked. Any payment already sent for processing requires separate review.', 'subscription' )
+				: ( ! empty( $result['barrier'] ) ? __( 'Your cancellation request is recorded and local renewal billing is blocked. Confirmation is pending; any provider-managed billing or payment already in progress requires review.', 'subscription' ) : __( 'Cancellation could not be confirmed. Please retry from a fresh account session or contact support.', 'subscription' ) );
+			wc_add_notice( $message, ! empty( $result['barrier'] ) ? 'success' : 'error' );
 		} elseif ( 'reactivate' === $action ) {
 			if ( ! self::can_reactivate_subscription( (int) $subscrpt_id ) ) {
 				wc_add_notice( __( 'This subscription can no longer be reactivated without completing a renewal payment.', 'subscription' ), 'error' );

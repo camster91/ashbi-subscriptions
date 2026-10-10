@@ -45,6 +45,18 @@ class Order {
 		if ( $order instanceof \WC_Order && $order->get_meta( '_subscrpt_renewal_quarantined' ) ) {
 			return false;
 		}
+		if ( $needs_payment && $order instanceof \WC_Order ) {
+			global $wpdb;
+			$subscriptions = $wpdb->get_results( $wpdb->prepare( 'SELECT subscription_id FROM %i WHERE order_id = %d AND type IN (%s, %s)', $wpdb->prefix . 'subscrpt_order_relation', (int) $order->get_id(), 'renew', 'early-renew' ) );
+			if ( ! empty( $wpdb->last_error ) && Helper::order_has_subscription_item( $order ) ) {
+				return false;
+			}
+			foreach ( (array) $subscriptions as $subscription ) {
+				if ( CancellationEvidence::blocked( (int) $subscription->subscription_id ) ) {
+					return false;
+				}
+			}
+		}
 
 		return $needs_payment;
 	}
@@ -512,6 +524,17 @@ class Order {
 		$histories = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i WHERE order_id=%d', array( $table_name, $order_id ) ) );
 
 		foreach ( $histories as $history ) {
+			$barrier_subscription_id = (int) $history->subscription_id;
+			if ( ! CancellationEvidence::lock( $barrier_subscription_id ) ) {
+				continue;
+			}
+			try {
+				if ( CancellationEvidence::blocked( $barrier_subscription_id ) ) {
+					if ( $order->is_paid() ) {
+						CancellationEvidence::record( 'dispatch_review', $barrier_subscription_id, 0, 'order-' . $order_id, array( 'order_id' => $order_id, 'code' => 'paid_after_cancellation' ) );
+					}
+					continue;
+				}
 			// Early renewal is a prepaid order for the next period. A failed or.
 			// cancelled early checkout must not cancel an otherwise active.
 			// subscription; only a verified payment advances its schedule.
@@ -660,6 +683,9 @@ class Order {
 				Action::write_comment( $target_status, $history->subscription_id );
 			} else {
 				do_action( 'subscrpt_order_status_changed', $order, $history );
+			}
+			} finally {
+				CancellationEvidence::unlock( $barrier_subscription_id );
 			}
 		}
 	}
