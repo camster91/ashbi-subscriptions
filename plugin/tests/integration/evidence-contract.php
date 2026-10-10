@@ -19,6 +19,7 @@ function ashbi_check_evidence_contract( callable $check ): bool {
 	$order            = null;
 	$product          = null;
 	$subscription     = 0;
+	$recovery_callbacks = array();
 	$deny_mail        = static function () {
 		return false;
 	};
@@ -85,11 +86,24 @@ function ashbi_check_evidence_contract( callable $check ): bool {
 		$consent->persist_acceptance( $order->get_id() );
 		$reloaded = wc_get_order( $order->get_id() );
 		$check( $consent->order_can_pay( true, $reloaded ), 'Real WooCommerce persisted contract did not match its final order.' );
+		$check( false === apply_filters( 'wc_stripe_show_payment_request_on_cart', true ), 'Consent failed to disable registered Stripe cart express route.' );
+		$check( false === apply_filters( 'wc_stripe_show_payment_request_on_checkout', true ), 'Consent failed to disable registered Stripe checkout express route.' );
+		$check( true === apply_filters( 'wc_stripe_hide_payment_request_on_product_page', false ), 'Consent failed to disable registered Stripe product express route.' );
+		$request = array( 'amount' => 2500 );
+		$check( is_array( apply_filters( 'wc_stripe_generate_create_intent_request', $request, $reloaded, new stdClass() ) ), 'Verified frozen order failed registered Stripe intent guard.' );
 		$document['enabled'] = false;
 		update_option( 'wp_subscription_contract_revision', $document );
 		$check( $consent->order_can_pay( true, $reloaded ), 'Disabled config rejected original unchanged acceptance.' );
 		$reloaded->set_total( 26 );
 		$check( ! $consent->order_can_pay( true, $reloaded ), 'Changed final amount bypassed disabled-config consent enforcement.' );
+		$guard_rejected = false;
+		try {
+			apply_filters( 'wc_stripe_generate_create_intent_request', $request, $reloaded, new stdClass() );
+		} catch ( Exception $error ) {
+			$guard_rejected = false !== strpos( $error->getMessage(), 'missing verified acceptance' );
+		}
+		$check( $guard_rejected, 'Registered Stripe intent hook did not reject changed final order before provider dispatch.' );
+		$reloaded->set_total( 25 );
 
 		$subscription = wp_insert_post(
 			array(
@@ -142,7 +156,36 @@ function ashbi_check_evidence_contract( callable $check ): bool {
 		$check( in_array( get_post_status( $subscription ), array( 'pe_cancelled', 'cancelled' ), true ), 'Durable repair did not preserve cancelled lifecycle.' );
 		$export = \SpringDevs\Subscription\Illuminate\EvidenceExport::build( $subscription );
 		$check( $export['subscription_id'] === $subscription && ! empty( $export['events'] ) && ! empty( $export['orders'][0]['acceptance'] ), 'Real evidence export lost source records.' );
+
+		// Rehearse the actual recovery companion with real evidence still present.
+		$document['enabled'] = true;
+		update_option( 'wp_subscription_contract_revision', $document );
+		$stored_before = $wpdb->get_var( $wpdb->prepare( 'SELECT option_value FROM %i WHERE option_name=%s', $wpdb->options, 'wp_subscription_contract_revision' ) );
+		$hook = 'option_wp_subscription_contract_revision';
+		$before_callbacks = isset( $GLOBALS['wp_filter'][ $hook ] ) ? array_keys( $GLOBALS['wp_filter'][ $hook ]->callbacks[ PHP_INT_MAX ] ?? array() ) : array();
+		$companion = WP_CONTENT_DIR . '/ashbi-recovery/evidence-preserving-rollback.php';
+		$check( is_file( $companion ), 'Actual recovery companion is unavailable in the disposable environment.' );
+		if ( is_file( $companion ) ) {
+			require $companion;
+			foreach ( $GLOBALS['wp_filter'][ $hook ]->callbacks[ PHP_INT_MAX ] ?? array() as $key => $callback ) {
+				if ( ! in_array( $key, $before_callbacks, true ) ) {
+					$recovery_callbacks[] = $callback['function'];
+				}
+			}
+			$check( null === $consent->approved_document(), 'Recovery companion did not disable new contract collection.' );
+			$check( $consent->order_can_pay( true, $reloaded ), 'Recovery companion rejected unchanged prior acceptance.' );
+			$reloaded->set_total( 26 );
+			$check( ! $consent->order_can_pay( true, $reloaded ), 'Recovery companion permitted altered prior acceptance.' );
+			$stored_after = $wpdb->get_var( $wpdb->prepare( 'SELECT option_value FROM %i WHERE option_name=%s', $wpdb->options, 'wp_subscription_contract_revision' ) );
+			$check( $stored_before === $stored_after, 'Recovery companion altered stored approval configuration.' );
+			$after_export = \SpringDevs\Subscription\Illuminate\EvidenceExport::build( $subscription );
+			$check( $export['cancellation_barrier'] === $after_export['cancellation_barrier'] && $export['events'] === $after_export['events'] && $export['orders'] === $after_export['orders'], 'Recovery companion changed durable evidence.' );
+			$check( \SpringDevs\Subscription\Illuminate\CancellationEvidence::blocked( $subscription ), 'Recovery companion removed the billing barrier.' );
+		}
 	} finally {
+		foreach ( $recovery_callbacks as $callback ) {
+			remove_filter( 'option_wp_subscription_contract_revision', $callback, PHP_INT_MAX );
+		}
 		if ( $missing === $previous ) {
 			delete_option( 'wp_subscription_contract_revision' );
 		} else {
