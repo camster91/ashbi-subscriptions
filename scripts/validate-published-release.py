@@ -130,6 +130,7 @@ def prepare_environment(output, repo, integration_dir=None):
             'https://downloads.wordpress.org/plugin/woocommerce-gateway-stripe.latest-stable.zip'],
         'phpVersion': '8.2', 'port': 8888, 'testsEnvironment': False,
         'mappings': {'wp-content/mu-plugins': mu.as_posix(),
+                     'wp-content/ashbi-recovery': (repo / 'tools').as_posix(),
                      'ashbi-integration': (integration_dir or repo / 'plugin/tests/integration').as_posix(),
                      'ashbi-tools': (repo / 'scripts/package-validation').as_posix(),
                      'ashbi-release': output.as_posix()},

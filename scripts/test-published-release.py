@@ -63,6 +63,8 @@ class PublishedReleaseTests(unittest.TestCase):
             output.mkdir(exist_ok=True)
             env = module.prepare_environment(output, SCRIPT.parent.parent)
             config = __import__('json').loads(env['config'].read_text())
+            self.assertEqual(config['mappings']['wp-content/ashbi-recovery'],
+                             (SCRIPT.parent.parent / 'tools').as_posix())
             self.assertTrue(all(not target.startswith('/') for target in config['mappings']),
                             'wp-env prefixes mappings with /var/www/html; root-looking targets are not root mounts')
             calls = []

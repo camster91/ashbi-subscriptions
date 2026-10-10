@@ -164,7 +164,7 @@ set_consent_fixture_global(
 		/** Return query.
 		 *
 		 * @param string $query Query.
-		 * @param mixed  $args Args.
+		 * @param mixed  ...$args Args.
 		 * @return string
 		 */
 		public function prepare( $query, ...$args ) {
