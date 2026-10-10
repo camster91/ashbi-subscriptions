@@ -54,3 +54,11 @@ order gates and cancellation barriers on an isolated clone before production.
 Gateway sandbox, mobile/keyboard, installed route coverage and actual fleet checks
 remain rollout gates. Unit doubles and CI integration are supporting evidence,
 not proof of a successful production deployment.
+
+An approved revision may include a reviewed `policy_url`. It must be an HTTPS
+URL without embedded credentials. The checkout renders that link beside the
+exact approved wording. Use `ContractConsent::document_hash()` for the revision
+hash: when the optional URL is present, the hash binds both text and URL, so a
+policy link changed after display cannot reuse the old checkbox submission.
+Older documents without the field retain their original text-only hash. Never
+reuse one brand's approval or policy URL for another brand.

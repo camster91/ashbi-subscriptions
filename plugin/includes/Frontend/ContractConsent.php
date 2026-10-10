@@ -39,7 +39,34 @@ final class ContractConsent {
 				return null;
 			}
 		}
-		return hash_equals( hash( 'sha256', $document['text'] ), $document['hash'] ) ? $document : null;
+		return self::valid_policy_link( $document ) && hash_equals( self::document_hash( $document ), $document['hash'] ) ? $document : null;
+	}
+
+	/**
+	 * Bind an optional reviewed policy link to the wording shown before acceptance.
+	 *
+	 * @param array $document Reviewed wording and optional policy URL.
+	 */
+	public static function document_hash( array $document ): string {
+		$text = (string) ( $document['text'] ?? '' );
+		return hash( 'sha256', array_key_exists( 'policy_url', $document ) ? (string) wp_json_encode( array( 'text' => $text, 'policy_url' => $document['policy_url'] ) ) : $text );
+	}
+
+	/**
+	 * Preserve legacy documents; reject unsafe or ambiguous new policy links.
+	 *
+	 * @param array $document Reviewed wording and optional policy URL.
+	 */
+	private static function valid_policy_link( array $document ): bool {
+		if ( ! array_key_exists( 'policy_url', $document ) ) {
+			return true;
+		}
+		$url = $document['policy_url'];
+		if ( ! is_string( $url ) || false === filter_var( $url, FILTER_VALIDATE_URL ) ) {
+			return false;
+		}
+		$parts = parse_url( $url );
+		return is_array( $parts ) && 'https' === ( $parts['scheme'] ?? '' ) && ! empty( $parts['host'] ) && ! isset( $parts['user'] ) && ! isset( $parts['pass'] );
 	}
 
 	/**
@@ -75,7 +102,7 @@ final class ContractConsent {
 				return false;
 			}
 		}
-		return hash_equals( hash( 'sha256', $document['text'] ), $document['hash'] ) && self::valid_snapshot( $actual_snapshot ) && hash_equals( hash( 'sha256', wp_json_encode( $payload['snapshot'] ) ), hash( 'sha256', wp_json_encode( $actual_snapshot ) ) );
+		return self::valid_policy_link( $document ) && hash_equals( self::document_hash( $document ), $document['hash'] ) && self::valid_snapshot( $actual_snapshot ) && hash_equals( hash( 'sha256', wp_json_encode( $payload['snapshot'] ) ), hash( 'sha256', wp_json_encode( $actual_snapshot ) ) );
 	}
 
 	/**
@@ -264,6 +291,9 @@ final class ContractConsent {
 		}
 		echo '<section aria-labelledby="ashbi-contract-title"><h3 id="ashbi-contract-title">' . esc_html__( 'Subscription terms', 'subscription' ) . '</h3>';
 		echo '<pre style="white-space:pre-wrap">' . esc_html( $document['text'] ) . '</pre>';
+		if ( isset( $document['policy_url'] ) ) {
+			echo '<p><a href="' . esc_url( $document['policy_url'] ) . '">' . esc_html__( 'Shipping / Refund Policy', 'subscription' ) . '</a></p>';
+		}
 		// translators: %s: reviewed terms revision identifier.
 		echo '<p>' . esc_html( sprintf( __( 'Terms version: %s', 'subscription' ), $document['version'] ) ) . '</p>';
 		echo '<label><input type="checkbox" name="ashbi_contract_accepted" value="1" required> ' . esc_html__( 'I accept the subscription terms shown above.', 'subscription' ) . '</label>';

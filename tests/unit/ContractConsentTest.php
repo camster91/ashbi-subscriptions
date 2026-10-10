@@ -190,6 +190,27 @@ final class ContractConsentTest extends TestCase {
 	}
 
 	/** Actual recovery companion preserves ledger gates and cancellation protection. */
+	public function test_reviewed_policy_link_is_escaped_and_bound_to_document_and_ledger(): void {
+		$data = $this->fixture();
+		$document = $data['policy_document'];
+		self::assertSame( 'https://example.test/shipping-refunds?section=terms&lang=en', $document['policy_url'] );
+		self::assertSame( hash( 'sha256', json_encode( array( 'text' => $document['text'], 'policy_url' => $document['policy_url'] ) ) ), $document['hash'] );
+		self::assertStringContainsString( 'href="https://example.test/shipping-refunds?section=terms&amp;lang=en"', $data['policy_render'] );
+		self::assertStringContainsString( '<a ', $data['policy_render'] );
+		self::assertStringNotContainsString( 'checked', $data['policy_render'] );
+		foreach ( $data['policy_invalid_urls'] as $rejected ) { self::assertTrue( $rejected ); }
+		foreach ( $data['policy_invalid_frozen_urls'] as $rejected ) { self::assertTrue( $rejected ); }
+		self::assertTrue( $data['policy_stale_hash_rejected'] );
+		self::assertTrue( $data['policy_frozen_stale_hash_rejected'] );
+		self::assertTrue( $data['policy_order_payable'] );
+		self::assertTrue( $data['policy_rehashed_tamper_denied'] );
+		self::assertTrue( $data['policy_ledger_unchanged'] );
+		self::assertSame( hash( 'sha256', $data['document']['text'] ), $data['policy_legacy_hash'] );
+		self::assertTrue( $data['policy_legacy_document_valid'] );
+		self::assertTrue( $data['policy_legacy_frozen_valid'] );
+	}
+
+	/** Actual recovery companion preserves ledger gates and cancellation protection. */
 	public function test_recovery_companion_disables_only_new_consent_without_erasing_protections(): void {
 		$data = $this->fixture();
 		self::assertTrue( $data['companion_new_document_disabled'] );

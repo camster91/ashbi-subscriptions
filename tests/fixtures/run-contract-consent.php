@@ -120,6 +120,12 @@ function __( $text, $domain = '' ) { return $text; }
 /** Escaped translation double; fixtures contain plain text only. */
 function esc_html__( $text, $domain = '' ) { return $text; }
 
+/** Real HTML escaping for render-path assertions, without a browser or WP. */
+function esc_html( $text ) { return htmlspecialchars( (string) $text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' ); }
+function esc_attr( $text ) { return esc_html( $text ); }
+function esc_url( $url ) { return esc_attr( $url ); }
+function wp_parse_url( $url, $component = -1 ) { return parse_url( $url, $component ); }
+
 /** Clock advances between retries to expose accidental evidence rewriting. */
 function current_time( $type, $gmt = false ) { return $GLOBALS['contract_now']; }
 
@@ -587,6 +593,49 @@ $cart->items = array( $installment_line );
 $cart->total = '31.50';
 $result['installment_cart_snapshot'] = $consent->cart_snapshot();
 $result['installment_order_snapshot'] = $consent->order_snapshot( $installment_order );
+
+// Reviewed policy destinations form part of the immutable displayed document.
+// Generic fixture wording and reserved example domain never use client terms.
+$policy_doc = $doc;
+$policy_doc['policy_url'] = 'https://example.test/shipping-refunds?section=terms&lang=en';
+$policy_doc['hash'] = $consent->document_hash( $policy_doc );
+$GLOBALS['contract_options']['wp_subscription_contract_revision'] = $policy_doc;
+$result['policy_document'] = $consent->approved_document();
+ob_start();
+$consent->render();
+$result['policy_render'] = ob_get_clean();
+$result['policy_invalid_urls'] = array();
+foreach ( array( '', 'http://example.test/policy', 'javascript:alert(1)', '//example.test/policy', 'https:///policy', 'https://', 'https://user@example.test/policy', 'https://user:pass@example.test/policy', "https://example.test/policy\nInjected", array( 'https://example.test' ), 42 ) as $invalid_url ) {
+	$invalid_doc = $policy_doc;
+	$invalid_doc['policy_url'] = $invalid_url;
+	$invalid_doc['hash'] = $consent->document_hash( $invalid_doc );
+	$GLOBALS['contract_options']['wp_subscription_contract_revision'] = $invalid_doc;
+	$result['policy_invalid_urls'][] = null === $consent->approved_document();
+	$result['policy_invalid_frozen_urls'][] = ! $consent->validate_frozen_acceptance( array( 'document' => $invalid_doc, 'snapshot' => $result['installment_order_snapshot'] ), $result['installment_order_snapshot'] );
+}
+$changed_policy = $policy_doc;
+$changed_policy['policy_url'] = 'https://example.test/replaced-policy';
+$GLOBALS['contract_options']['wp_subscription_contract_revision'] = $changed_policy;
+$result['policy_stale_hash_rejected'] = null === $consent->approved_document();
+$result['policy_frozen_stale_hash_rejected'] = ! $consent->validate_frozen_acceptance( array( 'document' => $changed_policy, 'snapshot' => $result['installment_order_snapshot'] ), $result['installment_order_snapshot'] );
+$GLOBALS['contract_options']['wp_subscription_contract_revision'] = $policy_doc;
+$policy_order = clone $installment_order;
+$policy_order->id = 708;
+$policy_order->meta['_ashbi_contract_required'] = '1';
+$policy_order->meta['_ashbi_contract_consent'] = array( 'document' => $policy_doc, 'snapshot' => $result['installment_order_snapshot'], 'accepted_at' => $GLOBALS['contract_now'], 'actor_id' => 0, 'payment_outcome' => 'not_confirmed' );
+$GLOBALS['contract_orders'][708] = $policy_order;
+$consent->persist_acceptance( 708 );
+$policy_ledger_before = $wpdb->rows;
+$result['policy_order_payable'] = $consent->order_can_pay( true, $policy_order );
+$tampered_policy_order = clone $policy_order;
+$tampered_policy_order->meta['_ashbi_contract_consent']['document']['policy_url'] = 'https://example.test/replaced-policy';
+$tampered_policy_order->meta['_ashbi_contract_consent']['document']['hash'] = $consent->document_hash( $tampered_policy_order->meta['_ashbi_contract_consent']['document'] );
+$result['policy_rehashed_tamper_denied'] = ! $consent->order_can_pay( true, $tampered_policy_order );
+$result['policy_ledger_unchanged'] = $policy_ledger_before === $wpdb->rows;
+$GLOBALS['contract_options']['wp_subscription_contract_revision'] = $doc;
+$result['policy_legacy_hash'] = $consent->document_hash( $doc );
+$result['policy_legacy_document_valid'] = null !== $consent->approved_document();
+$result['policy_legacy_frozen_valid'] = $consent->validate_frozen_acceptance( $order->meta['_ashbi_contract_consent'], $consent->order_snapshot( $order ) );
 
 // Load the actual recovery companion. The filter may disable new checkout UI
 // but must not write approvals, erase evidence or defeat cancellation barriers.

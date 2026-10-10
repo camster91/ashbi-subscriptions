@@ -85,7 +85,7 @@ final class EvidenceExport {
 			$acceptance = null;
 			if ( is_array( $payload ) ) {
 				$acceptance             = array_intersect_key( $payload, array_flip( array( 'document', 'snapshot', 'accepted_at', 'actor_id', 'payment_outcome' ) ) );
-				$acceptance['document'] = array_intersect_key( (array) ( $payload['document'] ?? array() ), array_flip( array( 'version', 'text', 'hash', 'approval_ref' ) ) );
+				$acceptance['document'] = array_intersect_key( (array) ( $payload['document'] ?? array() ), array_flip( array( 'version', 'text', 'hash', 'approval_ref', 'policy_url' ) ) );
 				$acceptance['snapshot'] = self::scrub_snapshot( (array) ( $payload['snapshot'] ?? array() ) );
 			}
 			$orders[] = array(
