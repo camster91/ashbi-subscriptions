@@ -17,6 +17,7 @@ function ashbi_check_evidence_contract( callable $check ): bool {
 	$mysql_contention = false;
 	$actor            = get_current_user_id();
 	$order            = null;
+	$product          = null;
 	$subscription     = 0;
 	$deny_mail        = static function () {
 		return false;
@@ -40,12 +41,16 @@ function ashbi_check_evidence_contract( callable $check ): bool {
 		$order   = wc_create_order();
 		$order->set_currency( 'USD' );
 		$order->set_payment_method( 'stripe' );
+		$product = new WC_Product_Simple();
+		$product->set_name( 'Fabricated isolated contract product' );
+		$product->set_regular_price( '12.50' );
+		$product->save();
 		$item = new WC_Order_Item_Product();
-		$item->set_product_id( 999001 );
+		$item->set_product_id( $product->get_id() );
 		$item->set_quantity( 2 );
 		$item->set_total( 25 );
 		$line = array(
-			'product_id'              => 999001,
+			'product_id'              => $product->get_id(),
 			'quantity'                => 2,
 			'subscrpt_plan_id'        => 7,
 			'subscrpt_signup_fee'     => 0,
@@ -148,6 +153,9 @@ function ashbi_check_evidence_contract( callable $check ): bool {
 		if ( $order ) {
 			$wpdb->delete( $wpdb->prefix . 'subscrpt_contract_acceptance', array( 'order_id' => $order->get_id() ) );
 			$order->delete( true );
+		}
+		if ( $product ) {
+			$product->delete( true );
 		}
 		remove_filter( 'pre_wp_mail', $deny_mail );
 		remove_filter( 'pre_http_request', $deny_http, PHP_INT_MAX );
