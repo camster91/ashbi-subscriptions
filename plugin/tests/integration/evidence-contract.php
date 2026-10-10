@@ -116,6 +116,10 @@ function ashbi_check_evidence_contract( callable $check ): bool {
 			$second = new wpdb( DB_USER, DB_PASSWORD, DB_NAME, DB_HOST );
 			$second->set_prefix( $wpdb->prefix );
 			$primary = $wpdb;
+			// Action Scheduler registers custom table names on the original connection.
+			foreach ( array( 'actionscheduler_actions', 'actionscheduler_claims', 'actionscheduler_groups', 'actionscheduler_logs' ) as $property ) {
+				$second->$property = $primary->$property;
+			}
 			$check( \SpringDevs\Subscription\Illuminate\CancellationEvidence::lock( $subscription ), 'Could not acquire isolated primary dispatch lock.' );
 			try {
 				// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Disposable harness switches the connection to test real mutex contention.

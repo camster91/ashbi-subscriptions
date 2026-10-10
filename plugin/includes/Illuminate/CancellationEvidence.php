@@ -198,11 +198,15 @@ final class CancellationEvidence {
 			$persisted = get_post_status( $subscription_id ) === $target && (int) get_post_meta( $subscription_id, '_subscrpt_cancel_at', true ) === $access_end && 0 === (int) get_post_meta( $subscription_id, '_subscrpt_auto_renew', true );
 			// Provider-managed billing is pending until the provider acknowledges it.
 			$order   = Helper::get_parent_order( $subscription_id );
-			$remote  = $order && 'wp_subscription_paypal' === $order->get_payment_method();
+			$method  = $order ? $order->get_payment_method() : '';
+			$remote  = 'wp_subscription_paypal' === $method;
+			// Only routes dispatched locally by this engine have a proven local stop.
+			// Paddle and unknown gateways may bill independently of this barrier.
+			$local   = in_array( $method, array( 'stripe', 'stripe_ideal', 'stripe_sepa', 'sepa_debit', 'stripe_bancontact' ), true );
 			if ( $remote && 'paypal' !== get_post_meta( $subscription_id, '_ashbi_cancel_provider_confirmed', true ) ) {
 				do_action( 'subscrpt_cancellation_provider_stop', $subscription_id );
 			}
-			$provider_confirmed = $order && ( ! $remote || 'paypal' === get_post_meta( $subscription_id, '_ashbi_cancel_provider_confirmed', true ) );
+			$provider_confirmed = $order && ( $local || ( $remote && 'paypal' === get_post_meta( $subscription_id, '_ashbi_cancel_provider_confirmed', true ) ) );
 			$state   = $persisted && $audit && $provider_confirmed ? 'confirmed' : 'pending';
 			$outcome = self::record(
 				'confirmed' === $state ? 'cancel_confirmed' : 'cancel_pending',
@@ -213,7 +217,7 @@ final class CancellationEvidence {
 					'status'         => get_post_status( $subscription_id ),
 					'access_end'     => $access_end,
 					'audit_complete' => $audit,
-					'provider_state' => $remote ? ( $provider_confirmed ? 'cancelled' : 'pending' ) : 'local_billing_blocked',
+					'provider_state' => $remote ? ( $provider_confirmed ? 'cancelled' : 'pending' ) : ( $local ? 'local_billing_blocked' : 'unverified' ),
 				)
 			);
 			if ( ! $outcome ) {

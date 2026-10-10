@@ -41,6 +41,14 @@ final class CancellationEvidenceTest extends TestCase {
  public function test_missing_parent_order_cannot_confirm_unknown_billing_route(): void {
   $d=$this->fixture();self::assertTrue($d['missing_parent_blocked']);self::assertNotSame('confirmed',$d['missing_parent']['state']);
  }
+ public function test_unverified_provider_routes_keep_local_barrier_without_claiming_remote_stop(): void {
+  foreach($this->fixture()['unverified_routes'] as $case){
+   self::assertSame('pending',$case['result']['state']);self::assertTrue($case['blocked']);self::assertSame(0,(int)$case['meta']['_subscrpt_auto_renew']);self::assertSame(0,(int)$case['meta']['_ashbi_cancellation_confirmed']);
+   self::assertSame($case['original'],$case['final']);
+   foreach($case['events'] as $event){self::assertNotSame('cancel_confirmed',$event['event_type']);}
+   $last=end($case['events']);self::assertSame('unverified',json_decode($last['details'],true)['provider_state']);
+  }
+ }
  public function test_dispatch_contention_preserves_authorized_intent_before_lock_and_replay_repairs(): void {
   $d=$this->fixture();$case=$d['dispatch_contention'];self::assertSame('pending',$case['first']['state']);self::assertTrue($case['first']['barrier']);self::assertTrue($case['first_blocked']);self::assertCount(1,$case['original']);
   self::assertSame($case['original'],$case['final']);self::assertSame('confirmed',$case['second']['state']);$end=(int)$case['original'][99]['access_end'];self::assertSame($end,(int)$case['second']['access_end']);self::assertSame($end,(int)$case['meta']['_subscrpt_cancel_at']);self::assertSame('pe_cancelled',$case['status']);

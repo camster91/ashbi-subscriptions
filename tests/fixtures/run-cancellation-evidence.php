@@ -125,6 +125,13 @@ foreach(array('repair_status'=>'ce_status_fail','repair_meta'=>'ce_meta_fail') a
 }
 reset_cancellation_evidence_fixture(); $GLOBALS['ce_parent_order']=false;
 $results['missing_parent']=$service::request(99,7,'missing-parent'); $results['missing_parent_blocked']=$service::blocked(99);
+foreach(array('smartpay_paddle','unknown_recurring','') as $method){
+ reset_cancellation_evidence_fixture();
+ $GLOBALS['ce_parent_order']=new class($method){private $method;public function __construct($method){$this->method=$method;}public function get_payment_method(){return $this->method;}};
+ $result=$service::request(99,7,'unverified-'.$method);
+ $original=$GLOBALS['wpdb']->barriers;$GLOBALS['ce_user']=0;$service::repair(99);
+ $results['unverified_routes'][$method]=array('result'=>$result,'blocked'=>$service::blocked(99),'original'=>$original,'final'=>$GLOBALS['wpdb']->barriers,'events'=>$GLOBALS['wpdb']->events,'meta'=>$GLOBALS['ce_meta']);
+}
 reset_cancellation_evidence_fixture(); $GLOBALS['wpdb']->fail_lock=true;
 $first_result=$service::request(99,7,'dispatch-contention'); $original=$GLOBALS['wpdb']->barriers;
 $first_blocked=$service::blocked(99); $GLOBALS['wpdb']->fail_lock=false;

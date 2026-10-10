@@ -1400,6 +1400,7 @@ function ashbi_run_security_boundary_integration_checks() {
 		$check( 'Fabricated legacy label' === get_comment_meta( $activity_ids[0], 'subscrpt_activity', true ), 'Rendering rewrote legacy metadata.' );
 
 		require_once __DIR__ . '/evidence-contract.php';
+		wp_set_current_user( (int) $administrator_id );
 		$mysql_cancellation_contention = ashbi_check_evidence_contract( $check );
 		if ( $failures ) {
 			wp_send_json_error( array( 'failures' => $failures ), 500 );
