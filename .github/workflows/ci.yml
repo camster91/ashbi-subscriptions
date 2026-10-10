@@ -84,8 +84,12 @@ jobs:
           vendor/bin/phpcs --report=summary
 
   wordpress-integration:
-    name: WordPress and WooCommerce integration
+    name: WordPress and WooCommerce integration (HPOS ${{ matrix.hpos }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        hpos: ['on', 'off']
 
     steps:
       - name: Check out source
@@ -118,16 +122,14 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p reports
-          for hpos in on off; do
-            ASHBI_PLAYGROUND_HPOS_MODE="$hpos" bash scripts/run-integration.sh | tee "reports/source-integration-$hpos.json"
-            python3 -c 'import json,sys; from pathlib import Path; mode=sys.argv[1]; d=json.loads(Path("reports/source-integration-"+mode+".json").read_text()); assert d.get("success") is True; checks=d.get("data", {}); assert checks.get("billing_consent_readbacks") is True; assert checks.get("cancellation_mysql_contention") is True; assert checks.get("hpos_mode")==mode; assert checks.get("hpos_enabled") is (mode=="on")' "$hpos"
-          done
+          ASHBI_PLAYGROUND_HPOS_MODE="${{ matrix.hpos }}" bash scripts/run-integration.sh | tee "reports/source-integration-${{ matrix.hpos }}.json"
+          python3 -c 'import json,sys; from pathlib import Path; mode=sys.argv[1]; d=json.loads(Path("reports/source-integration-"+mode+".json").read_text()); assert d.get("success") is True; checks=d.get("data", {}); assert checks.get("billing_consent_readbacks") is True; assert checks.get("cancellation_mysql_contention") is True; assert checks.get("hpos_mode")==mode; assert checks.get("hpos_enabled") is (mode=="on")' "${{ matrix.hpos }}"
 
       - name: Preserve source integration readback evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: source-billing-readbacks-${{ github.sha }}
+          name: source-billing-readbacks-${{ github.sha }}-${{ matrix.hpos }}
           path: reports/source-integration-*.json
           if-no-files-found: warn
           retention-days: 14
