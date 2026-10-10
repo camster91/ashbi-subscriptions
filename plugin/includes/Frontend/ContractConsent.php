@@ -49,6 +49,35 @@ final class ContractConsent {
 		if ( ! $document || '1' !== $accepted || ! is_string( $revision_hash ) || ! hash_equals( $document['hash'], $revision_hash ) || ! is_string( $snapshot_hash ) || ! hash_equals( hash( 'sha256', wp_json_encode( $snapshot ) ), $snapshot_hash ) ) {
 			return false;
 		}
+		return self::valid_snapshot( $snapshot );
+	}
+
+	/**
+	 * Validate preserved acceptance against actual unchanged order terms.
+	 * The caller must additionally verify this payload against its immutable ledger.
+	 *
+	 * @param array $payload Previously stored acceptance payload.
+	 * @param array $actual_snapshot Actual order terms before payment.
+	 */
+	public static function validate_frozen_acceptance( array $payload, array $actual_snapshot ): bool {
+		$document = $payload['document'] ?? null;
+		if ( ! is_array( $document ) || ! isset( $payload['snapshot'] ) || ! is_array( $payload['snapshot'] ) ) {
+			return false;
+		}
+		foreach ( array( 'version', 'text', 'hash', 'approval_ref' ) as $field ) {
+			if ( ! isset( $document[ $field ] ) || ! is_string( $document[ $field ] ) || '' === trim( $document[ $field ] ) ) {
+				return false;
+			}
+		}
+		return hash_equals( hash( 'sha256', $document['text'] ), $document['hash'] ) && self::valid_snapshot( $actual_snapshot ) && hash_equals( hash( 'sha256', wp_json_encode( $payload['snapshot'] ) ), hash( 'sha256', wp_json_encode( $actual_snapshot ) ) );
+	}
+
+	/**
+	 * Validate a normalized purchased plan snapshot without reading live revisions.
+	 *
+	 * @param array $snapshot Purchased terms.
+	 */
+	private static function valid_snapshot( array $snapshot ): bool {
 		if ( ! isset( $snapshot['currency'], $snapshot['items'] ) || ! is_string( $snapshot['currency'] ) || ! preg_match( '/^[A-Z]{3}$/', $snapshot['currency'] ) || ! is_array( $snapshot['items'] ) || ! $snapshot['items'] ) {
 			return false;
 		}

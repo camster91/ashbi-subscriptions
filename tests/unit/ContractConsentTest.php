@@ -79,4 +79,22 @@ final class ContractConsentTest extends TestCase {
 		self::assertSame( 0, $data['writes'] );
 		self::assertSame( 0, $data['historical_reads'] );
 	}
+
+	/** New store wording cannot retroactively replace acceptance on an unchanged order. */
+	public function test_frozen_approved_revision_remains_valid_for_unchanged_order_retry(): void {
+		$data = $this->fixture();
+		self::assertTrue( $data['frozen_without_current_config'] );
+		self::assertTrue( $data['frozen_after_revision_change'] );
+	}
+
+	/** Compare with actual final purchase details and independently validate the frozen document. */
+	public function test_frozen_acceptance_rejects_changed_order_and_invalid_document(): void {
+		$data = $this->fixture();
+		foreach ( $data['frozen_order_mutations'] as $name => $accepted ) {
+			self::assertFalse( $accepted, 'Changed actual order: ' . $name );
+		}
+		foreach ( $data['frozen_invalid_documents'] as $name => $accepted ) {
+			self::assertFalse( $accepted, 'Invalid frozen evidence: ' . $name );
+		}
+	}
 }

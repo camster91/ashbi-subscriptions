@@ -189,6 +189,61 @@ foreach ( $bad_snapshots as $name => $bad_snapshot ) {
 }
 $GLOBALS['contract_options'] = array( 'wp_subscription_renewal_process' => 'auto', 'subscrpt_renewal_process' => 'auto' );
 $result['historical_not_inferred'] = $consent->validate_acceptance( '1', $doc['hash'], $snapshot, $snapshot_hash );
+
+// A retry uses its immutable approved document and the actual final order,
+// not the store's new wording or a recomputed hash of a self-supplied snapshot.
+$frozen = array(
+	'document' => $doc,
+	'snapshot' => $snapshot,
+	'accepted_at' => '2026-10-10 12:00:00',
+	'actor_id' => 0,
+	'payment_outcome' => 'not_confirmed',
+);
+$GLOBALS['contract_options'] = array();
+$result['frozen_without_current_config'] = $consent->validate_frozen_acceptance( $frozen, $snapshot );
+$revision_two = $doc;
+$revision_two['text'] = 'Approved sandbox revision two applies to new purchases.';
+$revision_two['hash'] = hash( 'sha256', $revision_two['text'] );
+$revision_two['version'] = 'fixture-v2';
+$revision_two['approval_ref'] = 'fixture-approval-2';
+$GLOBALS['contract_options']['wp_subscription_contract_revision'] = $revision_two;
+$result['frozen_after_revision_change'] = $consent->validate_frozen_acceptance( $frozen, $snapshot );
+$result['frozen_order_mutations'] = array();
+foreach ( array( 'product_id' => 999, 'variation_id' => 999, 'plan_id' => 999, 'quantity' => 2 ) as $field => $value ) {
+	$actual = $snapshot;
+	$actual['items'][0][ $field ] = $value;
+	$result['frozen_order_mutations'][ $field ] = $consent->validate_frozen_acceptance( $frozen, $actual );
+}
+foreach ( array( 'price' => '25.00', 'time' => 2, 'type' => 'weeks' ) as $field => $value ) {
+	$actual = $snapshot;
+	$actual['items'][0]['plan'][ $field ] = $value;
+	$result['frozen_order_mutations'][ 'plan_' . $field ] = $consent->validate_frozen_acceptance( $frozen, $actual );
+}
+$actual = $snapshot;
+$actual['currency'] = 'CAD';
+$result['frozen_order_mutations']['currency'] = $consent->validate_frozen_acceptance( $frozen, $actual );
+$result['frozen_invalid_documents'] = array();
+foreach ( array( 'text', 'hash', 'version', 'approval_ref' ) as $field ) {
+	$unapproved = $frozen;
+	unset( $unapproved['document'][ $field ] );
+	$result['frozen_invalid_documents'][ 'missing_' . $field ] = $consent->validate_frozen_acceptance( $unapproved, $snapshot );
+	$unapproved = $frozen;
+	$unapproved['document'][ $field ] = '';
+	$result['frozen_invalid_documents'][ 'empty_' . $field ] = $consent->validate_frozen_acceptance( $unapproved, $snapshot );
+}
+$unapproved = $frozen;
+$unapproved['document']['text'] .= ' Undisclosed change.';
+$result['frozen_invalid_documents']['changed_text'] = $consent->validate_frozen_acceptance( $unapproved, $snapshot );
+$unapproved = $frozen;
+$unapproved['document']['hash'] = str_repeat( 'a', 64 );
+$result['frozen_invalid_documents']['forged_hash'] = $consent->validate_frozen_acceptance( $unapproved, $snapshot );
+$result['frozen_invalid_documents']['empty_payload'] = $consent->validate_frozen_acceptance( array(), $snapshot );
+$unapproved = $frozen;
+unset( $unapproved['snapshot'] );
+$result['frozen_invalid_documents']['missing_snapshot'] = $consent->validate_frozen_acceptance( $unapproved, $snapshot );
+$unapproved = $frozen;
+$unapproved['snapshot'] = array();
+$result['frozen_invalid_documents']['empty_snapshot'] = $consent->validate_frozen_acceptance( $unapproved, array() );
 $result['writes']                 = $GLOBALS['contract_writes'];
 $result['historical_reads']       = $GLOBALS['contract_historical_reads'];
 echo wp_json_encode( $result );
