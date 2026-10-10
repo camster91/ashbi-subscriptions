@@ -1399,16 +1399,19 @@ function ashbi_run_security_boundary_integration_checks() {
 		$check( 'subscription_note' === get_comment( $activity_ids[0] )->comment_type, 'Rendering rewrote legacy note type.' );
 		$check( 'Fabricated legacy label' === get_comment_meta( $activity_ids[0], 'subscrpt_activity', true ), 'Rendering rewrote legacy metadata.' );
 
+		require_once __DIR__ . '/evidence-contract.php';
+		$mysql_cancellation_contention = ashbi_check_evidence_contract( $check );
 		if ( $failures ) {
 			wp_send_json_error( array( 'failures' => $failures ), 500 );
 		}
 
 		wp_send_json_success(
 			array(
-				'message'                   => 'Ashbi security-boundary integration checks passed.',
-				'hpos_mode'                 => $hpos_mode,
-				'billing_consent_readbacks' => $billing_consent_readbacks,
-				'hpos_enabled'              => \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled(),
+				'message'                       => 'Ashbi security-boundary integration checks passed.',
+				'hpos_mode'                     => $hpos_mode,
+				'billing_consent_readbacks'     => $billing_consent_readbacks,
+				'cancellation_mysql_contention' => $mysql_cancellation_contention,
+				'hpos_enabled'                  => \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled(),
 			)
 		);
 	} catch ( \Throwable $error ) {

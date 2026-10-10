@@ -98,14 +98,15 @@ class Checkout {
 						throw new \Exception( esc_html__( 'The selected subscription cannot be renewed from this checkout.', 'subscription' ) );
 					}
 
-					$timing_option = $product->get_timing_option();
-					$trial         = $product->get_trial();
+					$frozen_contract = $order_item->get_meta( '_ashbi_contract_plan' );
+					$timing_option = is_array( $frozen_contract ) ? $frozen_contract['plan']['type'] : $product->get_timing_option();
+					$trial         = is_array( $frozen_contract ) ? $frozen_contract['plan']['trial'] : $product->get_trial();
 
 					wc_update_order_item_meta(
 						$order_item->get_id(),
 						'_subscrpt_meta',
 						array(
-							'time'  => 1,
+							'time'  => is_array( $frozen_contract ) ? $frozen_contract['plan']['time'] : 1,
 							'type'  => $timing_option,
 							'trial' => $trial,
 						)
@@ -129,7 +130,10 @@ class Checkout {
 					if ( $selected_subscription_id ) {
 						// product related.
 						update_post_meta( $selected_subscription_id, '_subscrpt_timing_option', $timing_option );
-						update_post_meta( $selected_subscription_id, '_subscrpt_price', $product->get_price() );
+						if ( is_array( $frozen_contract ) ) {
+							update_post_meta( $selected_subscription_id, '_subscrpt_timing_per', (int) $frozen_contract['plan']['time'] );
+						}
+						update_post_meta( $selected_subscription_id, '_subscrpt_price', is_array( $frozen_contract ) ? $frozen_contract['plan']['price'] : $product->get_price() );
 						update_post_meta( $selected_subscription_id, '_subscrpt_user_cancel', $product->get_meta( '_subscrpt_user_cancel' ) );
 
 						// order related.

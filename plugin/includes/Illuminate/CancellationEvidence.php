@@ -121,12 +121,7 @@ final class CancellationEvidence {
 				'barrier' => self::blocked( $subscription_id ),
 			);
 		}
-		if ( ! self::lock( $subscription_id ) ) {
-			return array(
-				'state'   => 'pending',
-				'barrier' => self::blocked( $subscription_id ),
-			);
-		}
+		$locked = false;
 		try {
 			$existing = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE subscription_id = %d', $wpdb->prefix . 'subscrpt_cancellation_barrier', $subscription_id ) );
 			if ( ! empty( $wpdb->last_error ) ) {
@@ -144,6 +139,12 @@ final class CancellationEvidence {
 					'barrier' => self::blocked( $subscription_id ),
 				);
 			}
+			$winner = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE subscription_id = %d', $wpdb->prefix . 'subscrpt_cancellation_barrier', $subscription_id ) );
+			if ( ! $winner || ! empty( $wpdb->last_error ) ) {
+				return array( 'state' => 'pending', 'barrier' => true );
+			}
+			$access_end = (int) $winner->access_end;
+			$existing = $existing || 0 === $insert;
 			$audit = self::record(
 				$existing ? 'cancel_pending' : 'cancel_authorized',
 				$subscription_id,
@@ -154,6 +155,38 @@ final class CancellationEvidence {
 					'code'       => $existing ? 'repair_requested' : 'authorized',
 				)
 			);
+			// Queue before acquiring the dispatch mutex: authorized intent survives
+			// an in-flight charge, a busy lock, or a process crash.
+			self::queue_repair( $subscription_id );
+			$locked = self::lock( $subscription_id );
+			if ( ! $locked ) {
+				self::record( 'dispatch_review', $subscription_id, $actor_id, $request_id, array( 'code' => 'dispatch_in_progress' ) );
+				return array( 'state' => 'pending', 'barrier' => true, 'access_end' => $access_end );
+			}
+			$barrier = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE subscription_id = %d', $wpdb->prefix . 'subscrpt_cancellation_barrier', $subscription_id ) );
+			return $barrier && empty( $wpdb->last_error ) ? self::apply_recorded( $subscription_id, $actor_id, $request_id, (int) $barrier->access_end, $audit ) : array( 'state' => 'pending', 'barrier' => true );
+		} catch ( \Throwable $error ) {
+			self::queue_repair( $subscription_id );
+			return array( 'state' => 'pending', 'barrier' => self::blocked( $subscription_id ) );
+		} finally {
+			if ( $locked ) {
+				self::unlock( $subscription_id );
+			}
+		}
+	}
+
+	/**
+	 * Apply already persisted intent under the shared mutex.
+	 *
+	 * @param int    $subscription_id Subscription ID.
+	 * @param int    $actor_id Recorded actor.
+	 * @param string $request_id Correlation ID.
+	 * @param int    $access_end Original immutable access end.
+	 * @param bool   $audit Evidence insertion outcome.
+	 */
+	private static function apply_recorded( int $subscription_id, int $actor_id, string $request_id, int $access_end, bool $audit ): array {
+		try {
+			$status = get_post_status( $subscription_id );
 			update_post_meta( $subscription_id, '_subscrpt_auto_renew', 0 );
 			$target = $access_end > time() && in_array( $status, array( 'active', 'pe_cancelled' ), true ) ? 'pe_cancelled' : 'cancelled';
 			if ( $target !== $status ) {
@@ -166,7 +199,11 @@ final class CancellationEvidence {
 			// Provider-managed billing is pending until the provider acknowledges it.
 			$order   = Helper::get_parent_order( $subscription_id );
 			$remote  = $order && 'wp_subscription_paypal' === $order->get_payment_method();
-			$state   = $persisted && $audit && $order && ! $remote ? 'confirmed' : 'pending';
+			if ( $remote && 'paypal' !== get_post_meta( $subscription_id, '_ashbi_cancel_provider_confirmed', true ) ) {
+				do_action( 'subscrpt_cancellation_provider_stop', $subscription_id );
+			}
+			$provider_confirmed = $order && ( ! $remote || 'paypal' === get_post_meta( $subscription_id, '_ashbi_cancel_provider_confirmed', true ) );
+			$state   = $persisted && $audit && $provider_confirmed ? 'confirmed' : 'pending';
 			$outcome = self::record(
 				'confirmed' === $state ? 'cancel_confirmed' : 'cancel_pending',
 				$subscription_id,
@@ -176,12 +213,16 @@ final class CancellationEvidence {
 					'status'         => get_post_status( $subscription_id ),
 					'access_end'     => $access_end,
 					'audit_complete' => $audit,
-					'provider_state' => $remote ? 'pending' : 'local_billing_blocked',
+					'provider_state' => $remote ? ( $provider_confirmed ? 'cancelled' : 'pending' ) : 'local_billing_blocked',
 				)
 			);
 			if ( ! $outcome ) {
 				$audit = false;
 				$state = 'pending';
+			}
+			update_post_meta( $subscription_id, '_ashbi_cancellation_confirmed', 'confirmed' === $state ? 1 : 0 );
+			if ( 'pending' === $state ) {
+				self::queue_repair( $subscription_id );
 			}
 			return array(
 				'state'          => $state,
@@ -192,12 +233,70 @@ final class CancellationEvidence {
 		} catch ( \Throwable $error ) {
 			// Mailer/feedback/hook failure cannot remove durable cancellation intent.
 			self::record( 'cancel_pending', $subscription_id, $actor_id, $request_id, array( 'code' => 'side_effect_failed' ) );
+			self::queue_repair( $subscription_id );
 			return array(
 				'state'   => 'pending',
 				'barrier' => self::blocked( $subscription_id ),
 			);
+		}
+	}
+
+	/**
+	 * Schedule a retry; the database barrier remains authoritative if queuing fails.
+	 *
+	 * @param int $subscription_id Subscription ID.
+	 */
+	private static function queue_repair( int $subscription_id ): void {
+		try {
+			if ( function_exists( 'as_schedule_single_action' ) ) {
+				$args = array( $subscription_id );
+				if ( ! function_exists( 'as_has_scheduled_action' ) || ! as_has_scheduled_action( 'subscrpt_repair_cancellation', $args, 'ashbi-subscriptions' ) ) {
+					as_schedule_single_action( time() + 300, 'subscrpt_repair_cancellation', $args, 'ashbi-subscriptions' );
+				}
+			}
+		} catch ( \Throwable $error ) {
+			// The hourly sweep recovers durable barriers after queue failures.
+		}
+	}
+
+	/** Register internal durable repair hooks. */
+	public static function register_hooks(): void {
+		add_action( 'subscrpt_repair_cancellation', array( self::class, 'repair' ) );
+		add_action( 'subscrpt_hourly_cron', array( self::class, 'sweep' ), 5 );
+	}
+
+	/**
+	 * Retry only existing immutable authorized intent; never fabricate a request.
+	 *
+	 * @param int $subscription_id Subscription ID.
+	 */
+	public static function repair( $subscription_id ): void {
+		global $wpdb;
+		$subscription_id = (int) $subscription_id;
+		$post = get_post( $subscription_id );
+		$barrier = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE subscription_id = %d', $wpdb->prefix . 'subscrpt_cancellation_barrier', $subscription_id ) );
+		if ( ! $post || 'subscrpt_order' !== $post->post_type || ! $barrier || ! empty( $wpdb->last_error ) ) {
+			return;
+		}
+		if ( ! self::lock( $subscription_id ) ) {
+			self::queue_repair( $subscription_id );
+			return;
+		}
+		try {
+			update_post_meta( $subscription_id, '_ashbi_cancellation_repair_at', time() );
+			$audit = self::record( 'cancel_pending', $subscription_id, 0, 'repair-' . $barrier->request_id, array( 'code' => 'durable_repair', 'access_end' => $barrier->access_end ) );
+			self::apply_recorded( $subscription_id, 0, 'repair-' . $barrier->request_id, (int) $barrier->access_end, $audit );
 		} finally {
 			self::unlock( $subscription_id );
+		}
+	}
+
+	/** Recover requests whose queue was lost, including overdue access termination. */
+	public static function sweep(): void {
+		global $wpdb;
+		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT b.subscription_id FROM %i b JOIN %i p ON p.ID=b.subscription_id LEFT JOIN %i m ON m.post_id=b.subscription_id AND m.meta_key=%s LEFT JOIN %i r ON r.post_id=b.subscription_id AND r.meta_key=%s WHERE p.post_type=%s AND (COALESCE(m.meta_value,'0') <> '1' OR (b.access_end <= %d AND p.post_status <> 'cancelled')) GROUP BY b.subscription_id ORDER BY MIN(CAST(COALESCE(r.meta_value,'0') AS UNSIGNED)), b.subscription_id LIMIT 100", $wpdb->prefix . 'subscrpt_cancellation_barrier', $wpdb->posts, $wpdb->postmeta, '_ashbi_cancellation_confirmed', $wpdb->postmeta, '_ashbi_cancellation_repair_at', 'subscrpt_order', time() ) );
+		foreach ( (array) $rows as $row ) {
+			self::repair( (int) $row->subscription_id );
 		}
 	}
 }

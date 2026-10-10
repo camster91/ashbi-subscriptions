@@ -31,11 +31,15 @@ function update_comment_meta( $id, $key, $value ) { return true; }
 function subscrpt_write_log( $message ) {}
 function WC() { return new class { public function mailer() { if ( $GLOBALS['ce_mail_fail'] ) { throw new RuntimeException( 'fixture mail failure' ); } return true; } }; }
 function wc_get_order( $id ) { return new class { public function get_payment_method() { return 'stripe'; } public function get_meta( $key, $single = true ) { return ''; } }; }
-function do_action( $hook, ...$args ) { $GLOBALS['ce_hooks'][] = $hook; }
+function do_action( $hook, ...$args ) { $GLOBALS['ce_hooks'][] = $hook; foreach($GLOBALS['ce_action_callbacks'][$hook]??array() as $callback){$callback(...$args);} }
+function add_action( $hook, $callback, ...$args ) { $GLOBALS['ce_action_callbacks'][$hook][]=$callback; }
+function as_schedule_single_action( $time, $hook, $args, $group='', $unique=false ) { $GLOBALS['ce_queued'][]=array('hook'=>$hook,'args'=>$args);return $GLOBALS['ce_queue_fail']?0:count($GLOBALS['ce_queued']); }
 
 /** Database double models immutable primary key and append-only ledger. */
 class CancellationEvidenceDatabase {
  public $prefix = 'wp_';
+ public $posts = 'wp_posts';
+ public $postmeta = 'wp_postmeta';
  public $last_error = '';
  public $insert_id = 0;
  public $barriers = array();
@@ -59,7 +63,7 @@ class CancellationEvidenceDatabase {
   $id=(int)end($args); return isset($this->barriers[$id]) ? $id : null;
  }
  public function get_row( $prepared, $output = null ) { list($sql,$args)=$this->unpack($prepared); $this->last_error=$this->fail_read?'fixture read unavailable':''; $row=$this->barriers[(int)end($args)]??null; return $this->fail_read?null:('ARRAY_A'===$output?$row:($row?(object)$row:null)); }
- public function get_results( $sql, $output = null ) { $this->last_error=$this->fail_read?'fixture read unavailable':''; return array(); }
+ public function get_results( $prepared, $output = null ) { list($sql,$args)=$this->unpack($prepared);$this->last_error=$this->fail_read?'fixture read unavailable':'';if($this->fail_read){return array();}if(strpos($sql,'SELECT b.subscription_id')===0){$rows=array();foreach($this->barriers as $id=>$barrier){if(($GLOBALS['ce_meta']['_ashbi_cancellation_confirmed']??0)!=1 || ((int)$barrier['access_end']<=time() && 'cancelled'!==$GLOBALS['ce_status'])){$rows[]=(object)array('subscription_id'=>$id);}}return $rows;}return array(); }
  public function insert( $table, $data, $formats = null ) { $this->last_error=''; $this->mutations[]=array('insert',$table,$data); if(false!==strpos($table,'evidence_event')) { ++$this->audit_attempts; if($this->fail_audit || $this->fail_audit_at === $this->audit_attempts){$this->last_error='fixture audit unavailable';return false;} $this->events[]=$data; $this->insert_id=count($this->events);return 1; } return false; }
  public function query( $prepared ) {
   list($sql,$args)=$this->unpack($prepared); $this->queries[]=$sql; $this->last_error='';
@@ -77,6 +81,7 @@ function reset_cancellation_evidence_fixture() {
  $GLOBALS['ce_meta']=array('_subscrpt_auto_renew'=>1,'_subscrpt_next_date'=>time()+86400,'_subscrpt_order_id'=>1);
  foreach(array('ce_meta_fail','ce_status_fail','ce_comment_fail','ce_mail_fail') as $key){$GLOBALS[$key]=false;} $GLOBALS['ce_hooks']=array();
  $GLOBALS['ce_status_writes']=array(); $GLOBALS['ce_comments']=array();
+ $GLOBALS['ce_action_callbacks']=array();$GLOBALS['ce_queued']=array();$GLOBALS['ce_queue_fail']=false;
  $GLOBALS['ce_parent_order']=new class { public function get_payment_method() { return 'stripe'; } };
 }
 $source=dirname(__DIR__,2).'/plugin/includes/Illuminate/CancellationEvidence.php';
@@ -120,6 +125,23 @@ foreach(array('repair_status'=>'ce_status_fail','repair_meta'=>'ce_meta_fail') a
 }
 reset_cancellation_evidence_fixture(); $GLOBALS['ce_parent_order']=false;
 $results['missing_parent']=$service::request(99,7,'missing-parent'); $results['missing_parent_blocked']=$service::blocked(99);
+reset_cancellation_evidence_fixture(); $GLOBALS['wpdb']->fail_lock=true;
+$first_result=$service::request(99,7,'dispatch-contention'); $original=$GLOBALS['wpdb']->barriers;
+$first_blocked=$service::blocked(99); $GLOBALS['wpdb']->fail_lock=false;
+$second_result=$service::request(99,7,'dispatch-contention-retry');
+$results['dispatch_contention']=array('first'=>$first_result,'first_blocked'=>$first_blocked,'original'=>$original,'second'=>$second_result,'final'=>$GLOBALS['wpdb']->barriers,'status'=>$GLOBALS['ce_status'],'meta'=>$GLOBALS['ce_meta']);
+foreach(array('queued_repair','lost_queue_sweep','overdue_sweep','busy_worker') as $name){
+ reset_cancellation_evidence_fixture();$GLOBALS['ce_status_fail']=true;$GLOBALS['ce_queue_fail']='lost_queue_sweep'===$name;
+ $first_result=$service::request(99,7,$name.'-request');$original=$GLOBALS['wpdb']->barriers;$queued=$GLOBALS['ce_queued'];
+ $GLOBALS['ce_status_fail']=false;$GLOBALS['ce_user']=0;
+ if('overdue_sweep'===$name){$GLOBALS['wpdb']->barriers[99]['access_end']=time()-60;$original=$GLOBALS['wpdb']->barriers;$GLOBALS['ce_meta']['_ashbi_cancellation_confirmed']=1;}
+ if('busy_worker'===$name){$GLOBALS['wpdb']->fail_lock=true;}
+ $error=null;
+ try{$service::register_hooks();do_action(in_array($name,array('lost_queue_sweep','overdue_sweep'),true)?'subscrpt_hourly_cron':'subscrpt_repair_cancellation',99);}catch(Throwable $exception){$error=get_class($exception).': '.$exception->getMessage();}
+ $results[$name]=array('first'=>$first_result,'original'=>$original,'final'=>$GLOBALS['wpdb']->barriers,'meta'=>$GLOBALS['ce_meta'],'status'=>$GLOBALS['ce_status'],'error'=>$error,'queued_before'=>$queued,'queued_after'=>$GLOBALS['ce_queued'],'events'=>$GLOBALS['wpdb']->events);
+}
+reset_cancellation_evidence_fixture();$GLOBALS['ce_user']=0;$service::repair(99);$service::sweep();
+$results['no_intent_repair']=array('barriers'=>$GLOBALS['wpdb']->barriers,'status'=>$GLOBALS['ce_status'],'events'=>$GLOBALS['wpdb']->events,'status_writes'=>$GLOBALS['ce_status_writes']);
 reset_cancellation_evidence_fixture();
 $details=array('code'=>'<b>received</b>','status'=>'pending','order_id'=>123,'access_end'=>1234,'audit_complete'=>true,'provider_state'=>'pending','password'=>'fixture-secret','email'=>'private@example.test','card_number'=>'4242424242424242','token'=>'fixture-token','comment'=>'unnecessary personal data','nested'=>array('secret'=>'nested-secret'));
 $results['record_first']=$service::record('request_received',99,7,'audit-request',$details);

@@ -97,4 +97,109 @@ final class ContractConsentTest extends TestCase {
 			self::assertFalse( $accepted, 'Invalid frozen evidence: ' . $name );
 		}
 	}
+
+	/** Final payable order fields must match the explicitly accepted cart. */
+	public function test_order_snapshot_and_payability_bind_actual_canonical_terms_and_amounts(): void {
+		$data = $this->fixture();
+		self::assertNull( $data['order_gate_error'] );
+		self::assertSame( $data['matching_cart_snapshot'], $data['order_snapshot'] );
+		foreach ( $data['order_gate_mutations'] as $name => $payable ) {
+			self::assertFalse( $payable, 'Changed final order still payable: ' . $name );
+		}
+		self::assertTrue( $data['altered_evidence_rejected'] );
+		self::assertTrue( $data['missing_required_evidence_rejected'] );
+	}
+
+	/** Retrying an unchanged order preserves the original immutable acceptance. */
+	public function test_order_retry_preserves_ledger_and_prior_approved_revision(): void {
+		$data = $this->fixture();
+		self::assertNull( $data['order_gate_error'] );
+		self::assertTrue( $data['retry_can_pay'] );
+		self::assertFalse( $data['already_nonpayable_stays_nonpayable'] );
+		self::assertTrue( $data['retry_ledger_unchanged'] );
+		self::assertTrue( $data['retry_meta_unchanged'] );
+		self::assertSame( 1, $data['retry_insert_count'] );
+		self::assertSame( 1, $data['final_ledger_insert_count'] );
+	}
+
+	/** Legacy renewal payment remains available without invented acceptance. */
+	public function test_legacy_order_pay_has_no_backfill_and_required_failure_is_usable(): void {
+		$data = $this->fixture();
+		self::assertTrue( $data['legacy_can_pay'] );
+		self::assertTrue( $data['legacy_meta_unchanged'] );
+		self::assertTrue( $data['legacy_ledger_unchanged'] );
+		self::assertNull( $data['guard_exception'] );
+		self::assertGreaterThan( 0, $data['guard_notices'] );
+	}
+
+	/** Turning off new-purchase acceptance never bypasses a required order's evidence. */
+	public function test_required_order_evidence_gate_survives_disabled_current_configuration(): void {
+		$data = $this->fixture();
+		self::assertTrue( $data['disabled_config_valid_order_can_pay'] );
+		self::assertTrue( $data['disabled_config_missing_evidence_denied'] );
+		self::assertTrue( $data['disabled_config_forged_evidence_denied'] );
+		self::assertTrue( $data['disabled_config_legacy_can_pay'] );
+		self::assertFalse( $data['eligibility_wrote_ledger'] );
+	}
+
+	/** Payment is denied until immutable acceptance can be durably stored and read back. */
+	public function test_ledger_write_and_readback_failures_remain_nonpayable_without_erasing_evidence(): void {
+		$data = $this->fixture();
+		self::assertTrue( $data['write_failure_threw'] );
+		self::assertTrue( $data['write_failure_nonpayable'] );
+		self::assertTrue( $data['write_failure_no_row'] );
+		self::assertTrue( $data['read_failure_threw'] );
+		self::assertTrue( $data['read_failure_nonpayable'] );
+		self::assertTrue( $data['corrupt_read_nonpayable'] );
+		self::assertFalse( $data['failed_eligibility_wrote_ledger'] );
+		self::assertTrue( $data['read_failure_evidence_retained'] );
+		self::assertTrue( $data['read_recovery_can_pay'] );
+	}
+
+	/** A normal DB scalar reload must not invalidate the same accepted recurring price. */
+	public function test_float_cart_price_matches_reloaded_wordpress_string_metadata(): void {
+		$data = $this->fixture();
+		self::assertSame( $data['float_cart_snapshot'], $data['reloaded_price_snapshot'] );
+		self::assertTrue( $data['float_price_binding_valid'] );
+	}
+
+	/** Classic creation cannot silently substitute current product terms after consent. */
+	public function test_classic_canonical_cadence_trial_and_amounts_are_stamped_and_bound(): void {
+		$data = $this->fixture();
+		self::assertTrue( $data['classic_order_binding_valid'] );
+		$meta = $data['classic_canonical_meta'];
+		self::assertSame( 1, $meta['_subscrpt_meta']['time'] );
+		self::assertSame( 'months', $meta['_subscrpt_meta']['type'] );
+		self::assertNull( $meta['_subscrpt_meta']['trial'] );
+		self::assertSame( 9.0, (float) $meta['_subscrpt_plan_price'] );
+		self::assertSame( 0.0, (float) $meta['_subscrpt_signup_fee'] );
+		self::assertSame( 5, $meta['_subscrpt_max_no_payment'] );
+		foreach ( $data['classic_canonical_mutations'] as $name => $accepted ) {
+			self::assertFalse( $accepted, 'Classic canonical drift accepted: ' . $name );
+		}
+	}
+
+	/** Finite installment obligations survive DB reload with exact lifecycle semantics. */
+	public function test_payment_type_billing_length_and_installment_total_are_preserved(): void {
+		$data = $this->fixture();
+		self::assertSame( $data['installment_cart_snapshot'], $data['installment_order_snapshot'] );
+		$item = $data['installment_order_snapshot']['items'][0];
+		self::assertSame( 'split_payment', $item['payment_type'] );
+		self::assertSame( 4, $item['billing_length'] );
+		self::assertSame( '50.00', $item['plan_total'] );
+	}
+
+	/** Actual recovery companion preserves ledger gates and cancellation protection. */
+	public function test_recovery_companion_disables_only_new_consent_without_erasing_protections(): void {
+		$data = $this->fixture();
+		self::assertTrue( $data['companion_new_document_disabled'] );
+		self::assertTrue( $data['companion_existing_order_payable'] );
+		self::assertTrue( $data['companion_missing_evidence_denied'] );
+		self::assertTrue( $data['barrier_before_companion'] );
+		self::assertTrue( $data['barrier_after_companion'] );
+		self::assertTrue( $data['companion_config_unchanged'] );
+		self::assertTrue( $data['companion_ledger_unchanged'] );
+		self::assertTrue( $data['companion_barriers_unchanged'] );
+		self::assertTrue( $data['companion_no_ledger_writes'] );
+	}
 }

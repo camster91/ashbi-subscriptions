@@ -5,6 +5,14 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 
 ## Unreleased
 
+- Add immutable cancellation barriers, append-only evidence, durable repair and
+  review of already-dispatched payments. Keep finalization independent of mail
+  availability and preserve previous survey feedback.
+- Add disabled-by-default approved contract snapshots bound to final WooCommerce
+  orders and immutable acceptance. Preserve unchanged retries and reject unsupported
+  subscription checkout routes while enabled. Add scoped private evidence export.
+  See `docs/MIGRATION_1.6.0.md` for compatibility and remaining rollout gates.
+
 - Validate renewal modes as exact `auto`/`manual` values rather than customer
   roles. Present corrupt modes resolve to Manual without option migration;
   genuinely absent settings retain the historical Automatic default.

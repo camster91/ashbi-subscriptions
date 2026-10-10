@@ -48,12 +48,18 @@ class ActionController {
 		// A guest-owned subscription has author ID 0. Never let an anonymous request
 		// inherit that ownership merely because get_current_user_id() also returns 0.
 		if ( ! is_user_logged_in() ) {
+			if ( $request_id ) {
+				CancellationEvidence::record( 'request_rejected', 0, 0, $request_id, array( 'code' => 'session_required' ) );
+			}
 			wc_add_notice( __( 'Please log in to manage this subscription.', 'subscription' ), 'error' );
 			return wp_safe_redirect( wc_get_page_permalink( 'myaccount' ) );
 		}
 
 		// Nonce check.
 		if ( ! wp_verify_nonce( $wpnonce, 'subscrpt_nonce' ) ) {
+			if ( $request_id ) {
+				CancellationEvidence::record( 'request_rejected', 0, 0, $request_id, array( 'code' => 'invalid_nonce' ) );
+			}
 			$error_notice = __( "You don't have permission to modify this subscription. If you believe this is an error, please contact support.", 'subscription' );
 			wc_add_notice( $error_notice, 'error' );
 
@@ -65,6 +71,9 @@ class ActionController {
 		// User check.
 		$subs_post       = get_post( $subscrpt_id );
 		if ( ! $subs_post || 'subscrpt_order' !== $subs_post->post_type ) {
+			if ( $request_id ) {
+				CancellationEvidence::record( 'request_rejected', 0, 0, $request_id, array( 'code' => 'invalid_subscription' ) );
+			}
 			wc_add_notice( __( "You don't have permission to modify this subscription. If you believe this is an error, please contact support.", 'subscription' ), 'error' );
 			$view_subscription_endpoint = Subscription::get_user_endpoint( 'view_subs' );
 			$redirect_url               = wc_get_endpoint_url( $view_subscription_endpoint, $subscrpt_id, wc_get_page_permalink( 'myaccount' ) );
@@ -76,6 +85,9 @@ class ActionController {
 		$user_is_admin   = current_user_can( 'manage_options' );
 
 		if ( ! $user_is_admin && ( 0 === (int) $author_id || (int) $author_id !== (int) $current_user_id ) ) {
+			if ( $request_id ) {
+				CancellationEvidence::record( 'request_rejected', 0, 0, $request_id, array( 'code' => 'ownership' ) );
+			}
 			$error_notice = __( "You don't have permission to modify this subscription. If you believe this is an error, please contact support.", 'subscription' );
 			wc_add_notice( $error_notice, 'error' );
 

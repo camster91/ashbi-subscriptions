@@ -41,6 +41,22 @@ final class CancellationEvidenceTest extends TestCase {
  public function test_missing_parent_order_cannot_confirm_unknown_billing_route(): void {
   $d=$this->fixture();self::assertTrue($d['missing_parent_blocked']);self::assertNotSame('confirmed',$d['missing_parent']['state']);
  }
+ public function test_dispatch_contention_preserves_authorized_intent_before_lock_and_replay_repairs(): void {
+  $d=$this->fixture();$case=$d['dispatch_contention'];self::assertSame('pending',$case['first']['state']);self::assertTrue($case['first']['barrier']);self::assertTrue($case['first_blocked']);self::assertCount(1,$case['original']);
+  self::assertSame($case['original'],$case['final']);self::assertSame('confirmed',$case['second']['state']);$end=(int)$case['original'][99]['access_end'];self::assertSame($end,(int)$case['second']['access_end']);self::assertSame($end,(int)$case['meta']['_subscrpt_cancel_at']);self::assertSame('pe_cancelled',$case['status']);
+ }
+ public function test_worker_and_lost_queue_sweep_repair_authorized_intent_without_customer_session(): void {
+  $d=$this->fixture();foreach(array('queued_repair','lost_queue_sweep') as $name){$case=$d[$name];self::assertNull($case['error'],$name);self::assertSame($case['original'],$case['final']);self::assertSame('pe_cancelled',$case['status']);self::assertSame(0,(int)$case['meta']['_subscrpt_auto_renew']);self::assertSame(1,(int)$case['meta']['_ashbi_cancellation_confirmed']);self::assertSame((int)$case['original'][99]['access_end'],(int)$case['meta']['_subscrpt_cancel_at']);self::assertNotEmpty($case['queued_before']);}
+ }
+ public function test_overdue_confirmed_request_is_finalized_by_sweep_without_extending_access(): void {
+  $case=$this->fixture()['overdue_sweep'];self::assertNull($case['error']);self::assertSame('cancelled',$case['status']);self::assertSame($case['original'],$case['final']);self::assertSame((int)$case['original'][99]['access_end'],(int)$case['meta']['_subscrpt_cancel_at']);
+ }
+ public function test_busy_worker_requeues_without_removing_barrier_or_fabricating_outcome(): void {
+  $case=$this->fixture()['busy_worker'];self::assertNull($case['error']);self::assertSame($case['original'],$case['final']);self::assertSame('active',$case['status']);self::assertGreaterThan(count($case['queued_before']),count($case['queued_after']));foreach($case['events'] as $event){self::assertNotSame('cancel_confirmed',$event['event_type']);}
+ }
+ public function test_worker_does_not_create_intent_when_no_authorized_barrier_exists(): void {
+  $case=$this->fixture()['no_intent_repair'];self::assertSame(array(),$case['barriers']);self::assertSame(array(),$case['events']);self::assertSame(array(),$case['status_writes']);self::assertSame('active',$case['status']);
+ }
  public function test_storage_and_lock_failures_never_confirm_cancellation(): void {
   $d=$this->fixture(); foreach(array('barrier_write','database_read','lock','status_write','meta_write') as $name){self::assertArrayNotHasKey('threw',$d[$name]);self::assertContains($d[$name]['state'],array('failed','pending'),$name);}
   self::assertTrue($d['database_read_blocked']); self::assertTrue($d['status_write_blocked']); self::assertTrue($d['meta_write_blocked']);

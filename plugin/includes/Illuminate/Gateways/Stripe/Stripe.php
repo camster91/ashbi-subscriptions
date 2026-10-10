@@ -262,7 +262,16 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 			$identity = $this->prepare_renewal_dispatch_identity( $renewal_order, (string) $prepared_source->customer );
 			$intent   = $this->find_existing_renewal_intent( $renewal_order, (string) $prepared_source->customer, $identity, (float) $amount );
 			if ( ! $intent ) {
+				// Cancellation intent may be persisted while this mutex is held.
+				if ( \SpringDevs\Subscription\Illuminate\CancellationEvidence::blocked( $subscription_id ) ) {
+					\SpringDevs\Subscription\Illuminate\CancellationEvidence::record( 'dispatch_review', $subscription_id, 0, 'stripe-dispatch', array( 'order_id' => $order_id, 'code' => 'cancelled_before_dispatch' ) );
+					return new \WP_Error( 'cancellation_barrier', __( 'Future billing is blocked by a cancellation request.', 'subscription' ) );
+				}
 				$intent = $this->create_and_confirm_intent_for_off_session( $renewal_order, $prepared_source, $amount );
+			}
+			if ( \SpringDevs\Subscription\Illuminate\CancellationEvidence::blocked( $subscription_id ) ) {
+				\SpringDevs\Subscription\Illuminate\CancellationEvidence::record( 'dispatch_review', $subscription_id, 0, 'stripe-dispatch', array( 'order_id' => $order_id, 'code' => 'cancelled_during_dispatch', 'provider_state' => $intent->status ?? 'unknown' ) );
+				return new \WP_Error( 'cancellation_review', __( 'A payment was already being processed when cancellation was requested. The store must review its outcome.', 'subscription' ) );
 			}
 
 			if ( ! empty( $intent->error ) ) {
@@ -300,6 +309,7 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 
 			if ( $order_locked ) {
 				$stripe_order_helper->unlock_order_payment( $renewal_order );
+				$order_locked = false;
 			}
 
 			if ( self::RENEWAL_EXCEPTION_TERMINAL === $disposition ) {
@@ -316,6 +326,9 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 				$this->trigger_renewal_payment_failed( $renewal_order );
 			}
 		} finally {
+			if ( $order_locked ) {
+				$stripe_order_helper->unlock_order_payment( $renewal_order );
+			}
 			\SpringDevs\Subscription\Illuminate\CancellationEvidence::unlock( $subscription_id );
 		}
 	}
@@ -383,6 +396,10 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 	public function retry_renewal_payment( $subscription_id, $order_id ) {
 		$subscription_id = (int) $subscription_id;
 		$order_id        = (int) $order_id;
+		if ( \SpringDevs\Subscription\Illuminate\CancellationEvidence::blocked( $subscription_id ) ) {
+			$this->reconcile_cancelled_dispatch( $subscription_id, $order_id );
+			return;
+		}
 		$next_attempt    = RenewalClaim::payment_next_attempt( $subscription_id, $order_id );
 		if ( $next_attempt > time() ) {
 			$this->schedule_renewal_payment_retry( $subscription_id, $order_id );
@@ -391,6 +408,25 @@ class Stripe extends \WC_Stripe_Payment_Gateway {
 
 		if ( RenewalClaim::is_claimed_order( $subscription_id, $order_id ) ) {
 			Helper::create_renewal_order( $subscription_id );
+		}
+	}
+
+	/** Inspect an uncertain pre-cancellation dispatch without requesting a charge. */
+	private function reconcile_cancelled_dispatch( int $subscription_id, int $order_id ): void {
+		$order = wc_get_order( $order_id );
+		if ( ! $order || ! RenewalClaim::is_claimed_order( $subscription_id, $order_id ) ) {
+			return;
+		}
+		$customer = (string) $order->get_meta( '_subscrpt_stripe_renewal_customer' );
+		$identity = (string) $order->get_meta( '_subscrpt_stripe_renewal_identity' );
+		if ( '' === $customer || '' === $identity ) {
+			return;
+		}
+		try {
+			$intent = $this->find_existing_renewal_intent( $order, $customer, $identity, (float) $order->get_total() );
+			\SpringDevs\Subscription\Illuminate\CancellationEvidence::record( 'dispatch_review', $subscription_id, 0, 'stripe-reconcile', array( 'order_id' => $order_id, 'code' => 'read_only_reconciliation', 'provider_state' => $intent ? ( $intent->status ?? 'unknown' ) : 'not_found' ) );
+		} catch ( \Throwable $error ) {
+			\SpringDevs\Subscription\Illuminate\CancellationEvidence::record( 'dispatch_review', $subscription_id, 0, 'stripe-reconcile', array( 'order_id' => $order_id, 'code' => 'reconciliation_unavailable' ) );
 		}
 	}
 

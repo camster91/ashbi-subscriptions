@@ -640,6 +640,7 @@ class Helper {
 		$plan_price      = (float) $order_item->get_meta( '_subscrpt_plan_price' );
 		$plan_total      = (float) $order_item->get_meta( '_subscrpt_plan_total' );
 		$plan_signup_fee = (float) $order_item->get_meta( '_subscrpt_signup_fee' );
+		$frozen_contract = $order_item->get_meta( '_ashbi_contract_plan' );
 
 		// Prepare split payment arguments.
 		$split_payment_args = array(
@@ -647,10 +648,10 @@ class Helper {
 			'order_id'      => $order_item->get_order_id(),
 			'order_item_id' => $order_item->get_id(),
 			'post_status'   => $post_status,
-			'max_payments'  => $plan_max > 0 ? $plan_max : $product->get_meta( '_subscrpt_max_no_payment' ),
+			'max_payments'  => is_array( $frozen_contract ) ? (int) $frozen_contract['payment_count'] : ( $plan_max > 0 ? $plan_max : $product->get_meta( '_subscrpt_max_no_payment' ) ),
 			'timing_per'    => ! empty( $plan_terms['time'] ) ? (int) $plan_terms['time'] : $product->get_meta( '_subscrpt_timing_per' ),
 			'timing_option' => ! empty( $plan_terms['type'] ) ? (string) $plan_terms['type'] : $product->get_meta( '_subscrpt_timing_option' ),
-			'price'         => $plan_price > 0 ? $plan_price : $product->get_price(),
+			'price'         => is_array( $frozen_contract ) ? $frozen_contract['plan']['price'] : ( $plan_price > 0 ? $plan_price : $product->get_price() ),
 		);
 
 		// Allow modification of split payment arguments.
@@ -674,8 +675,11 @@ class Helper {
 		);
 		// Check if this is a split payment subscription.
 		$payment_type = $plan_payment ? $plan_payment : $product->get_meta( '_subscrpt_payment_type' );
+		if ( is_array( $frozen_contract ) ) {
+			$payment_type = $frozen_contract['payment_type'];
+		}
 		$payment_type = $payment_type ? $payment_type : 'recurring';
-		$max_payments = $plan_max > 0 ? $plan_max : $product->get_meta( '_subscrpt_max_no_payment' );
+		$max_payments = is_array( $frozen_contract ) ? (int) $frozen_contract['payment_count'] : ( $plan_max > 0 ? $plan_max : $product->get_meta( '_subscrpt_max_no_payment' ) );
 
 		$comment_content = '';
 		$activity_type   = '';
@@ -712,6 +716,11 @@ class Helper {
 		update_post_meta( $subscription_id, '_subscrpt_payment_type', $payment_type );
 		if ( $max_payments ) {
 			update_post_meta( $subscription_id, '_subscrpt_max_no_payment', (int) $max_payments );
+		}
+		if ( is_array( $frozen_contract ) ) {
+			update_post_meta( $subscription_id, '_subscrpt_max_no_payment', (int) $frozen_contract['payment_count'] );
+			update_post_meta( $subscription_id, '_subscrpt_billing_length', (int) $frozen_contract['billing_length'] );
+			update_post_meta( $subscription_id, '_subscrpt_split_total', $frozen_contract['plan_total'] );
 		}
 		if ( $plan_signup_fee > 0 ) {
 			update_post_meta( $subscription_id, '_subscrpt_signup_fee', $plan_signup_fee );

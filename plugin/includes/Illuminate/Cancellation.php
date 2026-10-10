@@ -429,41 +429,13 @@ class Cancellation {
 			'created_at'      => current_time( 'mysql', true ),
 		);
 
-		// One row per subscription: overwrite any previous feedback (e.g. after a.
-		// reactivate → cancel-again cycle) rather than accumulating a log, so the.
-		// row always reflects the latest cancellation reason.
-		$existing_id = (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
-			$wpdb->prepare(
-				"SELECT id FROM {$wpdb->prefix}subscrpt_cancellation_feedback WHERE subscription_id = %d ORDER BY id DESC LIMIT 1",
-				$subscription_id
-			)
-		);
-
-		if ( $existing_id ) {
-			// Clear any stray duplicates from earlier writes, keep the one we update.
-			$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
-				$wpdb->prepare(
-					"DELETE FROM {$wpdb->prefix}subscrpt_cancellation_feedback WHERE subscription_id = %d AND id <> %d",
-					$subscription_id,
-					$existing_id
-				)
-			);
-			$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
-				$table,
-				$data,
-				array( 'id' => $existing_id ),
-				array( '%d', '%d', '%s', '%s', '%s', '%s' ),
-				array( '%d' )
-			);
-			$data['id'] = $existing_id;
-		} else {
-			$wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
-				$table,
-				$data,
-				array( '%d', '%d', '%s', '%s', '%s', '%s' )
-			);
-			$data['id'] = (int) $wpdb->insert_id;
+		// Append each explicitly sent survey; the latest-row view stays compatible.
+		// Prior feedback survives corrections and repeated cancellation attempts.
+		$inserted = $wpdb->insert( $table, $data, array( '%d', '%d', '%s', '%s', '%s', '%s' ) );
+		if ( false === $inserted ) {
+			wp_send_json_error( array( 'message' => 'feedback_unavailable' ) );
 		}
+		$data['id'] = (int) $wpdb->insert_id;
 
 		/**
 		 * Fires after a cancellation-feedback row is stored.
@@ -954,11 +926,9 @@ class Cancellation {
 			return;
 		}
 
-		// Ensure the mailer is ready so the cancellation email can be sent.
-		if ( function_exists( 'WC' ) && WC()->mailer() ) {
-			foreach ( $subscriptions as $subscription_id ) {
-				$this->cancel( (int) $subscription_id );
-			}
+		// Access termination must not depend on an optional notification service.
+		foreach ( $subscriptions as $subscription_id ) {
+			$this->cancel( (int) $subscription_id );
 		}
 	}
 
@@ -972,12 +942,18 @@ class Cancellation {
 	 */
 	public function cancel( $subscription_id ) {
 		$subscription_id = (int) $subscription_id;
+		if ( CancellationEvidence::blocked( $subscription_id ) ) {
+			CancellationEvidence::repair( $subscription_id );
+			return;
+		}
 
 		if ( 'pe_cancelled' === get_post_status( $subscription_id ) ) {
 			Action::status( 'cancelled', $subscription_id );
 		}
 
-		delete_post_meta( $subscription_id, self::CANCEL_AT_META );
+		if ( 'pe_cancelled' !== get_post_status( $subscription_id ) ) {
+			delete_post_meta( $subscription_id, self::CANCEL_AT_META );
+		}
 	}
 
 	/**
@@ -987,6 +963,9 @@ class Cancellation {
 	 * @return void
 	 */
 	public function clear_scheduled_cancellation( $subscription_id ) {
+		if ( CancellationEvidence::blocked( (int) $subscription_id ) ) {
+			return;
+		}
 		delete_post_meta( (int) $subscription_id, self::CANCEL_AT_META );
 	}
 

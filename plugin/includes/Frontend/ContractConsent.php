@@ -17,9 +17,15 @@ final class ContractConsent {
 		add_action( 'woocommerce_review_order_before_submit', array( $this, 'render' ) );
 		add_action( 'woocommerce_after_checkout_validation', array( $this, 'validate_classic' ), 100, 2 );
 		add_action( 'woocommerce_checkout_create_order', array( $this, 'snapshot_order' ), 100 );
+		add_action( 'woocommerce_checkout_create_order_line_item', array( $this, 'stamp_line' ), 100, 3 );
+		add_filter( 'woocommerce_order_needs_payment', array( $this, 'order_can_pay' ), 20, 2 );
 		add_action( 'woocommerce_checkout_order_processed', array( $this, 'persist_acceptance' ), -100 );
 		add_action( 'woocommerce_store_api_checkout_update_order_from_request', array( $this, 'guard_store_api' ), -100, 2 );
 		add_action( 'woocommerce_before_pay_action', array( $this, 'guard_order_pay' ), -100 );
+		add_filter( 'wc_stripe_show_payment_request_on_cart', array( $this, 'express_allowed' ), 100 );
+		add_filter( 'wc_stripe_show_payment_request_on_checkout', array( $this, 'express_allowed' ), 100 );
+		add_filter( 'wc_stripe_hide_payment_request_on_product_page', array( $this, 'hide_express_product' ), 100 );
+		add_filter( 'wc_stripe_generate_create_intent_request', array( $this, 'guard_stripe_intent' ), 100, 3 );
 	}
 
 	/** Return only explicitly enabled, approved and internally consistent wording. */
@@ -104,6 +110,29 @@ final class ContractConsent {
 		return is_array( $config ) && true === ( $config['enabled'] ?? false );
 	}
 
+	/** Reviewed contract checkout currently uses the standard consent form. */
+	public function express_allowed( $allowed ): bool {
+		return self::enabled() ? false : (bool) $allowed;
+	}
+
+	/** Disable product wallets while consent is enabled, before plan selection. */
+	public function hide_express_product( $hidden ): bool {
+		return self::enabled() || (bool) $hidden;
+	}
+
+	/** Guard supported Stripe intent creation independently of wallet visibility. */
+	public function guard_stripe_intent( $request, $order, $source ) {
+		if ( ! $order ) {
+			return $request;
+		}
+		$required = '1' === $order->get_meta( '_ashbi_contract_required' ) || $order->get_meta( '_ashbi_contract_consent' );
+		$new_cart = self::enabled() && WC()->cart && self::cart_snapshot()['items'];
+		if ( ( $new_cart && ! $required ) || ( $required && ! $this->order_can_pay( true, $order ) ) ) {
+			throw new \Exception( esc_html__( 'The subscription payment is missing verified acceptance of its final order terms.', 'subscription' ) );
+		}
+		return $request;
+	}
+
 	/** Freeze canonical cart plan data, not customer-supplied contract text. */
 	public static function cart_snapshot(): array {
 		$items = array();
@@ -113,7 +142,7 @@ final class ContractConsent {
 			}
 			$terms   = $line['subscription'];
 			$plan    = array(
-				'price' => $terms['per_cost'] ?? null,
+				'price' => isset( $terms['per_cost'] ) ? self::money( $terms['per_cost'] ) : null,
 				'time'  => (int) ( $terms['time'] ?? 1 ),
 				'type'  => $terms['type'] ?? '',
 				'trial' => $terms['trial'] ?? null,
@@ -124,19 +153,102 @@ final class ContractConsent {
 				'plan_id'       => (int) ( $line['subscrpt_plan_id'] ?? 0 ),
 				'quantity'      => (int) $line['quantity'],
 				'plan'          => $plan,
-				'initial_total' => (string) ( $line['line_total'] ?? '' ),
-				'tax'           => (string) ( $line['line_tax'] ?? '' ),
-				'signup_fee'    => (string) ( $line['subscrpt_signup_fee'] ?? $terms['signup_fee'] ?? 0 ),
+				'initial_total' => self::money( $line['line_total'] ?? 0 ),
+				'tax'           => self::money( $line['line_tax'] ?? 0 ),
+				'signup_fee'    => self::money( $line['subscrpt_signup_fee'] ?? $terms['signup_fee'] ?? 0 ),
 				'payment_count' => (int) ( $line['subscrpt_max_no_payment'] ?? $terms['max_no_payment'] ?? $line['data']->get_meta( '_subscrpt_max_no_payment' ) ),
+				'payment_type' => (string) ( $line['subscrpt_payment_type'] ?? ( isset( $line['data'] ) ? $line['data']->get_meta( '_subscrpt_payment_type' ) : '' ) ) ?: 'recurring',
+				'billing_length' => (int) ( $line['subscrpt_billing_length'] ?? 0 ),
+				'plan_total' => self::money( $line['subscrpt_plan_total'] ?? 0 ),
 			);
 		}
 		return array(
 			'currency' => get_woocommerce_currency(),
 			'items'    => $items,
-			'total'    => (string) WC()->cart->get_total( 'edit' ),
-			'shipping' => (string) WC()->cart->get_shipping_total(),
-			'discount' => (string) WC()->cart->get_discount_total(),
+			'total'    => self::money( WC()->cart->get_total( 'edit' ) ),
+			'shipping' => self::money( WC()->cart->get_shipping_total() ),
+			'discount' => self::money( WC()->cart->get_discount_total() ),
 		);
+	}
+
+	/** Normalize monetary serialization for cart and WooCommerce CRUD values. */
+	private static function money( $value ): string {
+		return wc_format_decimal( $value, wc_get_price_decimals() );
+	}
+
+	/** Freeze server cart terms on each line before gateway callbacks. */
+	public function stamp_line( $item, $cart_key, $line ): void {
+		if ( ! isset( $line['subscription'] ) || ! self::enabled() ) {
+			return;
+		}
+		$terms = $line['subscription'];
+		$item->update_meta_data( '_ashbi_contract_plan', array(
+			'plan_id' => (int) ( $line['subscrpt_plan_id'] ?? 0 ),
+			'plan' => array( 'price' => isset( $terms['per_cost'] ) ? self::money( $terms['per_cost'] ) : null, 'time' => (int) ( $terms['time'] ?? 1 ), 'type' => $terms['type'] ?? '', 'trial' => $terms['trial'] ?? null ),
+			'signup_fee' => self::money( $line['subscrpt_signup_fee'] ?? $terms['signup_fee'] ?? 0 ),
+			'payment_count' => (int) ( $line['subscrpt_max_no_payment'] ?? $terms['max_no_payment'] ?? $line['data']->get_meta( '_subscrpt_max_no_payment' ) ),
+			'payment_type' => (string) ( $line['subscrpt_payment_type'] ?? ( isset( $line['data'] ) ? $line['data']->get_meta( '_subscrpt_payment_type' ) : '' ) ) ?: 'recurring',
+			'billing_length' => (int) ( $line['subscrpt_billing_length'] ?? 0 ),
+			'plan_total' => self::money( $line['subscrpt_plan_total'] ?? 0 ),
+		) );
+		if ( empty( $line['subscrpt_plan_id'] ) ) {
+			$item->update_meta_data( '_subscrpt_meta', array( 'time' => (int) ( $terms['time'] ?? 1 ), 'type' => $terms['type'] ?? '', 'trial' => $terms['trial'] ?? null ) );
+			$item->update_meta_data( '_subscrpt_plan_price', self::money( $terms['per_cost'] ?? 0 ) );
+			$item->update_meta_data( '_subscrpt_signup_fee', self::money( $line['subscrpt_signup_fee'] ?? $terms['signup_fee'] ?? 0 ) );
+			$item->update_meta_data( '_subscrpt_max_no_payment', (int) ( $line['subscrpt_max_no_payment'] ?? $terms['max_no_payment'] ?? $line['data']->get_meta( '_subscrpt_max_no_payment' ) ) );
+			$item->update_meta_data( '_subscrpt_payment_type', (string) ( $line['subscrpt_payment_type'] ?? ( isset( $line['data'] ) ? $line['data']->get_meta( '_subscrpt_payment_type' ) : '' ) ) ?: 'recurring' );
+			$item->update_meta_data( '_subscrpt_billing_length', (int) ( $line['subscrpt_billing_length'] ?? 0 ) );
+			$item->update_meta_data( '_subscrpt_plan_total', self::money( $line['subscrpt_plan_total'] ?? 0 ) );
+		}
+	}
+
+	/** Build payment terms from the final order, not its acceptance payload. */
+	public static function order_snapshot( $order ): array {
+		$items = array();
+		foreach ( $order->get_items() as $item ) {
+			$stamp = $item->get_meta( '_ashbi_contract_plan' );
+			if ( ! is_array( $stamp ) ) {
+				continue;
+			}
+			$terms = $item->get_meta( '_subscrpt_plan_terms' );
+			$plan = $stamp['plan'];
+			$plan_id = (int) $stamp['plan_id'];
+			$fee = $stamp['signup_fee'];
+			$count = (int) $stamp['payment_count'];
+			if ( $plan_id > 0 ) {
+				// PlanCheckout persists these canonical terms independently of our stamp.
+				$plan_id = (int) $item->get_meta( '_subscrpt_plan_id' );
+				$plan = array( 'price' => self::money( $item->get_meta( '_subscrpt_plan_price' ) ), 'time' => (int) ( $terms['time'] ?? 0 ), 'type' => $terms['type'] ?? '', 'trial' => $terms['trial'] ?? null );
+				$fee = self::money( $item->get_meta( '_subscrpt_signup_fee' ) );
+				$count = (int) $item->get_meta( '_subscrpt_max_no_payment' );
+			} else {
+				$terms = $item->get_meta( '_subscrpt_meta' );
+				$plan = array( 'price' => self::money( $item->get_meta( '_subscrpt_plan_price' ) ), 'time' => (int) ( $terms['time'] ?? 0 ), 'type' => $terms['type'] ?? '', 'trial' => $terms['trial'] ?? null );
+				$fee = self::money( $item->get_meta( '_subscrpt_signup_fee' ) );
+				$count = (int) $item->get_meta( '_subscrpt_max_no_payment' );
+			}
+			$items[] = array( 'product_id' => (int) $item->get_product_id(), 'variation_id' => (int) $item->get_variation_id(), 'plan_id' => $plan_id, 'quantity' => (int) $item->get_quantity(), 'plan' => $plan, 'initial_total' => self::money( $item->get_total() ), 'tax' => self::money( $item->get_total_tax() ), 'signup_fee' => $fee, 'payment_count' => $count, 'payment_type' => (string) $item->get_meta( '_subscrpt_payment_type' ) ?: 'recurring', 'billing_length' => (int) $item->get_meta( '_subscrpt_billing_length' ), 'plan_total' => self::money( $item->get_meta( '_subscrpt_plan_total' ) ) );
+		}
+		return array( 'currency' => $order->get_currency(), 'items' => $items, 'total' => self::money( $order->get_total() ), 'shipping' => self::money( $order->get_shipping_total() ), 'discount' => self::money( $order->get_discount_total() ) );
+	}
+
+	/** Read the immutable ledger; eligibility checks never write evidence. */
+	private static function stored_payload( $order_id ) {
+		global $wpdb;
+		return $wpdb->get_var( $wpdb->prepare( 'SELECT payload FROM %i WHERE order_id = %d', $wpdb->prefix . 'subscrpt_contract_acceptance', (int) $order_id ) );
+	}
+
+	/** Existing required orders remain protected even after feature deactivation. */
+	public function order_can_pay( $needs_payment, $order ): bool {
+		if ( ! $needs_payment || ! $order ) {
+			return false;
+		}
+		$payload = $order->get_meta( '_ashbi_contract_consent' );
+		if ( '1' !== $order->get_meta( '_ashbi_contract_required' ) && ! $payload ) {
+			return (bool) $needs_payment;
+		}
+		$stored = self::stored_payload( $order->get_id() );
+		return is_array( $payload ) && is_string( $stored ) && hash_equals( wp_json_encode( $payload ), $stored ) && self::validate_frozen_acceptance( $payload, self::order_snapshot( $order ) );
 	}
 
 	/** Exact text is rendered as plain text; no hidden HTML clauses or precheck. */
@@ -198,6 +310,14 @@ final class ContractConsent {
 		if ( ! $this->posted_acceptance( $snapshot ) ) {
 			throw new \Exception( esc_html__( 'Subscription terms acceptance is missing or out of date.', 'subscription' ) );
 		}
+		$order->update_meta_data( '_ashbi_contract_required', '1' );
+		$existing = $order->get_meta( '_ashbi_contract_consent' );
+		if ( is_array( $existing ) ) {
+			if ( wp_json_encode( $existing['document'] ?? null ) !== wp_json_encode( self::approved_document() ) || ! self::validate_frozen_acceptance( $existing, $snapshot ) ) {
+				throw new \Exception( esc_html__( 'The order changed after terms acceptance. Please start a new checkout.', 'subscription' ) );
+			}
+			return;
+		}
 		$order->update_meta_data(
 			'_ashbi_contract_consent',
 			array(
@@ -217,20 +337,25 @@ final class ContractConsent {
 	 * @throws \Exception When immutable acceptance cannot be verified or saved.
 	 */
 	public function persist_acceptance( $order_id ): void {
-		if ( ! self::enabled() ) {
-			return;
-		}
 		$order = wc_get_order( $order_id );
-		if ( ! $order || ! \SpringDevs\Subscription\Illuminate\Helper::order_has_subscription_item( $order ) ) {
+		if ( ! $order || ( '1' !== $order->get_meta( '_ashbi_contract_required' ) && ! $order->get_meta( '_ashbi_contract_consent' ) ) ) {
 			return;
 		}
 		$payload = $order->get_meta( '_ashbi_contract_consent' );
-		if ( ! is_array( $payload ) || empty( $payload['document']['hash'] ) || ! self::validate_acceptance( '1', $payload['document']['hash'], $payload['snapshot'], hash( 'sha256', wp_json_encode( $payload['snapshot'] ) ) ) ) {
+		if ( ! is_array( $payload ) || ! self::validate_frozen_acceptance( $payload, self::order_snapshot( $order ) ) ) {
 			throw new \Exception( esc_html__( 'Subscription terms acceptance could not be verified.', 'subscription' ) );
 		}
 		global $wpdb;
 		$table  = $wpdb->prefix . 'subscrpt_contract_acceptance';
 		$json   = wp_json_encode( $payload );
+		$stored = self::stored_payload( $order_id );
+		if ( is_string( $stored ) && hash_equals( $json, $stored ) ) {
+			return;
+		}
+		$approved = self::approved_document();
+		if ( $stored || ! $approved || wp_json_encode( $approved ) !== wp_json_encode( $payload['document'] ) || '1' !== $order->get_meta( '_ashbi_contract_required' ) ) {
+			throw new \Exception( esc_html__( 'Subscription acceptance is not an approved unchanged purchase.', 'subscription' ) );
+		}
 		$result = $wpdb->query( $wpdb->prepare( 'INSERT IGNORE INTO %i (order_id, actor_id, accepted_at, revision_hash, payload) VALUES (%d, %d, %s, %s, %s)', array( $table, (int) $order_id, (int) $payload['actor_id'], $payload['accepted_at'], $payload['document']['hash'], $json ) ) );
 		$stored = $wpdb->get_var( $wpdb->prepare( 'SELECT payload FROM %i WHERE order_id = %d', $table, (int) $order_id ) );
 		if ( false === $result || ! is_string( $stored ) || ! hash_equals( $json, $stored ) ) {
@@ -256,8 +381,8 @@ final class ContractConsent {
 	 * @param \WC_Order $order Order being paid.
 	 */
 	public function guard_order_pay( $order ): void {
-		if ( self::enabled() && $order && \SpringDevs\Subscription\Illuminate\Helper::order_has_subscription_item( $order ) ) {
-			$this->persist_acceptance( $order->get_id() );
+		if ( $order && ! $this->order_can_pay( true, $order ) ) {
+			wc_add_notice( __( 'The subscription order no longer matches its accepted terms. Contact the store before payment.', 'subscription' ), 'error' );
 		}
 	}
 }
