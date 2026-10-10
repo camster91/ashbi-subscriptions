@@ -3,7 +3,7 @@ Contributors: ashbi
 Tags: woocommerce subscriptions, subscriptions, recurring payments, stripe, paypal
 Requires at least: 6.2
 Tested up to: 7.1
-Stable tag: 2.1.2
+Stable tag: 2.2.0
 Requires PHP: 7.4
 WC requires at least: 6.0
 WC tested up to: 10.3
@@ -80,6 +80,12 @@ the administrator or support contact responsible for your managed site.
 
 == Changelog ==
 
+= 2.2.0 =
+* Add durable customer cancellation barriers, repair and private evidence export.
+* Add opt-in approved billing contracts and immutable order-bound checkout acceptance.
+* Preserve renewal opt-outs and validate automatic/manual settings.
+* Keep Update URI: false and the legacy plugin identity.
+
 = 2.1.2 =
 * Fix self-conflict during bootstrap and refuse conflicting Core activation cleanly.
 * Restore administrator Migration access and recognize custom WooCommerce folders.
@@ -103,6 +109,12 @@ the administrator or support contact responsible for your managed site.
 * Retains the legacy plugin identity and storage identifiers for in-place upgrades.
 
 == Upgrade Notice ==
+
+= 2.2.0 =
+
+Rehearse on staging. Consent remains disabled until approved configuration.
+Preserve schema 1.6.0 and cancellation barriers during rollback; see the release
+notes and MIGRATION_1.6.0.md. Candidate review is pending; not a published release.
 
 = 2.1.2 =
 

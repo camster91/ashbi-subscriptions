@@ -3,7 +3,7 @@
 All notable Ashbi-maintained changes after the immutable upstream import are
 documented here. The original vendor changelog remains at `plugin/changelog.txt`.
 
-## Unreleased
+## 2.2.0 candidate - 2026-10-10
 
 - Add immutable cancellation barriers, append-only evidence, durable repair and
   review of already-dispatched payments. Keep finalization independent of mail
@@ -22,9 +22,10 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
   See `docs/BILLING_CONSENT.md` for compatibility and verification boundaries.
 - Reject direct access to the runtime bootstrap before loading bundled vendor code.
 - Opt this fork out of WordPress.org updates with the supported `Update URI: false`
-  header while retaining the legacy basename, storage, hooks, and version 2.1.2.
+  header while retaining the legacy basename, storage and hooks.
   No network updater is provided. Use reviewed, checksum-verified release ZIPs;
-  rollback restores the previous package without a schema migration.
+  preserve schema 1.6.0, cancellation barriers and protective runtime during rollback.
+  See `docs/RELEASE_2.2.0.md` for candidate traceability and release gates.
 
 ## 2.1.2 — 2026-10-04
 
