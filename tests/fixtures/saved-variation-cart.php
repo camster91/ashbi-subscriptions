@@ -28,8 +28,9 @@ namespace {
 		public function __construct( $enabled ) { $this->enabled = $enabled; }
 		public function is_type( $type ) { return 'variation' === $type; }
 		public function is_enabled() { return $this->enabled; }
-		public function get_meta( $key ) { return 'month'; }
+		public function get_meta( $key ) { return '_subscrpt_timing_per' === $key ? '1' : 'month'; }
 		public function get_trial() { return null; }
+		public function get_timing_per() { return 1; }
 	}
 	class SavedCart {
 		public $cart_contents = array();

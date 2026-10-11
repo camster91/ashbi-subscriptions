@@ -474,6 +474,24 @@ class Helper {
 	 * @return bool True when this order owns the renewal period.
 	 */
 	public static function process_order_renewal( $subscription_id, $order_id, $order_item_id ) {
+		if ( ! CancellationEvidence::lock( (int) $subscription_id ) ) {
+			return false;
+		}
+		try {
+			return CancellationEvidence::blocked( (int) $subscription_id ) ? false : self::process_order_renewal_locked( $subscription_id, $order_id, $order_item_id );
+		} finally {
+			CancellationEvidence::unlock( (int) $subscription_id );
+		}
+	}
+
+	/**
+	 * Link a manual renewal under the shared cancellation mutex.
+	 *
+	 * @param int $subscription_id Subscription ID.
+	 * @param int $order_id Order ID.
+	 * @param int $order_item_id Order item ID.
+	 */
+	private static function process_order_renewal_locked( $subscription_id, $order_id, $order_item_id ) {
 		global $wpdb;
 		$history_table = $wpdb->prefix . 'subscrpt_order_relation';
 		$period_anchor = (int) get_post_meta( $subscription_id, '_subscrpt_next_date', true );
@@ -622,6 +640,7 @@ class Helper {
 		$plan_price      = (float) $order_item->get_meta( '_subscrpt_plan_price' );
 		$plan_total      = (float) $order_item->get_meta( '_subscrpt_plan_total' );
 		$plan_signup_fee = (float) $order_item->get_meta( '_subscrpt_signup_fee' );
+		$frozen_contract = $order_item->get_meta( '_ashbi_contract_plan' );
 
 		// Prepare split payment arguments.
 		$split_payment_args = array(
@@ -629,10 +648,10 @@ class Helper {
 			'order_id'      => $order_item->get_order_id(),
 			'order_item_id' => $order_item->get_id(),
 			'post_status'   => $post_status,
-			'max_payments'  => $plan_max > 0 ? $plan_max : $product->get_meta( '_subscrpt_max_no_payment' ),
+			'max_payments'  => is_array( $frozen_contract ) ? (int) $frozen_contract['payment_count'] : ( $plan_max > 0 ? $plan_max : $product->get_meta( '_subscrpt_max_no_payment' ) ),
 			'timing_per'    => ! empty( $plan_terms['time'] ) ? (int) $plan_terms['time'] : $product->get_meta( '_subscrpt_timing_per' ),
 			'timing_option' => ! empty( $plan_terms['type'] ) ? (string) $plan_terms['type'] : $product->get_meta( '_subscrpt_timing_option' ),
-			'price'         => $plan_price > 0 ? $plan_price : $product->get_price(),
+			'price'         => is_array( $frozen_contract ) ? $frozen_contract['plan']['price'] : ( $plan_price > 0 ? $plan_price : $product->get_price() ),
 		);
 
 		// Allow modification of split payment arguments.
@@ -656,8 +675,11 @@ class Helper {
 		);
 		// Check if this is a split payment subscription.
 		$payment_type = $plan_payment ? $plan_payment : $product->get_meta( '_subscrpt_payment_type' );
+		if ( is_array( $frozen_contract ) ) {
+			$payment_type = $frozen_contract['payment_type'];
+		}
 		$payment_type = $payment_type ? $payment_type : 'recurring';
-		$max_payments = $plan_max > 0 ? $plan_max : $product->get_meta( '_subscrpt_max_no_payment' );
+		$max_payments = is_array( $frozen_contract ) ? (int) $frozen_contract['payment_count'] : ( $plan_max > 0 ? $plan_max : $product->get_meta( '_subscrpt_max_no_payment' ) );
 
 		$comment_content = '';
 		$activity_type   = '';
@@ -694,6 +716,11 @@ class Helper {
 		update_post_meta( $subscription_id, '_subscrpt_payment_type', $payment_type );
 		if ( $max_payments ) {
 			update_post_meta( $subscription_id, '_subscrpt_max_no_payment', (int) $max_payments );
+		}
+		if ( is_array( $frozen_contract ) ) {
+			update_post_meta( $subscription_id, '_subscrpt_max_no_payment', (int) $frozen_contract['payment_count'] );
+			update_post_meta( $subscription_id, '_subscrpt_billing_length', (int) $frozen_contract['billing_length'] );
+			update_post_meta( $subscription_id, '_subscrpt_split_total', $frozen_contract['plan_total'] );
 		}
 		if ( $plan_signup_fee > 0 ) {
 			update_post_meta( $subscription_id, '_subscrpt_signup_fee', $plan_signup_fee );
@@ -1199,6 +1226,18 @@ class Helper {
 	 * @throws \UnexpectedValueException Renewal order filter returned an invalid value.
 	 */
 	public static function create_renewal_order( $subscription_id ) {
+		if ( ! CancellationEvidence::lock( (int) $subscription_id ) ) {
+			return false;
+		}
+		try {
+			return CancellationEvidence::blocked( (int) $subscription_id ) ? false : self::create_renewal_order_locked( $subscription_id );
+		} finally {
+			CancellationEvidence::unlock( (int) $subscription_id );
+		}
+	}
+
+	/** Prepare a renewal while holding the shared cancellation mutex. */
+	private static function create_renewal_order_locked( $subscription_id ) {
 		if ( subscrpt_renewal_is_migration_blocked( (int) $subscription_id ) ) {
 			subscrpt_write_log( 'Automatic renewal blocked until legacy open orders are reconciled.' );
 			return false;
@@ -1421,6 +1460,18 @@ class Helper {
 	 * @throws \UnexpectedValueException Early renewal order filter returned an invalid value.
 	 */
 	public static function create_early_renewal_order( $subscription_id ) {
+		if ( ! CancellationEvidence::lock( (int) $subscription_id ) ) {
+			return false;
+		}
+		try {
+			return CancellationEvidence::blocked( (int) $subscription_id ) ? false : self::create_early_renewal_order_locked( $subscription_id );
+		} finally {
+			CancellationEvidence::unlock( (int) $subscription_id );
+		}
+	}
+
+	/** Prepare an early renewal while holding the shared cancellation mutex. */
+	private static function create_early_renewal_order_locked( $subscription_id ) {
 		$subscription_id = (int) $subscription_id;
 		if ( ! $subscription_id || 'active' !== get_post_status( $subscription_id ) ) {
 			return false;
@@ -1567,6 +1618,9 @@ class Helper {
 	 * @return \WC_Order|false
 	 */
 	private static function resume_canonical_renewal_order( $renewal_order, $old_order, int $subscription_id, int $order_item_id = 0 ) {
+		if ( CancellationEvidence::blocked( $subscription_id ) ) {
+			return false;
+		}
 		if ( ! $renewal_order instanceof \WC_Order || ! $old_order instanceof \WC_Order ) {
 			return false;
 		}

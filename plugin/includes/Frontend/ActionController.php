@@ -12,6 +12,7 @@ namespace SpringDevs\Subscription\Frontend;
 
 use SpringDevs\Subscription\Illuminate\Action;
 use SpringDevs\Subscription\Illuminate\Helper;
+use SpringDevs\Subscription\Illuminate\CancellationEvidence;
 use SpringDevs\Subscription\Illuminate\Subscription\Subscription;
 
 /**
@@ -39,16 +40,26 @@ class ActionController {
 		$subscrpt_id = sanitize_text_field( wp_unslash( $_GET['subscrpt_id'] ) );
 		$action      = sanitize_text_field( wp_unslash( $_GET['action'] ) );
 		$wpnonce     = sanitize_text_field( wp_unslash( $_GET['wpnonce'] ) );
+		$request_id = 'cancelled' === $action ? wp_generate_uuid4() : '';
+		if ( 'cancelled' === $action ) {
+			CancellationEvidence::record( 'request_received', 0, 0, $request_id );
+		}
 
 		// A guest-owned subscription has author ID 0. Never let an anonymous request
 		// inherit that ownership merely because get_current_user_id() also returns 0.
 		if ( ! is_user_logged_in() ) {
+			if ( $request_id ) {
+				CancellationEvidence::record( 'request_rejected', 0, 0, $request_id, array( 'code' => 'session_required' ) );
+			}
 			wc_add_notice( __( 'Please log in to manage this subscription.', 'subscription' ), 'error' );
 			return wp_safe_redirect( wc_get_page_permalink( 'myaccount' ) );
 		}
 
 		// Nonce check.
 		if ( ! wp_verify_nonce( $wpnonce, 'subscrpt_nonce' ) ) {
+			if ( $request_id ) {
+				CancellationEvidence::record( 'request_rejected', 0, 0, $request_id, array( 'code' => 'invalid_nonce' ) );
+			}
 			$error_notice = __( "You don't have permission to modify this subscription. If you believe this is an error, please contact support.", 'subscription' );
 			wc_add_notice( $error_notice, 'error' );
 
@@ -60,6 +71,9 @@ class ActionController {
 		// User check.
 		$subs_post       = get_post( $subscrpt_id );
 		if ( ! $subs_post || 'subscrpt_order' !== $subs_post->post_type ) {
+			if ( $request_id ) {
+				CancellationEvidence::record( 'request_rejected', 0, 0, $request_id, array( 'code' => 'invalid_subscription' ) );
+			}
 			wc_add_notice( __( "You don't have permission to modify this subscription. If you believe this is an error, please contact support.", 'subscription' ), 'error' );
 			$view_subscription_endpoint = Subscription::get_user_endpoint( 'view_subs' );
 			$redirect_url               = wc_get_endpoint_url( $view_subscription_endpoint, $subscrpt_id, wc_get_page_permalink( 'myaccount' ) );
@@ -71,6 +85,9 @@ class ActionController {
 		$user_is_admin   = current_user_can( 'manage_options' );
 
 		if ( ! $user_is_admin && ( 0 === (int) $author_id || (int) $author_id !== (int) $current_user_id ) ) {
+			if ( $request_id ) {
+				CancellationEvidence::record( 'request_rejected', 0, 0, $request_id, array( 'code' => 'ownership' ) );
+			}
 			$error_notice = __( "You don't have permission to modify this subscription. If you believe this is an error, please contact support.", 'subscription' );
 			wc_add_notice( $error_notice, 'error' );
 
@@ -93,15 +110,12 @@ class ActionController {
 		if ( 'renew' === $action && ! subscrpt_is_auto_renew_enabled() ) {
 			$this->manual_renew_product( $subscrpt_id );
 		} elseif ( 'cancelled' === $action ) {
-			$status      = get_post_status( $subscrpt_id );
-			$user_cancel = get_post_meta( $subscrpt_id, '_subscrpt_user_cancel', true );
-			if ( 'no' === $user_cancel ) {
-				return;
-			} elseif ( 'active' === $status ) {
-				Action::status( 'pe_cancelled', $subscrpt_id );
-			} else {
-				Action::status( $action, $subscrpt_id );
-			}
+			$result = CancellationEvidence::request( (int) $subscrpt_id, (int) $current_user_id, $request_id );
+			$recorded = ! empty( $result['recorded'] );
+			$message = $recorded && 'confirmed' === $result['state']
+				? __( 'Cancellation confirmed. Future automatic billing is blocked. Any payment already sent for processing requires separate review.', 'subscription' )
+				: ( $recorded && ! empty( $result['barrier'] ) ? __( 'Your cancellation request is recorded and local renewal billing is blocked. Confirmation is pending; any provider-managed billing or payment already in progress requires review.', 'subscription' ) : __( 'Cancellation could not be confirmed. Please retry from a fresh account session or contact support.', 'subscription' ) );
+			wc_add_notice( $message, $recorded && ! empty( $result['barrier'] ) ? 'success' : 'error' );
 		} elseif ( 'reactivate' === $action ) {
 			if ( ! self::can_reactivate_subscription( (int) $subscrpt_id ) ) {
 				wc_add_notice( __( 'This subscription can no longer be reactivated without completing a renewal payment.', 'subscription' ), 'error' );

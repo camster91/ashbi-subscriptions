@@ -19,6 +19,43 @@ class PublishedReleaseTests(unittest.TestCase):
         spec.loader.exec_module(module)
         return module
 
+    def test_historical_fixture_is_pinned_and_cannot_be_replaced_by_current_feature_tests(self):
+        module = self.load_module()
+        self.assertTrue(hasattr(module, 'prepare_historical_fixture'))
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            sample = b'<?php // pinned historical fixture'
+            with __import__('unittest.mock', fromlist=['patch']).patch.object(module, 'HISTORICAL_FIXTURE_SHA256', hashlib.sha256(sample).hexdigest()):
+                fixture = module.prepare_historical_fixture(output, SCRIPT.parent.parent, lambda repo, revision: sample)
+                self.assertEqual((fixture / 'security-boundaries.php').read_bytes(), sample)
+            with self.assertRaisesRegex(ValueError, 'fixture checksum'):
+                module.prepare_historical_fixture(output / 'tampered', SCRIPT.parent.parent, lambda repo, revision: b'changed')
+
+    def test_candidate_package_must_match_every_source_member_and_header(self):
+        module = self.load_module()
+        self.assertTrue(hasattr(module, 'validate_candidate_package'))
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            plugin = root / 'plugin'
+            plugin.mkdir()
+            (plugin / 'subscription.php').write_text('<?php\n/**\n * Version: 2.2.0\n */\n')
+            (plugin / 'runtime.php').write_text('<?php // actual fixture bytes')
+            (plugin / 'tests').mkdir()
+            (plugin / 'tests/private.php').write_text('excluded test')
+            package = root / 'candidate.zip'
+            def build(tamper=False, missing=False):
+                with zipfile.ZipFile(package, 'w') as archive:
+                    archive.writestr('subscription/subscription.php', (plugin / 'subscription.php').read_bytes())
+                    if not missing:
+                        archive.writestr('subscription/runtime.php', b'tampered' if tamper else (plugin / 'runtime.php').read_bytes())
+                return hashlib.sha256(package.read_bytes()).hexdigest()
+            manifest, version = module.validate_candidate_package(package, build(), plugin)
+            self.assertEqual(version, '2.2.0')
+            self.assertEqual(len(manifest), 2)
+            for kwargs in ({'tamper': True}, {'missing': True}):
+                with self.assertRaisesRegex(ValueError, 'source members'):
+                    module.validate_candidate_package(package, build(**kwargs), plugin)
+
     def test_wp_env_mappings_use_wordpress_relative_targets(self):
         module = self.load_module()
         with tempfile.TemporaryDirectory() as temp:
@@ -26,6 +63,8 @@ class PublishedReleaseTests(unittest.TestCase):
             output.mkdir(exist_ok=True)
             env = module.prepare_environment(output, SCRIPT.parent.parent)
             config = __import__('json').loads(env['config'].read_text())
+            self.assertEqual(config['mappings']['wp-content/ashbi-recovery'],
+                             (SCRIPT.parent.parent / 'tools').as_posix())
             self.assertTrue(all(not target.startswith('/') for target in config['mappings']),
                             'wp-env prefixes mappings with /var/www/html; root-looking targets are not root mounts')
             calls = []
@@ -100,6 +139,26 @@ console.log(JSON.stringify(compose.services.cli.volumes));
                 return subprocess.CompletedProcess(command, 0, '{"success":true}\n', '')
             with self.assertRaisesRegex(RuntimeError, 'datastore'):
                 module.run_environment(env, output, 'off', 'runtime', invoke)
+
+    def test_candidate_runtime_cannot_pass_with_historical_only_coverage(self):
+        module = self.load_module()
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            env = module.prepare_environment(output, SCRIPT.parent.parent)
+            def invoke(command, **kwargs):
+                return subprocess.CompletedProcess(command, 0, '{"success":true,"data":{"hpos_mode":"off","hpos_enabled":false}}', '')
+            with self.assertRaisesRegex(RuntimeError, 'current feature coverage'):
+                module.run_environment(env, output, 'off', 'runtime', invoke, target='candidate')
+
+    def test_candidate_rejects_missing_classic_variation_trace(self):
+        module = self.load_module()
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            env = module.prepare_environment(output, SCRIPT.parent.parent)
+            def invoke(command, **kwargs):
+                return subprocess.CompletedProcess(command, 0, '{"success":true,"data":{"hpos_mode":"off","hpos_enabled":false,"billing_consent_readbacks":true,"cancellation_mysql_contention":true}}', '')
+            with self.assertRaisesRegex(RuntimeError, 'current feature coverage'):
+                module.run_environment(env, output, 'off', 'runtime', invoke, target='candidate')
 
     def test_update_isolation_requires_real_service_evidence_for_other_plugins(self):
         checker = SCRIPT.parent / 'package-validation/verify-update-isolation.php'

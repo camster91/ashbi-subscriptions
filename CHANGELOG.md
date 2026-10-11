@@ -3,7 +3,26 @@
 All notable Ashbi-maintained changes after the immutable upstream import are
 documented here. The original vendor changelog remains at `plugin/changelog.txt`.
 
-## Unreleased
+## 2.2.0 candidate - 2026-10-10
+
+- Preserve classic subscription variation cart lines and their selected billing
+  interval through checkout, including exact parent/variation identity. Keep
+  mapped plans and one-time purchases separate. Missing or invalid legacy
+  intervals fail closed. No catalog or schema migration is performed.
+  See `docs/CLASSIC_VARIATION_CART.md` for scope and verification.
+
+- Require verified durable cancellation intent before displaying a recorded-request
+  receipt; retain fail-closed billing on storage errors. Export accepted payment
+  type, billing length and installment total. Guard admin status transitions before
+  status-related email and order completion, preserving existing permissions.
+
+- Add immutable cancellation barriers, append-only evidence, durable repair and
+  review of already-dispatched payments. Keep finalization independent of mail
+  availability and preserve previous survey feedback.
+- Add disabled-by-default approved contract snapshots bound to final WooCommerce
+  orders and immutable acceptance. Preserve unchanged retries and reject unsupported
+  subscription checkout routes while enabled. Add scoped private evidence export.
+  See `docs/MIGRATION_1.6.0.md` for compatibility and remaining rollout gates.
 
 - Validate renewal modes as exact `auto`/`manual` values rather than customer
   roles. Present corrupt modes resolve to Manual without option migration;
@@ -14,9 +33,10 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
   See `docs/BILLING_CONSENT.md` for compatibility and verification boundaries.
 - Reject direct access to the runtime bootstrap before loading bundled vendor code.
 - Opt this fork out of WordPress.org updates with the supported `Update URI: false`
-  header while retaining the legacy basename, storage, hooks, and version 2.1.2.
+  header while retaining the legacy basename, storage and hooks.
   No network updater is provided. Use reviewed, checksum-verified release ZIPs;
-  rollback restores the previous package without a schema migration.
+  preserve schema 1.6.0, cancellation barriers and protective runtime during rollback.
+  See `docs/RELEASE_2.2.0.md` for candidate traceability and release gates.
 
 ## 2.1.2 — 2026-10-04
 
