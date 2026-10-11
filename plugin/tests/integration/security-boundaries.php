@@ -10,6 +10,7 @@
 use SpringDevs\Subscription\Ajax;
 use SpringDevs\Subscription\Api\DiagnosticsController;
 use SpringDevs\Subscription\Frontend\ActionController;
+use SpringDevs\Subscription\Installer;
 use SpringDevs\Subscription\Illuminate\Action;
 use SpringDevs\Subscription\Illuminate\AutoRenewal;
 use SpringDevs\Subscription\Illuminate\GuestCheckout;
@@ -437,7 +438,11 @@ function ashbi_run_security_boundary_integration_checks() {
 		// checks prove the candidate was actually activated in the disposable site,.
 		// rather than merely loaded for this request.
 		$check( (int) get_option( 'subscrpt_installed', 0 ) > 0, 'Activation did not persist the installed marker.' );
-		$check( '1.5.0' === (string) get_option( 'subscrpt_db_version', '' ), 'Activation did not persist the current schema version.' );
+		$check( Installer::DB_VERSION === (string) get_option( 'subscrpt_db_version', '' ), 'Activation did not persist the current schema version.' );
+		foreach ( array( 'subscrpt_cancellation_barrier', 'subscrpt_evidence_event', 'subscrpt_contract_acceptance' ) as $evidence_table ) {
+			$evidence_table = $wpdb->prefix . $evidence_table;
+			$check( $evidence_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $evidence_table ) ) ), 'Activation did not create an evidence table.' );
+		}
 
 		$customer    = get_user_by( 'login', 'ashbi-existing-customer' );
 		$customer_id = $customer ? $customer->ID : wp_insert_user(
@@ -1291,7 +1296,11 @@ function ashbi_run_security_boundary_integration_checks() {
 		}
 		require_once SUBSCRPT_PATH . '/uninstall.php';
 		$check( get_post( $subscription_id ) instanceof WP_Post, 'Default uninstall removed the subscription record.' );
-		$check( '1.5.0' === (string) get_option( 'subscrpt_db_version', '' ), 'Default uninstall removed the schema marker.' );
+		$check( Installer::DB_VERSION === (string) get_option( 'subscrpt_db_version', '' ), 'Default uninstall removed the schema marker.' );
+		foreach ( array( 'subscrpt_cancellation_barrier', 'subscrpt_evidence_event', 'subscrpt_contract_acceptance' ) as $evidence_table ) {
+			$evidence_table = $wpdb->prefix . $evidence_table;
+			$check( $evidence_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $evidence_table ) ) ), 'Default uninstall removed an evidence table.' );
+		}
 		if ( false === $previous_remove_data ) {
 			delete_option( 'subscrpt_remove_data_on_uninstall' );
 		} else {
@@ -1390,16 +1399,23 @@ function ashbi_run_security_boundary_integration_checks() {
 		$check( 'subscription_note' === get_comment( $activity_ids[0] )->comment_type, 'Rendering rewrote legacy note type.' );
 		$check( 'Fabricated legacy label' === get_comment_meta( $activity_ids[0], 'subscrpt_activity', true ), 'Rendering rewrote legacy metadata.' );
 
+		require_once __DIR__ . '/evidence-contract.php';
+		wp_set_current_user( (int) $administrator_id );
+		$mysql_cancellation_contention = ashbi_check_evidence_contract( $check );
+		require_once __DIR__ . '/classic-variation-cart.php';
+		$classic_variations = ashbi_verify_classic_variation_cart( $check );
 		if ( $failures ) {
 			wp_send_json_error( array( 'failures' => $failures ), 500 );
 		}
 
 		wp_send_json_success(
 			array(
-				'message'                   => 'Ashbi security-boundary integration checks passed.',
-				'hpos_mode'                 => $hpos_mode,
-				'billing_consent_readbacks' => $billing_consent_readbacks,
-				'hpos_enabled'              => \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled(),
+				'message'                          => 'Ashbi security-boundary integration checks passed.',
+				'hpos_mode'                        => $hpos_mode,
+				'billing_consent_readbacks'        => $billing_consent_readbacks,
+				'cancellation_mysql_contention'    => $mysql_cancellation_contention,
+				'classic_variation_cart_lifecycle' => $classic_variations,
+				'hpos_enabled'                     => \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled(),
 			)
 		);
 	} catch ( \Throwable $error ) {

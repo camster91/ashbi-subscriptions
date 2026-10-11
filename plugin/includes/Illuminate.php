@@ -54,6 +54,8 @@ class Illuminate {
 		new Order();
 		new Cron();
 		new Cancellation();
+		\SpringDevs\Subscription\Illuminate\CancellationEvidence::register_hooks();
+		new \SpringDevs\Subscription\Illuminate\EvidenceExport();
 		new Stats();
 		new Post();
 		new Checkout();

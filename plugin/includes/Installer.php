@@ -25,7 +25,7 @@ class Installer {
 	 *
 	 * @var string
 	 */
-	const DB_VERSION = '1.5.0';
+	const DB_VERSION = '1.6.0';
 
 	/**
 	 * Run the installer
@@ -99,6 +99,7 @@ class Installer {
 		$this->create_stats_snapshot_table();
 		$this->create_cancellation_feedback_table();
 		$this->create_recovery_events_table();
+		$this->create_evidence_tables();
 		$this->create_plan_group_table();
 		$this->create_plan_table();
 		$this->create_plan_relation_table();
@@ -108,7 +109,51 @@ class Installer {
 		$this->backfill_overdue_renewal_quarantine();
 		$this->persist_migration_block_sources();
 
-		update_option( 'subscrpt_db_version', self::DB_VERSION );
+		global $wpdb;
+		$barrier = $wpdb->prefix . 'subscrpt_cancellation_barrier';
+		$events = $wpdb->prefix . 'subscrpt_evidence_event';
+		$acceptance = $wpdb->prefix . 'subscrpt_contract_acceptance';
+		if ( $barrier === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $barrier ) ) ) && $events === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $events ) ) ) && $acceptance === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $acceptance ) ) ) ) {
+			update_option( 'subscrpt_db_version', self::DB_VERSION );
+		}
+	}
+
+	/** Additive tables; no backfill, deletion or existing record rewrites. */
+	public function create_evidence_tables() {
+		global $wpdb;
+		$collate = $wpdb->get_charset_collate();
+		$barrier = $wpdb->prefix . 'subscrpt_cancellation_barrier';
+		$events = $wpdb->prefix . 'subscrpt_evidence_event';
+		$acceptance = $wpdb->prefix . 'subscrpt_contract_acceptance';
+		dbDelta( "CREATE TABLE $barrier (
+			subscription_id bigint(20) unsigned NOT NULL,
+			actor_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			request_id varchar(64) NOT NULL,
+			requested_at datetime NOT NULL,
+			access_end bigint(20) unsigned NOT NULL,
+			PRIMARY KEY  (subscription_id)
+		) $collate;" );
+		dbDelta( "CREATE TABLE $events (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			event_type varchar(40) NOT NULL,
+			subscription_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			actor_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			request_id varchar(64) NOT NULL,
+			details longtext NOT NULL,
+			created_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			KEY subscription_id (subscription_id),
+			KEY created_at (created_at)
+		) $collate;" );
+		dbDelta( "CREATE TABLE $acceptance (
+			order_id bigint(20) unsigned NOT NULL,
+			actor_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			accepted_at datetime NOT NULL,
+			revision_hash varchar(64) NOT NULL,
+			payload longtext NOT NULL,
+			PRIMARY KEY  (order_id),
+			KEY accepted_at (accepted_at)
+		) $collate;" );
 	}
 
 	/**

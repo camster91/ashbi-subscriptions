@@ -3,7 +3,7 @@
  * Plugin Name: Ashbi Subscriptions
  * Description: Adds recurring purchases, subscription management, and automated renewals to WooCommerce stores.
  *
- * Version: 2.1.2
+ * Version: 2.2.0
  * Update URI: false
  *
  * Author: Ashbi

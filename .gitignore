@@ -3,6 +3,8 @@
 .vscode/
 node_modules/
 vendor/
+.composer-home/
+composer.phar
 coverage/
 .phpunit.result.cache
 dist/

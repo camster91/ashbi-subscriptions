@@ -1,4 +1,4 @@
-# Exact published RC validation
+# Candidate and historical package validation
 
 The independently reviewable workflow is `.github/workflows/published-rc-validation.yml`.
 It supplements, and does not replace, the source-tree CI workflow.
@@ -18,8 +18,10 @@ bootstrap inclusion, and absence of a top-level class in the main file.
 Those are **archive checks, not WordPress runtime evidence**.
 
 The runner pins these URLs and checksums in `scripts/validate-published-release.py`.
-It never builds a candidate from the checkout or downloads a GitHub source archive.
-Changing the target requires an explicit reviewed code change.
+Published mode retains the immutable historical artifact. Candidate mode validates a
+canonical archive built from the exact checkout, requiring its SHA-256 and full
+source commit. Every member must match the source package manifest; a GitHub source
+archive is not a plugin release package.
 
 ## Hosted jobs and acceptance
 
@@ -171,3 +173,19 @@ Primary implementation references: the official `WordPress/plugin-check`
 `README.md`, `docs/CLI.md`, and `includes/CLI/Plugin_Check_Command.php`, plus the
 locked `@wordpress/env` CLI/config/cleanup source. Read them before altering the
 runtime-bootstrap, report-format, config ownership, or cleanup contract.
+
+## Historical fixture and current candidate separation
+
+The historical ZIP uses the release-era integration fixture from commit
+`45683b68787afa784775ef6b57c01568f33ed578`, verified against fixture SHA-256
+`3b1ba8688be765febb51bfcaea6e6db70d0b5451274b3e81e4f1ec759f397e0b`.
+It cannot fall back to current feature tests. The old ZIP predates ContractConsent;
+requiring that class in its historical runtime was a harness mismatch. Actual HPOS
+datastore and updater-isolation checks remain mandatory. Historical artifacts are
+retained unchanged.
+
+The candidate HPOS jobs install the exact canonical archive from the workflow
+checkout and require current consent readbacks and cancellation MySQL contention
+coverage, plus installed-member and datastore readbacks. Archive, manifest and
+validation evidence are uploaded separately from historical results. These jobs
+validate a candidate; they do not publish a release or update any client site.

@@ -23,13 +23,13 @@ class Cart {
 	 * Initialize the class
 	 */
 	public function __construct() {
-		add_filter( 'woocommerce_add_cart_item_data', array( $this, 'add_to_cart_item_data' ), 10, 2 );
+		add_filter( 'woocommerce_add_cart_item_data', array( $this, 'add_to_cart_item_data' ), 10, 3 );
 		add_action( 'woocommerce_blocks_loaded', array( $this, 'define_custom_schema' ) );
 		add_filter( 'woocommerce_cart_item_price', array( $this, 'change_price_cart_html' ), 10, 2 );
 		add_filter( 'woocommerce_cart_item_subtotal', array( $this, 'change_price_cart_html' ), 10, 2 );
 		add_action( 'woocommerce_cart_totals_after_order_total', array( $this, 'add_rows_order_total' ) );
 		add_action( 'woocommerce_review_order_after_order_total', array( $this, 'add_rows_order_total' ) );
-		add_filter( 'woocommerce_add_cart_item_data', array( $this, 'set_renew_status' ), 10, 2 );
+		add_filter( 'woocommerce_add_cart_item_data', array( $this, 'set_renew_status' ), 10, 3 );
 		add_action( 'woocommerce_check_cart_items', array( $this, 'check_cart_items' ) );
 		add_filter( 'woocommerce_get_item_data', array( $this, 'set_line_item_meta' ), 10, 2 );
 		add_action( 'woocommerce_before_calculate_totals', array( $this, 'add_calculation_price_filter' ) );
@@ -222,7 +222,7 @@ class Cart {
 				}
 				if ( isset( $value['subscription'] ) ) {
 					if ( $product->is_type( 'simple' ) || $product->is_type( 'variation' ) ) {
-						if ( Helper::get_typos( 1, $product->get_meta( '_subscrpt_timing_option' ) ) !== Helper::get_typos( 1, $value['subscription']['type'] ) || $product->get_trial() !== $value['subscription']['trial'] ) {
+						if ( Helper::get_typos( 1, $product->get_meta( '_subscrpt_timing_option' ) ) !== Helper::get_typos( 1, $value['subscription']['type'] ) || $product->get_trial() !== $value['subscription']['trial'] || ( $product->is_type( 'variation' ) && ( ! $this->has_valid_variation_schedule( $product ) || max( 1, (int) ( $value['subscription']['time'] ?? 1 ) ) !== $product->get_timing_per() ) ) ) {
 							// remove the item.
 							wc_add_notice( __( 'An item which is no longer available was removed from your cart.', 'subscription' ), 'error' );
 							WC()->cart->remove_cart_item( $key );
@@ -490,6 +490,7 @@ class Cart {
 	 * @param int   $product_id   Product parent id.
 	 * @param int   $variation_id Variation id, or 0 for simple products.
 	 *
+	 * @throws \Exception When a classic variation billing schedule is invalid.
 	 * @return array
 	 */
 	public function add_to_cart_item_data( array $cart_item_data, int $product_id, int $variation_id = 0 ): array {
@@ -510,9 +511,12 @@ class Cart {
 		if ( subscrpt_product_has_plan( $product_id, $variation_id ) ) {
 			return $cart_item_data;
 		}
-		if ( $product->is_enabled() && $product->is_type( 'simple' ) ) :
+		if ( $product->is_enabled() && ( $product->is_type( 'simple' ) || $product->is_type( 'variation' ) ) ) :
+			if ( $product->is_type( 'variation' ) && ! $this->has_valid_variation_schedule( $product ) ) {
+				throw new \Exception( esc_html__( 'This subscription billing schedule is unavailable. Please choose another option or contact the store.', 'subscription' ) );
+			}
 			$subscription_data          = array();
-			$subscription_data['time']  = null;
+			$subscription_data['time']  = $product->is_type( 'variation' ) ? $product->get_timing_per() : null;
 			$subscription_data['type']  = $product->get_timing_option();
 			$subscription_data['trial'] = null;
 			if ( $product->has_trial() ) {
@@ -664,21 +668,52 @@ class Cart {
 	}
 
 	/**
+	 * Validate raw classic variation cadence without inventing defaults.
+	 *
+	 * @param \SpringDevs\Subscription\Utils\Product $product Subscription product.
+	 * @return bool Whether the raw cadence is valid.
+	 */
+	private function has_valid_variation_schedule( $product ): bool {
+		return (bool) preg_match( '/^[1-9][0-9]*$/', (string) $product->get_meta( '_subscrpt_timing_per' ) ) && in_array( strtolower( (string) $product->get_meta( '_subscrpt_timing_option' ) ), array( 'day', 'days', 'week', 'weeks', 'month', 'months', 'year', 'years' ), true );
+	}
+
+	/**
 	 * Add renew status.
 	 *
 	 * @param array $cart_item_data cart_item_data.
 	 * @param int   $product_id Product ID.
+	 * @param int   $variation_id Selected variation ID.
 	 *
 	 * @return array
 	 */
-	public function set_renew_status( $cart_item_data, $product_id ) {
+	public function set_renew_status( $cart_item_data, $product_id, $variation_id = 0 ) {
 		// Plan purchases are new subscriptions unless an explicit renewal action.
 		// already carried the exact subscription and plan into the cart.
-		if ( empty( $cart_item_data['renew_subscrpt'] ) && function_exists( 'subscrpt_product_has_plan' ) && subscrpt_product_has_plan( $product_id ) ) {
+		if ( empty( $cart_item_data['renew_subscrpt'] ) && function_exists( 'subscrpt_product_has_plan' ) && subscrpt_product_has_plan( $product_id, $variation_id ) ) {
 			return $cart_item_data;
 		}
 
-		$expired = Helper::subscription_exists( $product_id, 'expired' );
+		if ( $variation_id ) {
+			// Preserve explicit renewal identity; plain variations are new purchases.
+			if ( ! empty( $cart_item_data['renew_subscrpt'] ) || empty( $cart_item_data['subscription'] ) || ! get_current_user_id() ) {
+				return $cart_item_data;
+			}
+			$expired = false;
+			foreach ( Helper::get_subscriptions(
+				array(
+					'product_id'  => $product_id,
+					'post_status' => 'expired',
+					'fields'      => 'ids',
+				)
+			) as $candidate ) {
+				if ( (int) get_post_meta( $candidate, '_subscrpt_variation_id', true ) === (int) $variation_id && ! get_post_meta( $candidate, '_subscrpt_plan_id', true ) ) {
+					$expired = (int) $candidate;
+					break;
+				}
+			}
+		} else {
+			$expired = Helper::subscription_exists( $product_id, 'expired' );
+		}
 		if ( $expired ) {
 			// Check if maximum payment limit has been reached.
 			if ( subscrpt_is_max_payments_reached( $expired ) ) {

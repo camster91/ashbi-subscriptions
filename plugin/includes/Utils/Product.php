@@ -139,7 +139,7 @@ abstract class Product {
 	 * @return int Billing interval multiplier.
 	 */
 	public function get_timing_per(): int {
-		return 1;
+		return $this->product->is_type( 'variation' ) ? max( 1, (int) $this->product->get_meta( '_subscrpt_timing_per' ) ) : 1;
 	}
 
 	/**

@@ -84,7 +84,7 @@ final class RenewalClaimContractTest extends TestCase {
 		$this->assertStringContainsString( '`schedule_next_attempt` DATETIME NULL', $this->installer );
 		$this->assertStringContainsString( '`payment_state` VARCHAR(20) NOT NULL', $this->installer );
 		$this->assertStringContainsString( '`payment_next_attempt` DATETIME NULL', $this->installer );
-		$this->assertStringContainsString( "const DB_VERSION = '1.5.0'", $this->installer );
+		$this->assertStringContainsString( "const DB_VERSION = '1.6.0'", $this->installer );
 	}
 
 	/** Verify automated and checkout renewals share the claim boundary. */

@@ -25,6 +25,9 @@ class Action {
 	 * @param bool   $write_comment Write comment?.
 	 */
 	public static function status( string $status, int $subscription_id, bool $write_comment = true ) {
+		if ( ! in_array( $status, array( 'cancelled', 'pe_cancelled' ), true ) && CancellationEvidence::blocked( $subscription_id ) ) {
+			return false;
+		}
 		// A split-payment subscription whose final installment is paid is terminal:.
 		// never (re)activate it. Any renewal-payment path that tries to set it active.
 		// after completion is coerced to `completed` so the status can't flip back.
@@ -38,12 +41,16 @@ class Action {
 
 		$old_status = get_post_status( $subscription_id );
 
-		wp_update_post(
+		$result = wp_update_post(
 			array(
 				'ID'          => $subscription_id,
 				'post_status' => $status,
-			)
+			),
+			true
 		);
+		if ( is_wp_error( $result ) || ! $result || get_post_status( $subscription_id ) !== $status ) {
+			return false;
+		}
 
 		if ( 'completed' === $status && function_exists( 'subscrpt_finalize_split_payment_completion' ) ) {
 			subscrpt_finalize_split_payment_completion( $subscription_id );
@@ -63,6 +70,7 @@ class Action {
 		if ( 'active' === $status && in_array( $old_status, array( 'cancelled', 'pe_cancelled', 'on_hold', 'on-hold' ), true ) ) {
 			do_action( 'subscrpt_subscription_resumed', $subscription_id, $old_status );
 		}
+		return true;
 	}
 
 	/**
@@ -181,17 +189,18 @@ class Action {
 	 * @param int $subscription_id Subscription ID.
 	 */
 	private static function cancelled( int $subscription_id ) {
-		if ( ! self::record_activity( $subscription_id, 'Subscription is Cancelled.', 'Subscription Cancelled', 'subs_cancelled' ) ) {
-			return false;
-		}
-
-		WC()->mailer();
-		do_action( 'subscrpt_subscription_cancelled_email_notification', $subscription_id );
+		$recorded = self::record_activity( $subscription_id, 'Subscription is Cancelled.', 'Subscription Cancelled', 'subs_cancelled' );
 		do_action( 'subscrpt_subscription_cancelled', $subscription_id );
 
 		// Fire split payment cancelled action.
 		do_action( 'subscrpt_split_payment_cancelled', $subscription_id );
-		return true;
+		try {
+			WC()->mailer();
+			do_action( 'subscrpt_subscription_cancelled_email_notification', $subscription_id );
+		} catch ( \Throwable $error ) {
+			// State and provider cancellation must not depend on email delivery.
+		}
+		return $recorded;
 	}
 
 	/**
@@ -214,17 +223,19 @@ class Action {
 	 * @param int $subscription_id Subscription ID.
 	 */
 	private static function pe_cancelled( int $subscription_id ) {
-		if ( ! self::record_activity( $subscription_id, 'Subscription is Pending Cancellation.', 'Subscription Pending Cancellation', 'subs_pe_cancel' ) ) {
-			return false;
-		}
+		$recorded = self::record_activity( $subscription_id, 'Subscription is Pending Cancellation.', 'Subscription Pending Cancellation', 'subs_pe_cancel' );
 
 		// WC_Email classes only exist once the mailer has been built, and they.
 		// attach their own listeners from their constructors. Without this, an.
 		// email listening for a pending cancellation is simply not registered yet.
 		// when the action fires - the same reason cancelled() calls it.
-		WC()->mailer();
+		try {
+			WC()->mailer();
+		} catch ( \Throwable $error ) {
+			// Scheduling remains independent of mailer availability.
+		}
 
 		do_action( 'subscrpt_subscription_pending_cancellation', $subscription_id );
-		return true;
+		return $recorded;
 	}
 }
