@@ -20,9 +20,13 @@ function ashbi_verify_classic_variation_cart( callable $check ): bool {
 		throw new RuntimeException( 'Classic variation fixtures require an authorized disposable local environment.' );
 	}
 	global $wpdb;
-	$passed          = true;
-	$missing         = new stdClass();
-	$previous        = get_option( 'wp_subscription_contract_revision', $missing );
+	$passed           = true;
+	$missing          = new stdClass();
+	$previous         = get_option( 'wp_subscription_contract_revision', $missing );
+	$previous_session = WC()->session;
+	if ( ! $previous_session ) {
+		WC()->initialize_session();
+	}
 	$previous_cart   = WC()->cart;
 	$cart            = $previous_cart instanceof WC_Cart ? $previous_cart : new WC_Cart();
 	$cart_contents   = $cart->cart_contents;
@@ -195,6 +199,7 @@ function ashbi_verify_classic_variation_cart( callable $check ): bool {
 		if ( function_exists( 'wc_set_notices' ) ) {
 			wc_set_notices( $previous_notice );
 		}
+		WC()->session = $previous_session;
 		if ( $missing === $previous ) {
 			delete_option( 'wp_subscription_contract_revision' );
 		} else {
