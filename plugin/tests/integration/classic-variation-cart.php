@@ -185,7 +185,20 @@ function ashbi_verify_classic_variation_cart( callable $check ): bool {
 		foreach ( array( '', 0 ) as $invalid_interval ) {
 			$valid->update_meta_data( '_subscrpt_timing_per', $invalid_interval );
 			$valid->save();
-			$cart->cart_contents = array( 'invalid-restored' => array_merge( $saved, array( 'data' => $valid ) ) );
+			$cart->cart_contents = array(
+				'invalid-restored' => array_merge(
+					$saved,
+					array(
+						'key'          => 'invalid-restored',
+						'product_id'   => $parent->get_id(),
+						'variation_id' => $valid->get_id(),
+						'quantity'     => 1,
+						'data'         => $valid,
+						'line_total'   => 12.5,
+						'line_tax'     => 0,
+					)
+				),
+			);
 			do_action( 'woocommerce_check_cart_items' );
 			$assert( ! isset( $cart->cart_contents['invalid-restored'] ), 'Restored cart accepted a missing or zero raw variation interval.' );
 		}
