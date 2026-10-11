@@ -202,6 +202,11 @@ $subscrpt_icon_plan = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 				<div class="wpsubs-wizard-card">
 					<h1 class="wpsubs-p2-page-title"><?php esc_html_e( 'Add billing durations', 'subscription' ); ?></h1>
 					<p class="wpsubs-p2-page-subtitle"><?php esc_html_e( 'How often a customer is charged. Add one or more to offer a choice.', 'subscription' ); ?></p>
+					<div id="subscrpt-installment-settings" style="display:none;">
+						<label for="subscrpt-installment-count"><?php esc_html_e( 'Total number of payments (including checkout)', 'subscription' ); ?></label>
+						<input id="subscrpt-installment-count" type="number" class="wpsubs-input" min="2" step="1" value="" data-currency-decimals="<?php echo esc_attr( wc_get_price_decimals() ); ?>" aria-describedby="subscrpt-installment-hint">
+						<p id="subscrpt-installment-hint"><?php esc_html_e( 'Choose at least 2 whole payments. Prices in the next step are total commitments, not per-payment amounts. The total is divided across this many payments; the final payment includes any rounding remainder.', 'subscription' ); ?></p>
+					</div>
 
 					<div id="subscrpt-durations" data-durations></div>
 
@@ -399,9 +404,17 @@ $subscrpt_icon_plan = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 			<!-- PAGE 4: Finish — everything is created here, sequentially. -->
 			<div class="wpsubs-wizard-section" data-page="4" id="subscrpt-section-4">
 				<div class="wpsubs-wizard-card wpsubs-p3-card">
+					<div id="subscrpt-finalize-review" hidden>
+						<h1><?php esc_html_e( 'Review billing and publication', 'subscription' ); ?></h1>
+						<label><input type="checkbox" id="subscrpt-publish-choice"> <?php esc_html_e( 'Activate this plan after setup and publish a new product. Linked existing products keep their current publication status.', 'subscription' ); ?></label>
+						<p id="subscrpt-review-summary" style="white-space:pre-line;" aria-live="polite"></p>
+						<label><input type="checkbox" id="subscrpt-review-confirm"> <?php esc_html_e( 'I reviewed the billing commitment and the draft/publication effects above.', 'subscription' ); ?></label>
+						<p><button type="button" id="subscrpt-btn-create-reviewed" class="wpsubs-btn wpsubs-btn--primary"><?php esc_html_e( 'Create reviewed draft', 'subscription' ); ?></button></p>
+						<button type="button" id="subscrpt-btn-back-review" class="wpsubs-btn wpsubs-btn--outline"><?php esc_html_e( 'Back to product and pricing', 'subscription' ); ?></button>
+					</div>
 
 					<!-- Working state: shown while the plan, durations and product are created. -->
-					<div id="subscrpt-finalize-progress" class="wpsubs-finalize-progress">
+					<div id="subscrpt-finalize-progress" class="wpsubs-finalize-progress" hidden>
 						<div class="wpsubs-finalize-spinner" aria-hidden="true"></div>
 						<h1 class="wpsubs-p3-heading"><?php esc_html_e( 'Setting things up…', 'subscription' ); ?></h1>
 						<p class="wpsubs-p3-subtext"><?php esc_html_e( 'Creating your plan, durations and product. This takes a moment.', 'subscription' ); ?></p>
@@ -430,8 +443,8 @@ $subscrpt_icon_plan = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 							</svg>
 						</div>
 
-						<h1 class="wpsubs-p3-heading"><?php esc_html_e( 'Your plan is live.', 'subscription' ); ?></h1>
-						<p class="wpsubs-p3-subtext"><?php esc_html_e( 'Your product is now subscribable. When a customer buys it, a subscription is created automatically.', 'subscription' ); ?></p>
+						<h1 class="wpsubs-p3-heading" id="subscrpt-done-heading"><?php esc_html_e( 'Your draft is saved.', 'subscription' ); ?></h1>
+						<p class="wpsubs-p3-subtext" id="subscrpt-done-summary"><?php esc_html_e( 'The plan is draft and is not offered to customers until activated separately.', 'subscription' ); ?></p>
 
 						<p class="wpsubs-p3-what-now-label"><?php esc_html_e( 'WHAT NOW?', 'subscription' ); ?></p>
 
@@ -554,7 +567,7 @@ $subscrpt_icon_plan = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 					&#8249; <?php esc_html_e( 'Back', 'subscription' ); ?>
 				</button>
 				<button type="button" id="subscrpt-btn-next-3" class="wpsubs-btn wpsubs-btn--primary">
-					<?php esc_html_e( 'Continue', 'subscription' ); ?> &rsaquo;
+					<?php esc_html_e( 'Review billing and publication', 'subscription' ); ?> &rsaquo;
 				</button>
 			</div>
 			<div class="wpsubs-wizard-nav" data-nav="4" hidden>
