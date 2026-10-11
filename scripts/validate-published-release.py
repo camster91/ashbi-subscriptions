@@ -214,7 +214,8 @@ def run_environment(env, output, mode, kind, invoke=subprocess.run, target="publ
             if trace.get('hpos_mode') != mode or trace.get('hpos_enabled') is not (mode == 'on'):
                 raise RuntimeError('Integration callback did not verify the requested actual datastore')
             if target == 'candidate' and (trace.get('billing_consent_readbacks') is not True
-                                          or trace.get('cancellation_mysql_contention') is not True):
+                                          or trace.get('cancellation_mysql_contention') is not True
+                                          or trace.get('classic_variation_cart_lifecycle') is not True):
                 raise RuntimeError('Candidate integration did not verify current feature coverage')
         else:
             run(['run', 'cli', 'bash', '-c',

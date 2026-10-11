@@ -123,7 +123,7 @@ jobs:
           set -o pipefail
           mkdir -p reports
           ASHBI_PLAYGROUND_HPOS_MODE="${{ matrix.hpos }}" bash scripts/run-integration.sh | tee "reports/source-integration-${{ matrix.hpos }}.json"
-          python3 -c 'import json,sys; from pathlib import Path; mode=sys.argv[1]; d=json.loads(Path("reports/source-integration-"+mode+".json").read_text()); assert d.get("success") is True; checks=d.get("data", {}); assert checks.get("billing_consent_readbacks") is True; assert checks.get("cancellation_mysql_contention") is True; assert checks.get("hpos_mode")==mode; assert checks.get("hpos_enabled") is (mode=="on")' "${{ matrix.hpos }}"
+          python3 -c 'import json,sys; from pathlib import Path; mode=sys.argv[1]; d=json.loads(Path("reports/source-integration-"+mode+".json").read_text()); assert d.get("success") is True; checks=d.get("data", {}); assert checks.get("billing_consent_readbacks") is True; assert checks.get("cancellation_mysql_contention") is True; assert checks.get("classic_variation_cart_lifecycle") is True; assert checks.get("hpos_mode")==mode; assert checks.get("hpos_enabled") is (mode=="on")' "${{ matrix.hpos }}"
 
       - name: Preserve source integration readback evidence
         if: always()

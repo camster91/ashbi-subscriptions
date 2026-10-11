@@ -150,6 +150,16 @@ console.log(JSON.stringify(compose.services.cli.volumes));
             with self.assertRaisesRegex(RuntimeError, 'current feature coverage'):
                 module.run_environment(env, output, 'off', 'runtime', invoke, target='candidate')
 
+    def test_candidate_rejects_missing_classic_variation_trace(self):
+        module = self.load_module()
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            env = module.prepare_environment(output, SCRIPT.parent.parent)
+            def invoke(command, **kwargs):
+                return subprocess.CompletedProcess(command, 0, '{"success":true,"data":{"hpos_mode":"off","hpos_enabled":false,"billing_consent_readbacks":true,"cancellation_mysql_contention":true}}', '')
+            with self.assertRaisesRegex(RuntimeError, 'current feature coverage'):
+                module.run_environment(env, output, 'off', 'runtime', invoke, target='candidate')
+
     def test_update_isolation_requires_real_service_evidence_for_other_plugins(self):
         checker = SCRIPT.parent / 'package-validation/verify-update-isolation.php'
         self.assertTrue(checker.exists(), 'Cached update-offer verification is missing')

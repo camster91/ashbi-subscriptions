@@ -5,6 +5,12 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 
 ## 2.2.0 candidate - 2026-10-10
 
+- Preserve classic subscription variation cart lines and their selected billing
+  interval through checkout, including exact parent/variation identity. Keep
+  mapped plans and one-time purchases separate. Missing or invalid legacy
+  intervals fail closed. No catalog or schema migration is performed.
+  See `docs/CLASSIC_VARIATION_CART.md` for scope and verification.
+
 - Require verified durable cancellation intent before displaying a recorded-request
   receipt; retain fail-closed billing on storage errors. Export accepted payment
   type, billing length and installment total. Guard admin status transitions before

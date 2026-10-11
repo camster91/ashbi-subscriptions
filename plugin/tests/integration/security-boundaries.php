@@ -1402,17 +1402,20 @@ function ashbi_run_security_boundary_integration_checks() {
 		require_once __DIR__ . '/evidence-contract.php';
 		wp_set_current_user( (int) $administrator_id );
 		$mysql_cancellation_contention = ashbi_check_evidence_contract( $check );
+		require_once __DIR__ . '/classic-variation-cart.php';
+		$classic_variations = ashbi_verify_classic_variation_cart( $check );
 		if ( $failures ) {
 			wp_send_json_error( array( 'failures' => $failures ), 500 );
 		}
 
 		wp_send_json_success(
 			array(
-				'message'                       => 'Ashbi security-boundary integration checks passed.',
-				'hpos_mode'                     => $hpos_mode,
-				'billing_consent_readbacks'     => $billing_consent_readbacks,
-				'cancellation_mysql_contention' => $mysql_cancellation_contention,
-				'hpos_enabled'                  => \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled(),
+				'message'                          => 'Ashbi security-boundary integration checks passed.',
+				'hpos_mode'                        => $hpos_mode,
+				'billing_consent_readbacks'        => $billing_consent_readbacks,
+				'cancellation_mysql_contention'    => $mysql_cancellation_contention,
+				'classic_variation_cart_lifecycle' => $classic_variations,
+				'hpos_enabled'                     => \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled(),
 			)
 		);
 	} catch ( \Throwable $error ) {
