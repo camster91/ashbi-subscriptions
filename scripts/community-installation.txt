@@ -1,0 +1,35 @@
+== Installation ==
+
+This is a distinct community-directory candidate, not the GitHub in-place
+replacement ZIP. It is not approved or hosted by WordPress.org. The proposed
+slug requires directory review/approval and the maintainer's verified account.
+
+1. Back up files/database and retain the previous verified plugin ZIP.
+2. Rehearse on isolated staging with renewal workers paused, email suppressed,
+   and sandbox-only gateways. Reconcile subscription/order/token counts first.
+3. Deactivate WP Subscription Core/WPSubscription and the GitHub compatibility
+   fork before activation. Never activate these distributions alongside one another.
+4. Upload this ZIP as ashbi-subscriptions/ashbi-subscriptions.php. Do not rename
+   it to subscription/subscription.php. No uninstall or record deletion is needed.
+5. Activate Ashbi Subscriptions Community and reconcile retained records. The
+   package preserves storage, hooks, aliases, REST namespaces and billing logic.
+6. Test checkout/renewal and the HPOS matrix before resuming any workers.
+
+For a code rollback, pause workers, deactivate Community, restore/reactivate the
+previous verified package alone and reconcile again. This is not a database
+rollback proof: use the site-specific database backup/restore runbook when data
+or payment state changed. Default uninstall retains business records, but do
+not uninstall with an explicitly enabled destructive-removal option.
+
+Translations: this candidate ships English only. The old subscription POT is
+omitted rather than relabeled. PHP and JS translation calls and registrations
+use ashbi-subscriptions, including compiled checkout/dashboard bundles. No new
+POT, MO or JSON translations are claimed; a complete fresh extraction and
+reviewed translations remain future directory work.
+
+Update delivery: the GitHub replacement retains Update URI: false and manual
+verified ZIP updates. Community has no Update URI header and a distinct identity;
+no WordPress.org-hosted updates are available until review and publication.
+Gateway sandbox, crash-window, client-clone and directory-approval gates remain
+open. This candidate is not production-payment certification.
+

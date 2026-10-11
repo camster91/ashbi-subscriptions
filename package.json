@@ -3,6 +3,7 @@
   "private": true,
   "devDependencies": {
     "@babel/parser": "^7.29.8",
+    "@babel/traverse": "7.29.8",
     "@wordpress/env": "11.15.0"
   },
   "overrides": {
