@@ -7,6 +7,8 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 
 - Align account reactivation with durable cancellation protection. Show full
   cancellation statuses and omit misleading future-payment dates after cancellation.
+  Keep pending cancellations out of payment-grace display so old billing dates
+  cannot relabel them Active in customer or merchant views.
   Preserve legacy reversible cancellations and stored billing/access dates.
   See `docs/SMALL_STORE_REVIEW.md` for the workflow audit and remaining priorities.
 

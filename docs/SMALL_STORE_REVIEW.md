@@ -62,6 +62,12 @@ assert that an already-processing payment has been refunded or a provider has
 confirmed cancellation. Original dates, access-end notices, consent and history
 remain available and unchanged in storage. No schema migration or new dependency.
 
+Follow-up regression: the shared display data also attached payment grace to
+`pe_cancelled` when an old billing date was in the last seven days. Customer and
+merchant templates then displayed Active instead of Pending Cancellation. Exclude
+pending cancellation from this display grace calculation; existing payment-failure
+grace semantics remain unchanged. This changes no entitlement, billing or dates.
+
 ## Verification
 
 - Baseline PHP suite: 287 tests / 3,470 assertions passed on PHP 8.2.34.
@@ -87,6 +93,17 @@ remain available and unchanged in storage. No schema migration or new dependency
   mobile/keyboard, timezone/DST and persistent-object-cache runtime checks remain
   required. Existing offline race/replay/failure suites are supporting evidence.
 
+Hosted evidence for PR head `78afa50` (workflow merge `28a2bce`) subsequently passed: PHP 7.4/8.2/8.5,
+source WordPress/WooCommerce integration with HPOS on/off, and exact candidate
+ZIP validation with HPOS on/off. See [source CI](https://github.com/camster91/ashbi-subscriptions/actions/runs/39497056706)
+and [candidate validation](https://github.com/camster91/ashbi-subscriptions/actions/runs/39497056715).
+The nonblocking coding-standard baseline reported two errors in the new screen
+fixture's file header; corrected in the follow-up rather than treating them as
+inherited debt. The added grace regression failed before its one-line fix;
+the updated suite passed 291 tests / 3,516 assertions, with package, PHPStan,
+syntax and security-sensitive PHPCS checks passing locally.
+Hosted results for `78afa50` do not validate later commits or real providers.
+
 ## Merchant use and next three priorities
 
 Customers open **My Account → Subscriptions → View → Cancel**. A confirmed notice
@@ -108,5 +125,5 @@ attention workflow around PR #45 and existing records; run the real billing and
 cancellation matrix, including failed/abandoned renewal coupon limits.
 
 Rollback this presentation patch by restoring the four changed frontend/template
-files from protective main `c70272f`. Preserve the installed cancellation engine,
+files and `Helper.php` from protective main `c70272f`. Preserve the installed cancellation engine,
 barriers, orders and evidence. No database rollback is needed or authorized.

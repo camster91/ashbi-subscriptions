@@ -1,5 +1,10 @@
 <?php
-/** Render real customer screens with fabricated orders and cancellation storage. */
+/**
+ * Render real customer screens with fabricated orders and cancellation storage.
+ *
+ * @package AshbiSubscriptions\Tests
+ */
+
 // phpcs:disable -- Isolated WordPress/WooCommerce doubles; no network or real data.
 namespace SpringDevs\Subscription\Illuminate {
 	class Helper {
