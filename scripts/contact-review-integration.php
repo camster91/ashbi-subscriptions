@@ -68,5 +68,18 @@ contact_ci_assert( ! current_user_can( 'read_post', $second ), 'private request 
 contact_ci_assert( ! get_post_type_object( $a::TYPE )->show_in_rest && ! get_post_type_object( $a::TYPE )->publicly_queryable, 'no public REST or query exposure' );
 wp_set_current_user( $owner->ID );
 contact_ci_assert( $before_subs === (int) wp_count_posts( 'subscrpt_order' )->publish, 'subscription count unchanged' );
+// A synthetic confirmation proof exercises the read-only contract, not a gateway.
+register_post_status( 'cancelled', array( 'public' => false ) );
+$sub = wp_insert_post( array( 'post_type' => 'subscrpt_order', 'post_status' => 'cancelled', 'post_title' => 'Synthetic cancellation proof' ) );
+update_post_meta( $sub, '_ashbi_cancellation_confirmed', 1 );
+$table = $wpdb->prefix . 'subscrpt_cancellation_barrier';
+$wpdb->query( $wpdb->prepare( 'CREATE TEMPORARY TABLE %i (subscription_id bigint unsigned NOT NULL PRIMARY KEY)', $table ) );
+contact_ci_assert( ! $a::confirmed( $sub ), 'confirmed marker without barrier is insufficient in MySQL' );
+$wpdb->insert( $table, array( 'subscription_id' => $sub ), array( '%d' ) );
+$request = $a::capture( 'synthetic@example.invalid', 'Synthetic cancellation proof request.' );
+$subscription_before = get_post( $sub );
+$meta_before = get_post_meta( $sub );
+contact_ci_assert( true === $a::resolve( $request, 'cancellation_confirmed', $sub, 'Verified synthetic proof and replied, TEST-003.', true ), 'verified cancellation outcome persists in MySQL' );
+contact_ci_assert( $subscription_before == get_post( $sub ) && $meta_before === get_post_meta( $sub ), 'confirmation review does not mutate subscription' );
 echo 'WordPress ' . esc_html( get_bloginfo( 'version' ) ) . '; PHP ' . esc_html( PHP_VERSION ) . '; database ' . esc_html( $wpdb->db_version() ) . "\n";
 echo "CONTACT_REVIEW_INTEGRATION_PASS\n";
