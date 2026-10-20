@@ -31,7 +31,9 @@ final class Ashbi_Contact_Request_Review {
 
 	/** Register administrator-only private storage. */
 	public static function register(): void {
-		$caps                 = array_fill_keys( array( 'read_post', 'edit_post', 'delete_post', 'edit_posts', 'edit_others_posts', 'publish_posts', 'read_private_posts', 'delete_posts', 'delete_private_posts', 'delete_published_posts', 'delete_others_posts', 'edit_private_posts', 'edit_published_posts' ), self::CAP );
+		// Keep unique meta-capability names. Reusing manage_options as a meta cap
+		// would remap that global capability to a post-specific permission.
+		$caps                 = array_fill_keys( array( 'edit_posts', 'edit_others_posts', 'publish_posts', 'read_private_posts', 'delete_posts', 'delete_private_posts', 'delete_published_posts', 'delete_others_posts', 'edit_private_posts', 'edit_published_posts' ), self::CAP );
 		$caps['create_posts'] = 'do_not_allow';
 		register_post_type(
 			self::TYPE,

@@ -15,6 +15,9 @@ Ashbi_Contact_Request_Review::register();
 register_post_type( 'subscrpt_order', array( 'public' => false ) );
 $owner = get_user_by( 'login', 'admin' );
 wp_set_current_user( $owner->ID );
+if ( ! user_can( $owner->ID, 'manage_options' ) ) {
+	throw new RuntimeException( 'Registering private storage must preserve administrator capabilities.' );
+}
 add_filter(
 	'ashbi_contact_review_config',
 	static function () use ( $owner ) {
@@ -58,6 +61,10 @@ contact_ci_assert( strpos( $notice, '24 hours' ) !== false, 'actual overdue noti
 // Exercise real WordPress private-post access as an unrelated subscriber.
 wp_set_current_user( $subscriber );
 contact_ci_assert( ! current_user_can( 'read_post', $second ), 'private request not readable by subscriber' );
+$editor = wp_create_user( 'synthetic-editor', 'fixture-only-not-a-real-credential', 'synthetic-editor@example.invalid' );
+( new WP_User( $editor ) )->set_role( 'editor' );
+wp_set_current_user( $editor );
+contact_ci_assert( ! current_user_can( 'read_post', $second ), 'private request not readable by editor' );
 contact_ci_assert( ! get_post_type_object( $a::TYPE )->show_in_rest && ! get_post_type_object( $a::TYPE )->publicly_queryable, 'no public REST or query exposure' );
 wp_set_current_user( $owner->ID );
 contact_ci_assert( $before_subs === (int) wp_count_posts( 'subscrpt_order' )->publish, 'subscription count unchanged' );
