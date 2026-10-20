@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — optional contact request review adapter
+
+- Add a separately installed, disabled-by-default Elementor intake review queue.
+  Preserve requests before email, deduplicate open receipts, flag aging requests,
+  and require staff resolution/notification plus verified cancellation proof.
+  No core billing behavior, live setting, outgoing mail or historical data changes.
+  See `docs/CONTACT_REQUEST_REVIEW.md` for configuration and staging gates.
+
 All notable Ashbi-maintained changes after the immutable upstream import are
 documented here. The original vendor changelog remains at `plugin/changelog.txt`.
 
