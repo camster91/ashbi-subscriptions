@@ -3,6 +3,7 @@
  *
  * @package AshbiSubscriptions\Tests
  */
+
 // phpcs:disable -- Isolated WordPress and unrelated module doubles.
 namespace SpringDevs\Subscription {
 	class Admin {}
