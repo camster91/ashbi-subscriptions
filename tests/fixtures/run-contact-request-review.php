@@ -79,6 +79,7 @@ function absint( $s ) {
 function wp_die( $s, ...$args ) {
 	throw new Review_Test_Die( $s ); }
 function check_admin_referer( $action ) {
+	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- This fixture implements the nonce verifier itself.
 	if ( ! $GLOBALS['nonce'] || $action !== 'ashbi_contact_resolve_' . ( $_POST['request_id'] ?? '' ) ) {
 		wp_die( 'bad_nonce' ); } }
 function admin_url( $s ) {
