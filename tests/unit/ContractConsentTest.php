@@ -10,6 +10,17 @@ use PHPUnit\Util\PHP\AbstractPhpProcess;
 
 /** Real-source tests; WordPress doubles remain isolated from the canonical suite. */
 final class ContractConsentTest extends TestCase {
+	/** Simple plans use singular billing units and still require exact acceptance. */
+	public function test_simple_billing_units_preserve_consent_and_snapshot_guards(): void {
+		$data = $this->fixture();
+		foreach ( $data['classic_units'] as $unit => $checks ) {
+			self::assertTrue( $checks['checked'], $unit );
+			self::assertFalse( $checks['unchecked'], $unit );
+			self::assertFalse( $checks['changed_terms'], $unit );
+		}
+		self::assertFalse( $data['invalid_unit'] );
+	}
+
 	/** Fetch one fixture run without caching production decisions across cases. */
 	private function fixture(): array {
 		$path   = dirname( __DIR__ ) . '/fixtures/run-contract-consent.php';

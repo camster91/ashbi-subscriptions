@@ -5,6 +5,10 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 
 ## 2.2.0 candidate - 2026-10-10
 
+- Accept the existing singular billing units from simple subscription products
+  without weakening explicit consent or snapshot checks. Register account routes
+  on normal admin requests so permalink refreshes retain subscription pages.
+
 - Preserve classic subscription variation cart lines and their selected billing
   interval through checkout, including exact parent/variation identity. Keep
   mapped plans and one-time purchases separate. Missing or invalid legacy

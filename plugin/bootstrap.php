@@ -214,6 +214,11 @@ final class Sdevs_Subscription {
 
 		if ( $this->is_request( 'admin' ) ) {
 			$this->container['admin'] = new SpringDevs\Subscription\Admin();
+			// Admin permalink refreshes must retain the customer account routes.
+			// AJAX already constructs MyAccount through the frontend bootstrap.
+			if ( ! $this->is_request( 'frontend' ) ) {
+				$this->container['account_endpoints'] = new SpringDevs\Subscription\Frontend\MyAccount();
+			}
 		}
 
 		if ( $this->is_request( 'frontend' ) ) {

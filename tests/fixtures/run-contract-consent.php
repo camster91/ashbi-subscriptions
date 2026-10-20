@@ -667,6 +667,19 @@ $simple                             = $snapshot;
 $simple['items'][0]['variation_id'] = 0;
 $simple['items'][0]['plan_id']      = 0;
 $result['classic_simple']           = $consent->validate_acceptance( '1', $doc['hash'], $simple, hash( 'sha256', wp_json_encode( $simple ) ) );
+foreach ( array( 'days', 'weeks', 'months', 'years' ) as $unit ) {
+	$classic                             = $simple;
+	$classic['items'][0]['plan']['type'] = \SpringDevs\Subscription\Illuminate\Helper::get_typos( 1, $unit );
+	$classic_hash                        = hash( 'sha256', wp_json_encode( $classic ) );
+	$result['classic_units'][ $unit ]    = array(
+		'checked'       => $consent->validate_acceptance( '1', $doc['hash'], $classic, $classic_hash ),
+		'unchecked'     => $consent->validate_acceptance( '', $doc['hash'], $classic, $classic_hash ),
+		'changed_terms' => $consent->validate_acceptance( '1', $doc['hash'], $classic, $snapshot_hash ),
+	);
+}
+$invalid_unit                             = $simple;
+$invalid_unit['items'][0]['plan']['type'] = 'unknown';
+$result['invalid_unit']                   = $consent->validate_acceptance( '1', $doc['hash'], $invalid_unit, hash( 'sha256', wp_json_encode( $invalid_unit ) ) );
 
 // These line shapes match PlanCheckout::stamp_plan and Cart::add_to_cart_item_data,
 // which use per_cost, not price; the classic path deliberately supplies time=null.
@@ -701,7 +714,7 @@ $cart->items                    = array(
 		'data'         => new ContractConsentProductFixture(),
 		'subscription' => array(
 			'time'           => null,
-			'type'           => 'months',
+			'type'           => \SpringDevs\Subscription\Illuminate\Helper::get_typos( 1, 'months' ),
 			'trial'          => null,
 			'signup_fee'     => null,
 			'per_cost'       => '9.00',

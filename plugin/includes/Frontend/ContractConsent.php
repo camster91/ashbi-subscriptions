@@ -124,7 +124,8 @@ final class ContractConsent {
 				}
 			}
 			$plan = $item['plan'] ?? null;
-			if ( ! is_array( $plan ) || ! isset( $plan['price'], $plan['time'], $plan['type'] ) || ! is_numeric( $plan['price'] ) || ! is_finite( (float) $plan['price'] ) || (float) $plan['price'] < 0 || ! is_int( $plan['time'] ) || $plan['time'] < 1 || ! in_array( $plan['type'], array( 'days', 'weeks', 'months', 'years' ), true ) ) {
+			// Classic one-period products use Helper::get_typos() singular units.
+			if ( ! is_array( $plan ) || ! isset( $plan['price'], $plan['time'], $plan['type'] ) || ! is_numeric( $plan['price'] ) || ! is_finite( (float) $plan['price'] ) || (float) $plan['price'] < 0 || ! is_int( $plan['time'] ) || $plan['time'] < 1 || ! in_array( $plan['type'], array( 'day', 'days', 'week', 'weeks', 'month', 'months', 'year', 'years' ), true ) ) {
 				return false;
 			}
 		}
