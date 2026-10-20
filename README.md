@@ -92,6 +92,7 @@ disabled, or not classified as sandbox/offline.
 
 ## Documentation
 
+- [Small-store workflow review and merchant procedure](docs/SMALL_STORE_REVIEW.md)
 - [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
 - [Feature matrix](docs/FEATURE_MATRIX.md)
 - [Architecture](docs/ARCHITECTURE.md)
