@@ -32,6 +32,9 @@ function contact_ci_assert( $truth, $label ) {
 $a           = 'Ashbi_Contact_Request_Review';
 $before_subs = (int) wp_count_posts( 'subscrpt_order' )->publish;
 $id          = $a::capture( 'synthetic@example.invalid', 'Please stop my next delivery.', 'Synthetic fixture' );
+if ( is_wp_error( $id ) ) {
+	throw new RuntimeException( 'Synthetic intake failed: ' . esc_html( $id->get_error_code() ) );
+}
 contact_ci_assert( is_int( $id ), 'actual MySQL intake succeeds' );
 contact_ci_assert( $id === $a::capture( 'synthetic@example.invalid', 'Please stop my next delivery.' ), 'actual database deduplicates open request' );
 $source     = get_post( $id )->post_content;

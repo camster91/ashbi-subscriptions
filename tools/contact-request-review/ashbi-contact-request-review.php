@@ -7,7 +7,11 @@
  * Requires PHP: 7.4
  * License: GPL-2.0-or-later
  * Update URI: false
+ *
+ * @package AshbiContactReview
  */
+
+// phpcs:ignoreFile WordPress.Files.FileName.InvalidClassFileName -- Standalone WordPress plugin entrypoint, not a library class file.
 
 defined( 'ABSPATH' ) || exit;
 
@@ -16,6 +20,7 @@ final class Ashbi_Contact_Request_Review {
 	const TYPE = 'ashbi_contact_review';
 	const CAP  = 'manage_options';
 
+	/** Register the optional adapter's hooks. */
 	public static function boot(): void {
 		add_action( 'init', array( __CLASS__, 'register' ) );
 		add_action( 'elementor_pro/forms/process', array( __CLASS__, 'process' ), 10, 2 );
@@ -24,6 +29,7 @@ final class Ashbi_Contact_Request_Review {
 		add_action( 'admin_post_ashbi_contact_resolve', array( __CLASS__, 'handle' ) );
 	}
 
+	/** Register administrator-only private storage. */
 	public static function register(): void {
 		$caps                 = array_fill_keys( array( 'read_post', 'edit_post', 'delete_post', 'edit_posts', 'edit_others_posts', 'publish_posts', 'read_private_posts', 'delete_posts', 'delete_private_posts', 'delete_published_posts', 'delete_others_posts', 'edit_private_posts', 'edit_published_posts' ), self::CAP );
 		$caps['create_posts'] = 'do_not_allow';
@@ -66,7 +72,12 @@ final class Ashbi_Contact_Request_Review {
 		return $c;
 	}
 
-	/** Runs after Elementor validation and before notification actions. */
+	/**
+	 * Run after Elementor validation and before notification actions.
+	 *
+	 * @param object $record Validated Elementor form record.
+	 * @param object $handler Elementor AJAX response handler.
+	 */
 	public static function process( $record, $handler ): void {
 		$c = self::config();
 		if ( ! $c || $record->get_form_settings( 'form_name' ) !== $c['form_name'] ) {
@@ -83,7 +94,14 @@ final class Ashbi_Contact_Request_Review {
 		$handler->add_response_data( 'ashbi_request_reference', 'R-' . $id );
 	}
 
-	/** Every message is queued: wording detection must never decide what is ignored. */
+	/**
+	 * Queue every message without interpreting the customer's intent.
+	 *
+	 * @param string $email Submitted address, not proof of identity.
+	 * @param string $message Submitted message.
+	 * @param string $name Submitted name.
+	 * @return int|WP_Error Verified receipt or failure.
+	 */
 	public static function capture( string $email, string $message, string $name = '' ) {
 		global $wpdb;
 		if ( ! self::config() ) {
@@ -139,6 +157,7 @@ final class Ashbi_Contact_Request_Review {
 		}
 	}
 
+	/** Add the private review page. */
 	public static function menu(): void {
 		add_management_page( 'Contact requests', 'Contact requests', self::CAP, 'ashbi-contact-review', array( __CLASS__, 'page' ) );
 	}
@@ -162,7 +181,16 @@ final class Ashbi_Contact_Request_Review {
 		echo '<div class="notice ' . ( $late ? 'notice-error' : 'notice-warning' ) . '"><p>' . esc_html( $row->total ) . ' contact request(s) need review.' . ( $late ? ' At least one has waited 24 hours.' : '' ) . ' <a href="' . esc_url( admin_url( 'tools.php?page=ashbi-contact-review' ) ) . '">Review requests</a></p></div>';
 	}
 
-	/** Only staff may close a request, after checking the exact account separately. */
+	/**
+	 * Close only after staff have checked the exact account separately.
+	 *
+	 * @param int $id Request ID.
+	 * @param string $outcome Explicit staff disposition.
+	 * @param int $subscription_id Independently verified subscription ID.
+	 * @param string $note Staff evidence and reply reference.
+	 * @param bool $notified Staff attestation, not proof of mail delivery.
+	 * @return bool|WP_Error Closure readback or failure.
+	 */
 	public static function resolve( int $id, string $outcome, int $subscription_id, string $note, bool $notified ) {
 		if ( ! current_user_can( self::CAP ) ) {
 			return new WP_Error( 'forbidden' ); }
@@ -209,7 +237,11 @@ final class Ashbi_Contact_Request_Review {
 		}
 	}
 
-	/** Read only. Never invokes cancellation, a gateway, or repair. */
+	/**
+	 * Read confirmation without invoking cancellation, a gateway, or repair.
+	 *
+	 * @param int $id Exact subscription ID.
+	 */
 	public static function confirmed( int $id ): bool {
 		global $wpdb;
 		$p = get_post( $id );
@@ -219,6 +251,7 @@ final class Ashbi_Contact_Request_Review {
 		return empty( $wpdb->last_error ) && $id === (int) $barrier;
 	}
 
+	/** Check the request-specific nonce before recording a staff outcome. */
 	public static function handle(): void {
 		if ( ! current_user_can( self::CAP ) ) {
 			wp_die( 'Access denied.', '', array( 'response' => 403 ) ); }
@@ -235,6 +268,7 @@ final class Ashbi_Contact_Request_Review {
 		exit;
 	}
 
+	/** Render the authorized review queue without changing source records. */
 	public static function page(): void {
 		if ( ! current_user_can( self::CAP ) ) {
 			wp_die( 'Access denied.', '', array( 'response' => 403 ) ); }
