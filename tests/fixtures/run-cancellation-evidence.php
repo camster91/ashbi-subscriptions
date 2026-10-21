@@ -10,8 +10,9 @@ function is_wp_error( $value ) { return $value instanceof WP_Error; }
 function get_current_blog_id() { return 1; }
 function get_current_user_id() { return $GLOBALS['ce_user']; }
 function is_user_logged_in() { return $GLOBALS['ce_user'] > 0; }
-function current_user_can( $cap ) { return $GLOBALS['ce_admin'] && in_array( $cap, array( 'manage_options', 'manage_woocommerce' ), true ); }
+function current_user_can( $cap, ...$args ) { return ( $GLOBALS['ce_admin'] && in_array( $cap, array( 'manage_options', 'manage_woocommerce', 'edit_post' ), true ) ) || ( 'edit_post' === $cap && ! empty( $GLOBALS['ce_editor'] ) ); }
 function get_post( $id ) { return 99 === (int) $id ? (object) array( 'ID'=>99, 'post_author'=>7, 'post_type'=>'subscrpt_order' ) : null; }
+function clean_post_cache( $id ) {}
 function get_post_status( $id ) { return $GLOBALS['ce_status']; }
 function get_post_meta( $id, $key, $single = true ) { return $GLOBALS['ce_meta'][$key] ?? ''; }
 function metadata_exists( $type, $id, $key ) { return array_key_exists( $key, $GLOBALS['ce_meta'] ); }
@@ -79,7 +80,7 @@ class CancellationEvidenceDatabase {
  }
 }
 function reset_cancellation_evidence_fixture() {
- $GLOBALS['wpdb']=new CancellationEvidenceDatabase(); $GLOBALS['ce_user']=7; $GLOBALS['ce_admin']=false; $GLOBALS['ce_status']='active';
+ $GLOBALS['wpdb']=new CancellationEvidenceDatabase(); $GLOBALS['ce_user']=7; $GLOBALS['ce_admin']=false; $GLOBALS['ce_editor']=false; $GLOBALS['ce_status']='active';
  $GLOBALS['ce_meta']=array('_subscrpt_auto_renew'=>1,'_subscrpt_next_date'=>time()+86400,'_subscrpt_order_id'=>1);
  foreach(array('ce_meta_fail','ce_status_fail','ce_comment_fail','ce_mail_fail') as $key){$GLOBALS[$key]=false;} $GLOBALS['ce_hooks']=array();
  $GLOBALS['ce_status_writes']=array(); $GLOBALS['ce_comments']=array();
@@ -193,4 +194,23 @@ foreach(array('first','replay') as $attempt){
  $results['customer_mail_replay'][$attempt]=array('barriers'=>$GLOBALS['wpdb']->barriers,'status'=>$GLOBALS['ce_status'],'meta'=>$GLOBALS['ce_meta'],'blocked'=>$service::blocked(99));
 }
 $results['customer_mail_replay']['notices']=$GLOBALS['ce_notices'];
+foreach(array('now','scheduled','mail_failure','barrier_failure','busy','denied','editor','completed','on_hold') as $case){
+ reset_cancellation_evidence_fixture();$GLOBALS['ce_admin']=true;$GLOBALS['ce_user']=8;$GLOBALS['ce_meta']['_subscrpt_user_cancel']='no';
+ if('mail_failure'===$case){$GLOBALS['ce_mail_fail']=true;}
+ if('barrier_failure'===$case){$GLOBALS['wpdb']->fail_barrier=true;}
+ if('busy'===$case){$GLOBALS['wpdb']->fail_lock=true;}
+ if('denied'===$case){$GLOBALS['ce_admin']=false;$GLOBALS['ce_user']=7;}
+ if('editor'===$case){$GLOBALS['ce_admin']=false;$GLOBALS['ce_editor']=true;}
+ if(in_array($case,array('completed','on_hold'),true)){$GLOBALS['ce_status']=$case;}
+ $target='scheduled'===$case?'pe_cancelled':'cancelled';$error=null;
+ try{$outcome=SpringDevs\Subscription\Admin\Subscriptions::process_status_change(99,$target);}catch(Throwable $e){$outcome=null;$error=get_class($e);}
+ $results['merchant'][$case]=array('order_writes'=>$GLOBALS['ce_order_status_writes'],'outcome'=>$outcome,'error'=>$error,'status'=>$GLOBALS['ce_status'],'barriers'=>$GLOBALS['wpdb']->barriers,'meta'=>$GLOBALS['ce_meta'],'hooks'=>$GLOBALS['ce_hooks']);
+ if('scheduled'===$case){
+  $before=array('barriers'=>$GLOBALS['wpdb']->barriers,'hooks'=>$GLOBALS['ce_hooks'],'writes'=>$GLOBALS['ce_status_writes']);
+  SpringDevs\Subscription\Admin\Subscriptions::process_status_change(99,$target);
+  $results['merchant_replay']=array('before'=>$before,'after'=>array('barriers'=>$GLOBALS['wpdb']->barriers,'hooks'=>$GLOBALS['ce_hooks'],'writes'=>$GLOBALS['ce_status_writes']));
+  SpringDevs\Subscription\Admin\Subscriptions::process_status_change(99,'cancelled');$service::repair(99);
+  $results['merchant_end_existing']=array('original'=>$before['barriers'],'final'=>$GLOBALS['wpdb']->barriers,'status'=>$GLOBALS['ce_status']);
+ }
+}
 echo json_encode($results);

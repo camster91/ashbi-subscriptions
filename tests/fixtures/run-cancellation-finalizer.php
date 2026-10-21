@@ -5,6 +5,7 @@ define('ABSPATH','/');define('DAY_IN_SECONDS',86400);
 class WP_Error {}
 function is_wp_error($value){return $value instanceof WP_Error;}
 function get_post($id){return (object)array('ID'=>$id,'post_type'=>'subscrpt_order','post_author'=>7);}
+function clean_post_cache($id){}
 function get_post_status($id){return $GLOBALS['cf_status'];}
 function get_post_meta($id,$key,$single=true){return $GLOBALS['cf_meta'][$key]??'';}
 function update_post_meta($id,$key,$value){$GLOBALS['cf_meta'][$key]=$value;return true;}
