@@ -2142,7 +2142,7 @@ class Helper {
 		}
 
 		if (
-			! in_array( strtolower( $status ), array( 'cancelled', 'pending', 'completed' ), true )
+			! in_array( strtolower( $status ), array( 'pe_cancelled', 'cancelled', 'pending', 'completed' ), true )
 			&& ! empty( $next_date )
 			&& $next_datetime - time() <= 0
 			&& (int) $default_grace_period > 0

@@ -122,7 +122,7 @@ do_action( 'before_single_subscrpt_content', $id );
 			</td>
 			<td><?php echo esc_html( $start_date ); ?></td>
 		</tr>
-	<?php if ( ( null === $trial || in_array( $trial_mode, array( 'off', 'extended' ), true ) ) && get_post_meta( $id, '_subscrpt_next_date', true ) ) : ?>
+	<?php if ( ! in_array( $status, array( 'pe_cancelled', 'cancelled' ), true ) && ( null === $trial || in_array( $trial_mode, array( 'off', 'extended' ), true ) ) && get_post_meta( $id, '_subscrpt_next_date', true ) ) : ?>
 			<tr>
 				<td>
 				<?php

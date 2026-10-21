@@ -118,7 +118,7 @@ class ActionController {
 			wc_add_notice( $message, $recorded && ! empty( $result['barrier'] ) ? 'success' : 'error' );
 		} elseif ( 'reactivate' === $action ) {
 			if ( ! self::can_reactivate_subscription( (int) $subscrpt_id ) ) {
-				wc_add_notice( __( 'This subscription can no longer be reactivated without completing a renewal payment.', 'subscription' ), 'error' );
+				wc_add_notice( __( 'This subscription cannot be reactivated here. Please contact the store for help.', 'subscription' ), 'error' );
 			} else {
 				Action::status( 'active', $subscrpt_id );
 			}
@@ -167,6 +167,11 @@ class ActionController {
 	 */
 	public static function can_reactivate_subscription( int $subscription_id, int $now = 0 ): bool {
 		if ( 'pe_cancelled' !== get_post_status( $subscription_id ) || subscrpt_is_max_payments_reached( $subscription_id ) ) {
+			return false;
+		}
+		// Protected customer cancellations cannot be reopened by a status change.
+		// Keep legacy scheduled cancellation reversible only without a barrier.
+		if ( CancellationEvidence::blocked( $subscription_id ) ) {
 			return false;
 		}
 
