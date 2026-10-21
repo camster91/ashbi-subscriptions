@@ -154,8 +154,12 @@ function ashbi_check_evidence_contract( callable $check ): bool {
 		}
 		$check( \SpringDevs\Subscription\Illuminate\CancellationEvidence::blocked( $subscription ), 'Real stored cancellation barrier missing.' );
 		\SpringDevs\Subscription\Illuminate\CancellationEvidence::repair( $subscription );
+		$check( ! \SpringDevs\Subscription\Frontend\ActionController::can_reactivate_subscription( $subscription ), 'Protected customer cancellation incorrectly permits reactivation.' );
 		$check( 0 === (int) get_post_meta( $subscription, '_subscrpt_auto_renew', true ), 'Durable repair did not disable local billing.' );
 		$check( in_array( get_post_status( $subscription ), array( 'pe_cancelled', 'cancelled' ), true ), 'Durable repair did not preserve cancelled lifecycle.' );
+		update_post_meta( $subscription, '_subscrpt_next_date', time() - 60 );
+		$cancellation_display = \SpringDevs\Subscription\Illuminate\Helper::get_subscription_data( $subscription );
+		$check( ! isset( $cancellation_display['grace_period'] ), 'Old billing date relabelled cancellation as active payment grace.' );
 		$export = \SpringDevs\Subscription\Illuminate\EvidenceExport::build( $subscription );
 		$check( $export['subscription_id'] === $subscription && ! empty( $export['events'] ) && ! empty( $export['orders'][0]['acceptance'] ), 'Real evidence export lost source records.' );
 

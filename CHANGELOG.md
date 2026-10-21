@@ -11,6 +11,12 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
   Distinguish missing storage from an empty result and keep contact/email intake
   separate. Correct the row's order-item reference when displaying quantities
   and recurring totals. See `docs/CANCELLATION_REVIEW_FILTER.md`.
+- Align account reactivation with durable cancellation protection. Show full
+  cancellation statuses and omit misleading future-payment dates after cancellation.
+  Keep pending cancellations out of payment-grace display so old billing dates
+  cannot relabel them Active in customer or merchant views.
+  Preserve legacy reversible cancellations and stored billing/access dates.
+  See `docs/SMALL_STORE_REVIEW.md` for the workflow audit and remaining priorities.
 
 - Preserve classic subscription variation cart lines and their selected billing
   interval through checkout, including exact parent/variation identity. Keep
