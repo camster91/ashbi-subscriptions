@@ -15,6 +15,8 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 
 - Keep contact cancellation requests open when confirmation is stale, conflicting
   or unavailable, using the canonical core receipt reader for staff closure.
+  Recheck request storage after locking so stale staff pages cannot overwrite
+  an outcome already recorded by another reviewer.
 
 - Keep the customer cancellation receipt visible after account reload, distinguishing
   confirmed billing protection, recorded requests awaiting confirmation, and

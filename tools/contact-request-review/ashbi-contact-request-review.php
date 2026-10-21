@@ -205,8 +205,12 @@ final class Ashbi_Contact_Request_Review {
 		if ( 1 !== (int) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 0)', $lock ) ) ) {
 			return new WP_Error( 'busy' ); }
 		try {
-			$p = get_post( $id );
-			if ( ! $p || 'private' !== $p->post_status ) {
+			// Recheck after locking: request-local post cache may predate another closure.
+			$p = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE ID = %d', $wpdb->posts, $id ) );
+			if ( $wpdb->last_error ) {
+				return new WP_Error( 'storage_unavailable' );
+			}
+			if ( ! $p || self::TYPE !== $p->post_type || 'private' !== $p->post_status ) {
 				return new WP_Error( 'not_open' ); }
 			if ( ! in_array( $outcome, array( 'cancellation_confirmed', 'other_request' ), true ) || ! $notified || strlen( trim( $note ) ) < 12 || strlen( $note ) > 2000 ) {
 				return new WP_Error( 'review_required' ); }
@@ -267,7 +271,7 @@ final class Ashbi_Contact_Request_Review {
 		$note    = isset( $_POST['note'] ) && is_string( $_POST['note'] ) ? sanitize_textarea_field( wp_unslash( $_POST['note'] ) ) : '';
 		$ok      = self::resolve( $id, $outcome, $sid, $note, isset( $_POST['notified'] ) && '1' === $_POST['notified'] );
 		if ( is_wp_error( $ok ) ) {
-			wp_die( 'Request remains open. Verify cancellation and record the customer reply before closing it.', '', array( 'response' => 400 ) ); }
+			wp_die( 'Outcome could not be recorded. Refresh the queue and verify the existing outcome, cancellation result and customer reply.', '', array( 'response' => 400 ) ); }
 		wp_safe_redirect( admin_url( 'tools.php?page=ashbi-contact-review' ) );
 		exit;
 	}

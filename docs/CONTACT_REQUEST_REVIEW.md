@@ -114,3 +114,11 @@ Full coding checks on the adapter reported zero errors/warnings; production nonc
 and prepared-SQL checks passed. Broader source/package CI is recorded separately
 for the exact updated PR head. All records were fabricated and mail/provider
 traffic blocked. This still does not test an installed Elementor form end to end.
+
+A further replay regression reproduced a stale open-post cache overwriting another
+staff member's closed outcome. After acquiring the existing per-request lock,
+closure now rechecks the private request row directly from storage. A closed,
+missing, changed-type or unreadable row cannot be overwritten from cached state.
+The failure message asks staff to refresh and check the existing outcome rather
+than falsely claiming the request is still open. Offline and real MySQL stale-post
+checks preserve the original outcome and source. No new lock, state or table.
