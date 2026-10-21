@@ -143,7 +143,7 @@ and **13** published-release harness regressions. Full advisory PHPCS reported
 **0 errors / 110 warnings** on this Windows runtime; that debt was not hidden
 or renamed. It is not the official Plugin Check report.
 
-Community archive checks passed **211 members**, **134 PHP files linted**,
+The original pre-small-store Community archive checks passed **211 members**, **134 PHP files linted**,
 **38 JS files parsed**, retained copyright/license/vendor bytes, exact-transform
 comparison, and the same static storage/hook contract. Actual extracted main
 and bootstrap files were included in isolated PHP subprocesses for clean,

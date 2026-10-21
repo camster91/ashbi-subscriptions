@@ -13,8 +13,10 @@ ID. Both serial HPOS jobs and the later Plugin Check job download **that same
 ID**, not another checkout-built community ZIP or a public release URL.
 
 Every consumer checks source commit, clean-tree provenance, transform-script
-hashes, both archive hashes, exact member hashes and the 211-member community
-identity. It independently checks the canonical reference against the unchanged
+hashes, both archive hashes, exact member hashes and the community directory
+identity. The complete file set must match current source and the reviewed
+transform; no historical numeric file count authorizes or rejects additions.
+It independently checks the canonical reference against the unchanged
 canonical source packaging policy and applies the approved transform in memory.
 Only canonical reference verification rebuilds an archive; consumers never build
 or substitute a community candidate. Archive members cannot be paths, symlinks,
