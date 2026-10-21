@@ -66,12 +66,17 @@ jobs:
           }, PHP_INT_MAX, 3 );
           PHP
           wp config set ACTION_SCHEDULER_DISABLE_DEFAULT_QUEUE_RUNNER true --raw --path=/tmp/contact-review-wordpress
-          wp option update woocommerce_custom_orders_table_enabled '${{ matrix.hpos }}' --path=/tmp/contact-review-wordpress
           wp plugin install woocommerce --version=11.2.1 --activate --path=/tmp/contact-review-wordpress
           cat >> /tmp/contact-review-wordpress/wp-content/mu-plugins/contact-ci-safety.php <<'PHP'
           add_filter( 'pre_http_request', static function () { return new WP_Error( 'ci_no_network' ); }, PHP_INT_MAX );
           PHP
+          wp wc hpos sync --path=/tmp/contact-review-wordpress
           ln -s "$GITHUB_WORKSPACE/plugin" /tmp/contact-review-wordpress/wp-content/plugins/subscription
           wp plugin activate subscription --path=/tmp/contact-review-wordpress
+          if [[ '${{ matrix.hpos }}' == 'yes' ]]; then
+            wp wc hpos enable --path=/tmp/contact-review-wordpress
+          else
+            wp wc hpos disable --path=/tmp/contact-review-wordpress
+          fi
           ASHBI_EXPECT_HPOS='${{ matrix.hpos }}' wp eval-file "$GITHUB_WORKSPACE/scripts/contact-cancellation-lifecycle.php" --user=admin --path=/tmp/contact-review-wordpress | tee /tmp/contact-lifecycle-result.txt
           grep -q CONTACT_CANCELLATION_LIFECYCLE_PASS /tmp/contact-lifecycle-result.txt
