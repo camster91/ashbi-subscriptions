@@ -27,7 +27,7 @@ still contain these records; site data access and retention must be approved.
 Staff verify identity and the exact subscription separately, process the request
 using the existing subscription controls, and reply to the customer. Closing a
 cancellation requires a cancelled/pending-cancellation subscription, a verified
-Ashbi cancellation barrier and confirmed-result marker, a staff note and an explicit
+Ashbi cancellation receipt from the core evidence reader, a staff note and an explicit
 attestation that the customer has been notified. The adapter only reads that proof;
 it never starts a cancellation or provider operation. Other messages require a
 documented resolution and the reply attestation. Staff can misclassify a message:
@@ -90,3 +90,27 @@ gateway sandbox or named-owner response. Those remain per-site staging gates.
 
 Primary integration reference:
 https://developers.elementor.com/docs/hooks/forms.html#form-processing
+
+## Review follow-up — October 21, 2026
+
+Cancellation closure now uses the same read-only core evidence reader as the
+customer account receipt. Cached metadata cannot override the database result,
+and conflicting confirmation flags leave the request open. An unavailable core
+reader also leaves cancellation unresolved; install a compatible reviewed core
+before recording a cancellation outcome. The adapter still never cancels or
+repairs a subscription, and does not silently fall back to status-only proof.
+
+The stale-cache regression failed before this change. The offline fixture loads
+the actual core reader, and the real WordPress/MySQL workflow tests stale cache
+and conflicting flags against fabricated records. Its temporary barrier table
+shadows only the disposable connection and supplies the real reader's schema.
+The workflow also runs when its core evidence-reader dependency changes.
+
+Local follow-up results: **295 tests / 3,580 assertions** passed, including an
+isolated missing-core-reader rejection. The dedicated real WordPress 7.1.3 / PHP
+8.2.34 / MariaDB 10.11.19 run passed intake, duplicate safety, permissions,
+immutable closure/source preservation, stale-cache and conflicting-flag checks.
+Full coding checks on the adapter reported zero errors/warnings; production nonce
+and prepared-SQL checks passed. Broader source/package CI is recorded separately
+for the exact updated PR head. All records were fabricated and mail/provider
+traffic blocked. This still does not test an installed Elementor form end to end.

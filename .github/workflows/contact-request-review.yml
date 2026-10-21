@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'tools/contact-request-review/**'
+      - 'plugin/includes/Illuminate/CancellationEvidence.php'
       - 'tests/**/ContactRequestReviewTest.php'
       - 'tests/fixtures/run-contact-request-review.php'
       - 'scripts/contact-review-integration.php'

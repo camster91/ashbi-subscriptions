@@ -245,12 +245,14 @@ final class Ashbi_Contact_Request_Review {
 	 * @param int $id Exact subscription ID.
 	 */
 	public static function confirmed( int $id ): bool {
-		global $wpdb;
 		$p = get_post( $id );
-		if ( ! $p || 'subscrpt_order' !== $p->post_type || ! in_array( $p->post_status, array( 'cancelled', 'pe_cancelled' ), true ) || '1' !== (string) get_post_meta( $id, '_ashbi_cancellation_confirmed', true ) ) {
+		if ( ! $p || 'subscrpt_order' !== $p->post_type || ! in_array( $p->post_status, array( 'cancelled', 'pe_cancelled' ), true ) ) {
 			return false; }
-		$barrier = $wpdb->get_var( $wpdb->prepare( 'SELECT subscription_id FROM %i WHERE subscription_id = %d', $wpdb->prefix . 'subscrpt_cancellation_barrier', $id ) );
-		return empty( $wpdb->last_error ) && $id === (int) $barrier;
+		$reader = \SpringDevs\Subscription\Illuminate\CancellationEvidence::class;
+		if ( ! is_callable( array( $reader, 'receipt' ) ) ) {
+			return false;
+		}
+		return 'confirmed' === $reader::receipt( $id )['state'];
 	}
 
 	/** Check the request-specific nonce before recording a staff outcome. */

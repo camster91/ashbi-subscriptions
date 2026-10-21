@@ -10,6 +10,7 @@ add_filter(
 		return new WP_Error( 'ci_network_disabled' );
 	}
 );
+require_once dirname( __DIR__ ) . '/plugin/includes/Illuminate/CancellationEvidence.php';
 require dirname( __DIR__ ) . '/tools/contact-request-review/ashbi-contact-request-review.php';
 Ashbi_Contact_Request_Review::register();
 register_post_type( 'subscrpt_order', array( 'public' => false ) );
@@ -73,9 +74,19 @@ register_post_status( 'cancelled', array( 'public' => false ) );
 $sub = wp_insert_post( array( 'post_type' => 'subscrpt_order', 'post_status' => 'cancelled', 'post_title' => 'Synthetic cancellation proof' ) );
 update_post_meta( $sub, '_ashbi_cancellation_confirmed', 1 );
 $table = $wpdb->prefix . 'subscrpt_cancellation_barrier';
-$wpdb->query( $wpdb->prepare( 'CREATE TEMPORARY TABLE %i (subscription_id bigint unsigned NOT NULL PRIMARY KEY)', $table ) );
+$wpdb->query( $wpdb->prepare( 'CREATE TEMPORARY TABLE %i (subscription_id bigint unsigned NOT NULL PRIMARY KEY, access_end bigint NOT NULL DEFAULT 0)', $table ) );
 contact_ci_assert( ! $a::confirmed( $sub ), 'confirmed marker without barrier is insufficient in MySQL' );
 $wpdb->insert( $table, array( 'subscription_id' => $sub ), array( '%d' ) );
+update_post_meta( $sub, '_ashbi_cancellation_confirmed', 0 );
+$cached = get_post_meta( $sub );
+$cached['_ashbi_cancellation_confirmed'] = array( '1' );
+wp_cache_set( $sub, $cached, 'post_meta' );
+contact_ci_assert( ! $a::confirmed( $sub ), 'stale confirmation cache cannot close a cancellation request' );
+wp_cache_delete( $sub, 'post_meta' );
+update_post_meta( $sub, '_ashbi_cancellation_confirmed', 1 );
+add_post_meta( $sub, '_ashbi_cancellation_confirmed', 0 );
+contact_ci_assert( ! $a::confirmed( $sub ), 'conflicting confirmation flags cannot close a cancellation request' );
+delete_post_meta( $sub, '_ashbi_cancellation_confirmed', 0 );
 $request = $a::capture( 'synthetic@example.invalid', 'Synthetic cancellation proof request.' );
 $subscription_before = get_post( $sub );
 $meta_before = get_post_meta( $sub );

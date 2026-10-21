@@ -112,6 +112,7 @@ class WP_Query {
 class Review_DB {
 	public $prefix      = 'fixture_';
 	public $posts       = 'fixture_posts';
+	public $postmeta    = 'fixture_postmeta';
 	public $last_error  = '';
 	public $busy        = false;
 	public $fail_lookup = false;
@@ -140,6 +141,17 @@ class Review_DB {
 	}
 	public function get_row( $q ) {
 		$this->last_error = $this->fail_lookup ? 'unavailable' : '';
+		if ( strpos( $q[0], 'MIN(CASE' ) !== false ) {
+			if ( ! $this->barrier ) {
+				return null;
+			}
+			$flags = $GLOBALS['stored_flags'] ?? array( $GLOBALS['meta'][ $q[1][4] ]['_ashbi_cancellation_confirmed'] ?? '' );
+			$confirmed = count( $flags ) > 0;
+			foreach ( $flags as $flag ) {
+				$confirmed = $confirmed && '1' === (string) $flag;
+			}
+			return (object) array( 'access_end' => 0, 'confirmed' => $confirmed ? '1' : '0' );
+		}
 		$rows             = array_filter(
 			$GLOBALS['records'],
 			static function ( $p ) {
@@ -153,6 +165,7 @@ class Review_DB {
 	}
 }
 $wpdb = new Review_DB();
+require dirname( __DIR__, 2 ) . '/plugin/includes/Illuminate/CancellationEvidence.php';
 require dirname( __DIR__, 2 ) . '/tools/contact-request-review/ashbi-contact-request-review.php';
 $checks = array();
 function verify_review( $truth, $label ) {
@@ -210,6 +223,11 @@ $wpdb->barrier     = true;
 $wpdb->fail_lookup = true;
 verify_review( ! $adapter::confirmed( 99 ), 'unreadable barrier is not cancellation proof' );
 $wpdb->fail_lookup = false;
+$GLOBALS['stored_flags'] = array( 0 );
+verify_review( ! $adapter::confirmed( 99 ), 'stale cached confirmation cannot close a request' );
+$GLOBALS['stored_flags'] = array( 0, 1 );
+verify_review( ! $adapter::confirmed( 99 ), 'conflicting confirmation flags cannot close a request' );
+unset( $GLOBALS['stored_flags'] );
 verify_review( err_review( $adapter::resolve( $id, 'cancellation_confirmed', 99, $note, false ), 'review_required' ), 'customer reply attestation required' );
 verify_review( err_review( $adapter::resolve( $id, 'other_request', 0, 'done', true ), 'review_required' ), 'unexplained dismissal rejected' );
 $source                 = get_post( $id )->post_content;
