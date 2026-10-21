@@ -87,7 +87,7 @@ def fixture_hashes():
     names = {'scripts/playground-mu-plugins/ashbi-integration-loader.php',
              'scripts/run-integration.sh', 'scripts/wp-env-compat.cjs'}
     # These entire directories are mounted, not only the primary entry points.
-    for directory in ('plugin/tests/integration', 'scripts/package-validation'):
+    for directory in ('plugin/tests/integration', 'scripts/package-validation', 'tools'):
         names.update(path.relative_to(REPO).as_posix() for path in (REPO / directory).rglob('*') if path.is_file())
     return {name: digest(REPO / name) for name in sorted(names)}
 
@@ -182,7 +182,7 @@ def main():
     if args.kind == 'plugin-check':
         expected['input/plugin-check.zip'] = (output / 'plugin-check.zip', release.PLUGIN_CHECK_SHA256)
     directories = {}
-    for directory in ('plugin/tests/integration', 'scripts/package-validation'):
+    for directory in ('plugin/tests/integration', 'scripts/package-validation', 'tools'):
         path = REPO / directory
         directories[path] = {name[len(directory) + 1:] for name in before if name.startswith(directory + '/')}
     owned = release.owned_path(output, profile='community')

@@ -96,7 +96,7 @@ class CommunityRuntimeTests(unittest.TestCase):
             bundle.mkdir()
             (bundle / 'community-candidate.zip').write_bytes(b'offline immutable candidate')
             repo = root / 'source-fixture'
-            for directory in ('plugin/tests/integration', 'scripts/package-validation', 'scripts/playground-mu-plugins'):
+            for directory in ('plugin/tests/integration', 'scripts/package-validation', 'scripts/playground-mu-plugins', 'tools'):
                 shutil.copytree(ROOT / directory, repo / directory)
             for filename in ('run-integration.sh', 'wp-env-compat.cjs'):
                 shutil.copyfile(ROOT / 'scripts' / filename, repo / 'scripts' / filename)
@@ -177,6 +177,19 @@ class CommunityRuntimeTests(unittest.TestCase):
                 self.assertIsNotNone(error)
                 self.assertFalse(evidence['fixture_and_candidate_unchanged'])
                 self.assertGreaterEqual(len(evidence['mismatches']), 2)
+
+    def test_mounted_recovery_tools_mutation_removal_and_addition_are_checked(self):
+        for operation in ('change', 'remove', 'add'):
+            with self.subTest(operation=operation):
+                def mutate(env, output):
+                    mappings = json.loads(env['config'].read_text())['mappings']
+                    recovery = Path(mappings['wp-content/ashbi-recovery'])
+                    path = recovery / ('extra.php' if operation == 'add' else 'evidence-preserving-rollback.php')
+                    path.unlink() if operation == 'remove' else path.write_text('<?php // forged recovery helper')
+                error, evidence = self.run_integrity_case(mutate)
+                self.assertIsNotNone(error)
+                self.assertFalse(evidence['fixture_and_candidate_unchanged'])
+                self.assertIn('tools', str(evidence['mismatches']))
 
     def test_unmodified_integrity_survives_successful_cleanup(self):
         error, evidence = self.run_integrity_case()

@@ -69,6 +69,7 @@ The only approved differences are:
   community ZIP; GPL/dependency copyright notices, licenses and vendor files
   remain byte-identical. The canonical notices file stays unchanged.
 - The inherited stale `languages/subscription.pot` is omitted. **English only**:
+  the Community-only Domain Path header is omitted with the empty directory.
   there is no newly generated POT, MO or JSON catalog. Calls/registrations use
   the new domain, ready for a later complete extraction and reviewed directory
   translations. Existing upstream-domain translations are not promised.

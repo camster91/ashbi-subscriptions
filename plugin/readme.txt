@@ -52,7 +52,10 @@ have fees. There is no plugin license activation or paid feature unlock.
 When configured and used for payments, the Stripe integration uses the installed
 WooCommerce Stripe gateway and its API client. It sends payment amounts/currency,
 saved customer/payment references and payment metadata to Stripe to create or
-retrieve charges and reconcile payments. See [Stripe terms](https://stripe.com/legal)
+retrieve charges and reconcile payments. When linking a Stripe customer to a
+WordPress account, it can also send billing email, first/last name, WordPress
+username and user ID to update the Stripe customer profile. Order and line-item
+details are sent when providing Level 3 payment data. See [Stripe terms](https://stripe.com/legal)
 and [Stripe privacy](https://stripe.com/privacy). The installed Stripe gateway
 also controls its checkout data collection.
 

@@ -202,6 +202,7 @@ class DomainTransformTests(unittest.TestCase):
         self.assertIn(b'=== Ashbi Subscriptions ===\n', members['ashbi-subscriptions/readme.txt'])
         self.assertIn(b'Contributors: camster91\n', members['ashbi-subscriptions/readme.txt'])
         self.assertNotIn(b'Update URI:', main)
+        self.assertNotIn(b'Domain Path:', main, 'English-only archive has no languages directory')
         self.assertIn(b'Text Domain: ashbi-subscriptions', main)
         self.assertNotIn('subscription/subscription.php', members)
         self.assertNotIn('ashbi-subscriptions/languages/subscription.pot', members)

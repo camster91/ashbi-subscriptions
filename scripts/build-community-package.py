@@ -54,6 +54,7 @@ def community_members(canonical):
             data = domain_transform(name, data)
         if name == 'subscription.php':
             data = replace_once(data, b' * Update URI: false\n', b'')
+            data = replace_once(data, b' * Domain Path: /languages\n', b'')
             data = replace_once(data, b' * Text Domain: subscription', b' * Text Domain: ashbi-subscriptions')
             data = replace_once(data, b' * Requires PHP: 7.4', b' * Requires Plugins: woocommerce\n * Requires PHP: 7.4')
             name = 'ashbi-subscriptions.php'
