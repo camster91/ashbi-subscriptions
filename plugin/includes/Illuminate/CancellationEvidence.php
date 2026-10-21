@@ -143,16 +143,48 @@ final class CancellationEvidence {
 	 * @param string $request_id Correlation ID.
 	 */
 	public static function request( int $subscription_id, int $actor_id, string $request_id ): array {
+		return self::request_with_policy( $subscription_id, $actor_id, $request_id, '' );
+	}
+
+	/**
+	 * Record a merchant's explicit access choice using existing edit permission.
+	 *
+	 * @param int    $subscription_id Subscription ID.
+	 * @param int    $actor_id Current merchant actor.
+	 * @param string $request_id Correlation ID.
+	 * @param string $target cancelled ends now; pe_cancelled uses the configured end.
+	 */
+	public static function request_admin( int $subscription_id, int $actor_id, string $request_id, string $target ): array {
+		if ( ! in_array( $target, array( 'cancelled', 'pe_cancelled' ), true ) ) {
+			return array( 'state' => 'failed', 'barrier' => false );
+		}
+		return self::request_with_policy( $subscription_id, $actor_id, $request_id, $target );
+	}
+
+	/**
+	 * Share intent persistence and repair without granting customer access overrides.
+	 *
+	 * @param int    $subscription_id Subscription ID.
+	 * @param int    $actor_id Authorized current actor.
+	 * @param string $request_id Correlation ID.
+	 * @param string $merchant_action Empty for the existing customer policy.
+	 */
+	private static function request_with_policy( int $subscription_id, int $actor_id, string $request_id, string $merchant_action ): array {
 		global $wpdb;
 		$post = get_post( $subscription_id );
-		if ( ! is_user_logged_in() || 0 >= $actor_id || $actor_id !== (int) get_current_user_id() || ! $post || 'subscrpt_order' !== $post->post_type || ( ! current_user_can( 'manage_options' ) && (int) $post->post_author !== $actor_id ) ) {
+		$merchant = '' !== $merchant_action;
+		if ( ! is_user_logged_in() || 0 >= $actor_id || $actor_id !== (int) get_current_user_id() || ! $post || 'subscrpt_order' !== $post->post_type || ( $merchant ? ! current_user_can( 'edit_post', $subscription_id ) : ( ! current_user_can( 'manage_options' ) && (int) $post->post_author !== $actor_id ) ) ) {
 			self::record( 'request_rejected', 0, 0, $request_id, array( 'code' => 'unauthorized' ) );
 			return array(
 				'state'   => 'failed',
 				'barrier' => false,
 			);
 		}
-		if ( 'no' === get_post_meta( $subscription_id, '_subscrpt_user_cancel', true ) || ! in_array( get_post_status( $subscription_id ), array( 'active', 'pending', 'on_hold', 'pe_cancelled', 'cancelled' ), true ) ) {
+		$allowed_statuses = array( 'active', 'pending', 'on_hold', 'pe_cancelled', 'cancelled' );
+		if ( $merchant ) {
+			$allowed_statuses = array_merge( $allowed_statuses, array( 'on-hold', 'expired', 'completed' ) );
+		}
+		if ( ( ! $merchant && 'no' === get_post_meta( $subscription_id, '_subscrpt_user_cancel', true ) ) || ! in_array( get_post_status( $subscription_id ), $allowed_statuses, true ) ) {
 			return array(
 				'state'   => 'failed',
 				'barrier' => self::blocked( $subscription_id ),
@@ -169,7 +201,13 @@ final class CancellationEvidence {
 				);
 			}
 			$status     = get_post_status( $subscription_id );
-			$access_end = $existing ? (int) $existing->access_end : ( 'active' === $status ? (int) apply_filters( 'subscrpt_cancellation_time', time() + DAY_IN_SECONDS, $subscription_id ) : time() );
+			$access_end = time();
+			if ( ! $existing && 'active' === $status && 'cancelled' !== $merchant_action ) {
+				$access_end = (int) apply_filters( 'subscrpt_cancellation_time', time() + DAY_IN_SECONDS, $subscription_id );
+			}
+			if ( $existing ) {
+				$access_end = (int) $existing->access_end;
+			}
 			$insert     = $existing ? 0 : $wpdb->query( $wpdb->prepare( 'INSERT IGNORE INTO %i (subscription_id, actor_id, request_id, requested_at, access_end) VALUES (%d, %d, %s, %s, %d)', array( $wpdb->prefix . 'subscrpt_cancellation_barrier', $subscription_id, $actor_id, hash( 'sha256', $request_id ), current_time( 'mysql', true ), $access_end ) ) );
 			if ( false === $insert || ! self::blocked( $subscription_id ) || ! empty( $wpdb->last_error ) ) {
 				return array(
@@ -191,7 +229,7 @@ final class CancellationEvidence {
 				$request_id,
 				array(
 					'access_end' => $access_end,
-					'code'       => $existing ? 'repair_requested' : 'authorized',
+					'code'       => $merchant ? ( 'cancelled' === $merchant_action ? 'merchant_end_now' : 'merchant_scheduled' ) : ( $existing ? 'repair_requested' : 'authorized' ),
 				)
 			);
 			// Queue before acquiring the dispatch mutex: authorized intent survives
@@ -201,6 +239,14 @@ final class CancellationEvidence {
 			if ( ! $locked ) {
 				self::record( 'dispatch_review', $subscription_id, $actor_id, $request_id, array( 'code' => 'dispatch_in_progress' ) );
 				return array( 'state' => 'pending', 'barrier' => true, 'recorded' => true, 'access_end' => $access_end );
+			}
+			// A prior access promise stays immutable. Commit an explicit merchant end
+			// in the canonical status under the mutex before repair can inspect it.
+			if ( 'cancelled' === $merchant_action && $access_end > time() && 'cancelled' !== get_post_status( $subscription_id ) ) {
+				update_post_meta( $subscription_id, '_subscrpt_auto_renew', 0 );
+				if ( ! Action::status( 'cancelled', $subscription_id ) ) {
+					return array( 'state' => 'pending', 'barrier' => true, 'recorded' => true, 'access_end' => $access_end );
+				}
 			}
 			$barrier = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE subscription_id = %d', $wpdb->prefix . 'subscrpt_cancellation_barrier', $subscription_id ) );
 			return $barrier && empty( $wpdb->last_error ) ? self::apply_recorded( $subscription_id, $actor_id, $request_id, (int) $barrier->access_end, $audit ) : array( 'state' => 'pending', 'barrier' => true, 'recorded' => $recorded );
@@ -225,6 +271,9 @@ final class CancellationEvidence {
 	 */
 	private static function apply_recorded( int $subscription_id, int $actor_id, string $request_id, int $access_end, bool $audit ): array {
 		try {
+			// The request/worker may have cached status before acquiring the mutex.
+			// Refresh under the lock so a completed merchant end cannot reopen access.
+			clean_post_cache( $subscription_id );
 			$status = get_post_status( $subscription_id );
 			update_post_meta( $subscription_id, '_subscrpt_auto_renew', 0 );
 			$target = $access_end > time() && in_array( $status, array( 'active', 'pe_cancelled' ), true ) ? 'pe_cancelled' : 'cancelled';

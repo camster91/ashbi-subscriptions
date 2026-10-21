@@ -21,6 +21,14 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
   Recheck request storage after locking so stale staff pages cannot overwrite
   an outcome already recorded by another reviewer.
 
+- Save merchant cancellation through the same durable renewal barrier as customer
+  cancellation. Preserve immediate versus configured access timing, original
+  cancellation evidence, edit permissions and notification failure safety.
+  Show the saved billing result and next action on the existing admin details
+  page; hide reopening actions protected by a barrier. Refresh stale lifecycle
+  caches during repair and prevent pending cancellation from completing an order.
+  No historical backfill.
+  See `docs/MERCHANT_CANCELLATION.md`.
 - Keep the customer cancellation receipt visible after account reload, distinguishing
   confirmed billing protection, recorded requests awaiting confirmation, and
   unavailable evidence. Read existing durable intent without trusting stale cache;
