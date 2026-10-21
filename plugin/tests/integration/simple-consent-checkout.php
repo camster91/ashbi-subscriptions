@@ -32,6 +32,9 @@ function ashbi_check_simple_consent_checkout( callable $check ): void {
 	add_filter( 'pre_wp_mail', $deny_mail );
 	add_filter( 'pre_http_request', $deny_http, PHP_INT_MAX );
 	try {
+		// Admin integration requests do not preload WooCommerce's customer session.
+		// Keep its standard request lifecycle alive through shutdown.
+		wc_load_cart();
 		$text = 'Fabricated isolated terms: free monthly subscription. No payment provider is used.';
 		$doc  = array(
 			'enabled'      => true,
