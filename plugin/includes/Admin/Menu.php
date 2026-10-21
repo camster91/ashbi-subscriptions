@@ -441,7 +441,7 @@ class Menu {
 	 */
 	public function render_dashboard_page() {
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended
-		$list_args = array( 'post_status', 's', 'paged', 'filter_action', 'orderby', 'order', 'subscrpt_status', 'date_filter', 'per_page', 'renewal_due' );
+		$list_args = array( 'post_status', 's', 'paged', 'filter_action', 'orderby', 'order', 'subscrpt_status', 'date_filter', 'per_page', 'renewal_due', 'cancellation_review' );
 
 		foreach ( $list_args as $arg ) {
 			if ( isset( $_GET[ $arg ] ) && '' !== $_GET[ $arg ] ) {
@@ -470,6 +470,9 @@ class Menu {
 	 * Render Subscriptions page
 	 */
 	public function render_subscriptions_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to manage subscriptions.', 'subscription' ) );
+		}
 		$this->render_admin_header( __( 'Subscriptions', 'subscription' ), __( 'Manage your subscriptions', 'subscription' ) );
 
 		// Handle filters.
@@ -479,6 +482,8 @@ class Menu {
 		$per_page    = isset( $_GET['per_page'] ) ? max( 1, intval( $_GET['per_page'] ) ) : 20;
 		$paged       = isset( $_GET['paged'] ) ? max( 1, intval( $_GET['paged'] ) ) : 1;
 		$renewal_due = isset( $_GET['renewal_due'] ) ? min( 366, absint( $_GET['renewal_due'] ) ) : 0;
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Strictly allowlisted read-only list filter; POST changes use the existing list nonce.
+		$cancellation_review = isset( $_GET['cancellation_review'] ) && '1' === wp_unslash( $_GET['cancellation_review'] );
 
 		// Handle form submissions (both filters and bulk actions).
 		$request_method = isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : '';
@@ -524,6 +529,9 @@ class Menu {
 			// Handle filter form submission.
 			if ( isset( $_POST['filter_action'] ) ) {
 				$filter_params = array();
+				if ( isset( $_POST['cancellation_review'] ) && '1' === wp_unslash( $_POST['cancellation_review'] ) ) {
+					$filter_params['cancellation_review'] = '1';
+				}
 
 				if ( ! empty( $_POST['subscrpt_status'] ) ) {
 					$filter_params['subscrpt_status'] = sanitize_text_field( wp_unslash( $_POST['subscrpt_status'] ) );
@@ -678,10 +686,20 @@ class Menu {
 			$args['orderby']     = array( 'subscrpt_next_date' => 'ASC' );
 		}
 
-		$query         = new \WP_Query( $args );
-		$subscriptions = $query->posts;
-		$total         = $query->found_posts;
-		$max_num_pages = $query->max_num_pages;
+		$review_error = '';
+		if ( $cancellation_review ) {
+			try {
+				$query = CancellationReview::query( $args );
+			} catch ( \RuntimeException $error ) {
+				$query        = null;
+				$review_error = __( 'Cancellation requests could not be loaded. Please try again or contact support.', 'subscription' );
+			}
+		} else {
+			$query = new \WP_Query( $args );
+		}
+		$subscriptions = $query ? $query->posts : array();
+		$total         = $query ? $query->found_posts : 0;
+		$max_num_pages = $query ? $query->max_num_pages : 0;
 
 		// Get all possible statuses for filter dropdown.
 		$all_statuses = get_post_stati( array( 'show_in_admin_all_list' => true ), 'objects' );

@@ -29,6 +29,8 @@ function ashbi_check_evidence_contract( callable $check ): bool {
 	};
 	add_filter( 'pre_http_request', $deny_http, PHP_INT_MAX );
 	try {
+		require_once __DIR__ . '/cancellation-review.php';
+		ashbi_check_cancellation_review( $check );
 		$text     = 'Fabricated isolated contract: USD 12.50 every two months.';
 		$document = array(
 			'enabled'      => true,
