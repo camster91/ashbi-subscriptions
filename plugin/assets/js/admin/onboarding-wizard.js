@@ -5,8 +5,7 @@
  *   1. Create Plan — pick a plan type + name (name auto-fills from the type).
  *   2. Durations   — one or more billing durations.
  *   3. Connect     — choose a new or existing product to attach the plan to.
- *   4. Finish      — creates everything in order: plan group -> one term per
- *                    duration -> product (if new) -> a relation per term.
+ *   4. Review      — explicit draft creation or confirmed activation/publication.
  *
  * Steps 1–3 only collect and validate input; the plan (group), durations
  * (terms) and product relations are all created together on step 4 through the
@@ -34,6 +33,14 @@
     finalProductName: "",
     relationsCreated: false,
     finalizeRunning: false,
+    planPending: null,
+    intent: null,
+    reviewedIntent: null,
+    uncertainWrite: false,
+    seededTermId: 0,
+    relationIds: {},
+    publicationComplete: false,
+    durationSequence: 0,
     // Durations show as placeholder ghost cards in the preview until the user
     // reaches page 2 and starts editing them.
     reachedDurations: false,
@@ -66,7 +73,10 @@
       }).then(function (res) {
         return res.json().then(function (data) {
           if (!res.ok) {
-            throw new Error((data && data.message) || "Request failed.");
+            var error = new Error((data && data.message) || "Request failed.");
+            var refusalCodes = ["rest_invalid_param", "rest_missing_callback_param", "rest_forbidden", "rest_cookie_invalid_nonce", "subscrpt_installment_count_invalid", "subscrpt_plan_group_missing", "subscrpt_plan_missing", "subscrpt_oid_missing", "subscrpt_variation_product_mismatch", "subscrpt_variation_mapping_editor"];
+            error.safeRetry = res.status >= 400 && res.status < 500 && refusalCodes.indexOf(data && data.code) !== -1;
+            throw error;
           }
           return data;
         });
@@ -111,7 +121,11 @@
         }
       });
 
-      // Page 4 (finish).
+      // Page 4 (review, then explicit creation).
+      $(document).on("click", "#subscrpt-btn-create-reviewed", $.proxy(this.finalize, this));
+      $(document).on("click", "#subscrpt-btn-back-review", $.proxy(this.goToPage, this, 3));
+      $(document).on("change", "#subscrpt-publish-choice", $.proxy(this.renderReview, this));
+      $(document).on("input", "#subscrpt-installment-count", $.proxy(this.updatePreview, this));
       $(document).on("click", "#subscrpt-btn-retry-finalize", $.proxy(this.finalize, this));
       $(document).on("click", "#subscrpt-btn-add-another", $.proxy(this.restart, this));
     },
@@ -122,10 +136,16 @@
       if (e && e.preventDefault) {
         e.preventDefault();
       }
+      if (this.finalizeRunning || this.planPending || this.intent || this.uncertainWrite) {
+        return;
+      }
       this.switchSection(pageNum);
     },
 
     switchSection: function (pageNum) {
+      if (pageNum !== 4 && (this.finalizeRunning || this.planPending || this.intent || this.uncertainWrite)) {
+        return;
+      }
       $("#subscrpt-wizard-page").val(pageNum);
 
       // Once the user lands on the durations step, the preview duration nodes
@@ -171,6 +191,9 @@
 
     skip: function (e) {
       e.preventDefault();
+      if (this.finalizeRunning || this.planPending) {
+        return;
+      }
       window.location.href = this.cfg.subscriptions_url;
     },
 
@@ -190,6 +213,7 @@
       }
       this.autoName = suggested;
 
+      $("#subscrpt-installment-settings").toggle(card.data("type") === "installments");
       this.updatePreview();
     },
 
@@ -283,7 +307,7 @@
         var max = Math.max.apply(null, prices);
         text = min === max ? fmt(min) : fmt(min) + " - " + fmt(max);
       }
-      $("#subscrpt-preview-prod-sub").text(text);
+      $("#subscrpt-preview-prod-sub").text($("#subscrpt-plan-type").val() === "installments" && prices.length ? "Total commitment: " + text : text);
     },
 
     // Fill the persistent preview graph from the current form state. Each step
@@ -460,10 +484,13 @@
       var out = [];
       $("#subscrpt-durations [data-dur]").each(function () {
         var $c = $(this);
+        if (!$c.attr("data-dur-key")) {
+          $c.attr("data-dur-key", ++self.durationSequence);
+        }
         var freq = parseInt($c.find("[data-dur-freq]").val(), 10) || 1;
         var interval = self.durInterval($c);
         var name = $.trim($c.find("[data-dur-name]").val()) || self.durationName(freq, interval);
-        out.push({ freq: freq, interval: interval, name: name });
+        out.push({ freq: freq, interval: interval, name: name, key: $c.attr("data-dur-key") });
       });
       return out;
     },
@@ -590,6 +617,7 @@
       $("#subscrpt-connect-durations [data-connect-row]").each(function () {
         var idx = parseInt($(this).data("connect-dur"), 10);
         state[idx] = {
+          durationKey: $(this).attr("data-connect-key"),
           price: $(this).find("[data-connect-price]").val(),
           enabled: $(this).find("[data-connect-enabled]").is(":checked"),
         };
@@ -613,11 +641,15 @@
         var $frag = $(tpl.content.cloneNode(true));
         var $row = $frag.find("[data-connect-row]");
         $row.attr("data-connect-dur", idx);
+        $row.attr("data-connect-key", dur.key);
         $row.find("[data-connect-name]").text(dur.name);
-        $row.find("[data-connect-billing]").text("Billing every " + self.billingEvery(dur.freq, dur.interval));
-        if (prev[idx]) {
-          $row.find("[data-connect-price]").val(prev[idx].price);
-          $row.find("[data-connect-enabled]").prop("checked", prev[idx].enabled);
+        var installments = $("#subscrpt-plan-type").val() === "installments";
+        $row.find("[data-connect-billing]").text((installments ? "Total commitment; payments every " : "Price per payment; billing every ") + self.billingEvery(dur.freq, dur.interval));
+        $row.find("[data-connect-price]").attr("aria-label", dur.name + (installments ? " total commitment" : " price per payment"));
+        var previous = Object.keys(prev).map(function (key) { return prev[key]; }).find(function (row) { return row.durationKey && row.durationKey === dur.key; });
+        if (previous) {
+          $row.find("[data-connect-price]").val(previous.price);
+          $row.find("[data-connect-enabled]").prop("checked", previous.enabled);
         }
         $row.toggleClass("is-off", !$row.find("[data-connect-enabled]").is(":checked"));
         $wrap.append($frag);
@@ -656,7 +688,7 @@
       var badPrice = false;
       enabledRows.each(function () {
         var p = $.trim($(this).find("[data-connect-price]").val());
-        if (p && (isNaN(parseFloat(p)) || parseFloat(p) < 0)) {
+        if (p && (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(p) || !Number.isFinite(Number(p)))) {
           badPrice = true;
         }
       });
@@ -665,11 +697,57 @@
         return;
       }
 
-      this.switchSection(4);
-      this.finalize();
+      if (this.finalizeRunning || this.planPending || this.intent || this.uncertainWrite) {
+        return;
+      }
+      try {
+        this.captureIntent();
+        this.switchSection(4);
+        this.renderReview();
+      } catch (err) {
+        window.alert(err.message);
+      }
     },
 
-    // ----- Page 4: create everything sequentially -----
+    // ----- Page 4: review before any mutation -----
+
+    renderReview: function () {
+      if (this.intent || this.finalizeRunning) {
+        return;
+      }
+      this.reviewedIntent = this.captureIntent();
+      var intent = this.reviewedIntent;
+      var sym = this.cfg.currency_symbol || "$";
+      var lines = [intent.title + " — " + intent.productName];
+      intent.terms.forEach(function (term, idx) {
+        var row = intent.rows[idx];
+        if (!row || !row.enabled) {
+          return;
+        }
+        var price = row.price || "0";
+        var cadence = this.billingEvery(term.billing_frequency, Object.keys(INTERVAL_TO_INT).find(function (key) {
+          return INTERVAL_TO_INT[key] === term.billing_interval;
+        }));
+        if (intent.type === "installments") {
+          var decimals = Number(this.cfg.currency_decimals == null ? $("#subscrpt-installment-count").attr("data-currency-decimals") : this.cfg.currency_decimals);
+          var factor = Math.pow(10, decimals);
+          var minor = Math.round((Number(price) + Number.EPSILON) * factor);
+          var count = term.data.installment_count;
+          var base = Math.floor(minor / count);
+          var final = minor - base * (count - 1);
+          lines.push(term.title + ": total " + sym + (minor / factor).toFixed(decimals) + " across " + count + " payments, every " + cadence + ". Base estimate due today: " + sym + (base / factor).toFixed(decimals) + "; first " + (count - 1) + " payments: " + sym + (base / factor).toFixed(decimals) + " each; final payment: " + sym + (final / factor).toFixed(decimals) + ". No trial or signup fee is added.");
+        } else {
+          lines.push(term.title + ": " + sym + price + " per payment, every " + cadence + "; recurring until cancelled.");
+        }
+      }, this);
+      lines.push("Signup fee: 0. No free trial. Taxes, shipping and coupons are calculated at checkout, not included here.");
+      lines.push(intent.publish ? (intent.mode === "new" ? "Activate this plan and publish the new product after setup. Customers may purchase it." : "Activate this plan on the existing product. Its publication status, native prices and one-time settings will not change; an already published product may offer these subscriptions.") : "Create draft plan and durations. A new product stays draft; an existing product keeps its publication status. This plan is not offered to customers until activated separately.");
+      $("#subscrpt-review-summary").text(lines.join("\n"));
+      $("#subscrpt-review-confirm").prop("checked", false);
+      $("#subscrpt-btn-create-reviewed").text(intent.publish ? "Activate reviewed plan" : "Create reviewed draft");
+      $("#subscrpt-finalize-review").removeAttr("hidden");
+      $("#subscrpt-finalize-progress").attr("hidden", "hidden");
+    },
 
     // Mark a progress step's state ("is-doing" / "is-done").
     finalizeStep: function (key, state) {
@@ -684,7 +762,28 @@
       if (e && e.preventDefault) {
         e.preventDefault();
       }
-      if (this.finalizeRunning) {
+      if (this.finalizeRunning || this.planPending) {
+        return;
+      }
+      try {
+        if (this.uncertainWrite) {
+          throw this.uncertainError();
+        }
+        var current = this.captureIntent();
+        var approved = this.intent || this.reviewedIntent;
+        if (!approved || !$("#subscrpt-review-confirm").is(":checked")) {
+          throw new Error("Review the billing and publication choices, then confirm them before creating anything.");
+        }
+        if (JSON.stringify(current) !== JSON.stringify(approved)) {
+          throw new Error("Fields changed after review. Restore the original reviewed values to resume. Check existing records before starting a different plan.");
+        }
+        if (!this.intent && approved.publish && !window.confirm("Activate the reviewed subscription plan? New products will be published; existing products keep their current publication status. Customers may be able to buy these subscriptions.")) {
+          return;
+        }
+        this.intent = approved;
+      } catch (err) {
+        $("#subscrpt-finalize-error-msg").text(err.message);
+        $("#subscrpt-finalize-error").removeAttr("hidden");
         return;
       }
       this.finalizeRunning = true;
@@ -695,9 +794,13 @@
       $("#subscrpt-link-plans, #subscrpt-link-products").attr("hidden", "hidden");
       $("[data-finalize-step]").removeClass("is-doing is-done");
 
-      this.ensurePlan()
+      $("#subscrpt-finalize-review").attr("hidden", "hidden");
+      return this.ensurePlan()
         .then(function () {
           return self.ensureProductAndConnect();
+        })
+        .then(function () {
+          return self.completePublication();
         })
         .then(function () {
           self.finalizeRunning = false;
@@ -708,10 +811,24 @@
           $("#subscrpt-finalize-progress").attr("hidden", "hidden");
           $("#subscrpt-finalize-error-msg").text(err && err.message ? err.message : "Please try again.");
           $("#subscrpt-finalize-error").removeAttr("hidden");
+          $("#subscrpt-btn-retry-finalize").prop("disabled", self.uncertainWrite);
+          $("#subscrpt-link-plans, #subscrpt-link-products").removeAttr("hidden");
         });
     },
 
+    installmentCount: function () {
+      var count = Number($("#subscrpt-installment-count").val());
+      if (!Number.isSafeInteger(count) || count < 2) {
+        throw new Error("Choose a whole number of payments (minimum 2).");
+      }
+      return count;
+    },
+
     termBody: function (dur, groupId, type) {
+      var data = { free_trial_interval: "day" };
+      if (type === "installments") {
+        data.installment_count = this.installmentCount();
+      }
       return {
         plan_group_id: groupId,
         type: type,
@@ -721,56 +838,114 @@
         billing_length: 0,
         free_trial: "",
         signup_fee: { amount: "" },
-        status: "active",
-        data: { free_trial_interval: "day" },
+        status: "draft",
+        data: data,
       };
     },
 
-    // Create the plan group + one term per duration (reusing the auto-seeded
-    // draft term for the first). No-op if a retry already created them.
+    // Freeze all mutation inputs before the first request, including prices.
+    captureIntent: function () {
+      var type = $("#subscrpt-plan-type").val() || "recurring";
+      var rows = this.readConnectState();
+      Object.keys(rows).forEach(function (key) {
+        var row = rows[key];
+        var price = $.trim(row.price);
+        if (row.enabled && price && (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(price) || !Number.isFinite(Number(price)))) {
+          throw new Error("Please enter valid decimal prices.");
+        }
+      });
+      return {
+        title: $.trim($("#subscrpt_plan_title").val()),
+        type: type,
+        terms: this.collectDurations().map(function (dur) {
+          return this.termBody(dur, 0, type);
+        }, this),
+        mode: this.currentConnectMode(),
+        productId: $("#subscrpt-existing-product-hidden").val() || "",
+        productName: this.previewProductName(),
+        rows: rows,
+        publish: $("#subscrpt-publish-choice").is(":checked"),
+      };
+    },
+
+    uncertainError: function () {
+      return new Error("Check existing plans and products before continuing. A request may have saved, but its outcome could not be confirmed. Do not create another copy.");
+    },
+
+    // There is no server-side idempotency contract for POST. Only an explicit
+    // validation refusal is retryable; a lost/malformed success fails closed.
+    writeRecord: function (method, path, body) {
+      var self = this;
+      if (this.uncertainWrite) {
+        return Promise.reject(this.uncertainError());
+      }
+      return this.api(method, path, body).then(function (record) {
+        if (!record || !Number.isSafeInteger(Number(record.id)) || Number(record.id) <= 0) {
+          throw new Error("The saved record could not be confirmed.");
+        }
+        return record;
+      }).catch(function (err) {
+        if (!err.safeRetry) {
+          self.uncertainWrite = true;
+          throw self.uncertainError();
+        }
+        throw err;
+      });
+    },
+
+    // Reuse the group, seeded ID and each individually completed duration.
     ensurePlan: function () {
       var self = this;
-      if (this.groupId && this.termIds && this.termIds.length) {
-        this.finalizeStep("plan", "is-done");
-        this.finalizeStep("durations", "is-done");
-        return Promise.resolve();
+      if (this.uncertainWrite) {
+        return Promise.reject(this.uncertainError());
       }
-
-      var title = $.trim($("#subscrpt_plan_title").val());
-      var type = $("#subscrpt-plan-type").val() || "recurring";
-      var durations = this.collectDurations();
-
+      if (this.planPending) {
+        return this.planPending;
+      }
+      try {
+        this.intent = this.intent || this.captureIntent();
+      } catch (err) {
+        return Promise.reject(err);
+      }
+      var intent = this.intent;
       this.finalizeStep("plan", "is-doing");
-      return this.api("POST", "/groups", { title: title, type: type, product_type: 1, status: "active" }).then(
-        function (group) {
-          self.groupId = group.id;
-          self.planTitle = title;
-          self.billingText = durations[0].name;
-          self.finalizeStep("plan", "is-done");
-          self.finalizeStep("durations", "is-doing");
-
-          var seeded = group.plans && group.plans.length ? group.plans[0] : null;
-          var termIds = [];
-          var chain = durations.reduce(function (promise, dur, idx) {
-            return promise.then(function () {
-              var body = self.termBody(dur, group.id, type);
-              if (idx === 0 && seeded && seeded.id) {
-                return self.api("PUT", "/terms/" + seeded.id, body).then(function () {
-                  termIds.push(seeded.id);
-                });
-              }
-              return self.api("POST", "/terms", body).then(function (term) {
-                termIds.push(term.id);
-              });
-            });
-          }, Promise.resolve());
-
+      this.planPending = Promise.resolve().then(function () {
+        if (self.groupId) {
+          return;
+        }
+        return self.writeRecord("POST", "/groups", { title: intent.title, type: intent.type, product_type: 1, status: "draft" }).then(function (group) {
+          self.groupId = Number(group.id);
+          self.seededTermId = group.plans && group.plans[0] ? Number(group.plans[0].id) : 0;
+          // A missing seed is not permission to create a duplicate duration.
+          if (!self.seededTermId) {
+            self.uncertainWrite = true;
+            throw self.uncertainError();
+          }
+          self.planTitle = intent.title;
+          self.billingText = intent.terms[0].title;
+        });
+      }).then(function () {
+        self.finalizeStep("plan", "is-done");
+        self.finalizeStep("durations", "is-doing");
+        return intent.terms.reduce(function (chain, term, idx) {
           return chain.then(function () {
-            self.termIds = termIds;
-            self.finalizeStep("durations", "is-done");
+            if (self.termIds[idx]) {
+              return;
+            }
+            var body = Object.assign({}, term, { plan_group_id: self.groupId });
+            var method = idx === 0 ? "PUT" : "POST";
+            var path = idx === 0 ? "/terms/" + self.seededTermId : "/terms";
+            return self.writeRecord(method, path, body).then(function (saved) {
+              self.termIds[idx] = Number(saved.id);
+            });
           });
-        },
-      );
+        }, Promise.resolve());
+      }).then(function () {
+        self.finalizeStep("durations", "is-done");
+      }).finally(function () {
+        self.planPending = null;
+      });
+      return this.planPending;
     },
 
     // Create the product (if new) and connect the plan to it. No-op if a retry
@@ -792,75 +967,142 @@
         });
     },
 
-    // Resolve the product id — an existing selection, or a newly created one
-    // (name only; each duration carries its own price on the relation).
+    // Resolve from the frozen reviewed selection, never from changed fields.
     ensureProduct: function () {
       var self = this;
       if (this.finalProductId) {
         return Promise.resolve();
       }
-
-      if (this.currentConnectMode() === "existing") {
-        this.finalProductId = $("#subscrpt-existing-product-hidden").val();
-        this.finalProductName = this.selectedProductName || "Product";
+      if (this.intent.mode === "existing") {
+        this.finalProductId = this.intent.productId;
+        this.finalProductName = this.intent.productName;
         return Promise.resolve();
       }
+      return this.productRequest("subscrpt_create_wizard_product", { product_name: this.intent.productName }).then(function (record) {
+        self.finalProductId = record.product_id;
+        self.finalProductName = self.intent.productName;
+      });
+    },
 
-      var name = $.trim($("#subscrpt_new_product_name").val());
-      this.finalProductName = name;
+    productRequest: function (action, fields) {
+      var self = this;
+      if (this.uncertainWrite) {
+        return Promise.reject(this.uncertainError());
+      }
       return new Promise(function (resolve, reject) {
-        $.post(
-          self.cfg.ajax_url,
-          {
-            action: "subscrpt_create_wizard_product",
-            nonce: $("#subscrpt_wizard_nonce").val(),
-            product_name: name,
-          },
-          function (response) {
-            if (response && response.success) {
-              self.finalProductId = response.data.product_id;
-              resolve();
+        $.post(self.cfg.ajax_url, Object.assign({ action: action, nonce: $("#subscrpt_wizard_nonce").val() }, fields), function (response) {
+          if (response && response.success && response.data && Number.isSafeInteger(Number(response.data.product_id)) && Number(response.data.product_id) > 0 && response.data.product_status === (action === "subscrpt_publish_wizard_product" ? "publish" : "draft")) {
+            resolve(response.data);
+          } else {
+            // Only declared pre-write validation refusals permit resubmission.
+            if (response && response.success === false && response.data && response.data.safe_retry === true) {
+              reject(new Error(response.data.message));
             } else {
-              reject(
-                new Error((response && response.data && response.data.message) || "Could not create the product."),
-              );
+              self.uncertainWrite = true;
+              reject(self.uncertainError());
             }
-          },
-        ).fail(function () {
-          reject(new Error("Server error. Please try again."));
+          }
+        }).fail(function () {
+          self.uncertainWrite = true;
+          reject(self.uncertainError());
         });
       });
     },
 
-    // Connect the product to each toggled-on duration, using that duration's
-    // own price. Durations toggled off get no relation.
+    // Sequential writes checkpoint each relation, so later refusals don't replay
+    // earlier writes. A lost response stops here instead of blindly POSTing again.
     createRelations: function () {
       var self = this;
-      var rows = $("#subscrpt-connect-durations [data-connect-row]");
-      var calls = [];
-      (this.termIds || []).forEach(function (tid, idx) {
-        var $row = rows.filter('[data-connect-dur="' + idx + '"]');
-        var enabled = $row.length ? $row.find("[data-connect-enabled]").is(":checked") : true;
-        if (!enabled) {
-          return;
-        }
-        var price = $row.length ? $.trim($row.find("[data-connect-price]").val()) : "";
-        calls.push(
-          self.api("POST", "/relations", {
+      return this.termIds.reduce(function (chain, tid, idx) {
+        return chain.then(function () {
+          var row = self.intent.rows[idx];
+          if (!row || !row.enabled || self.relationIds[idx]) {
+            return;
+          }
+          return self.writeRecord("POST", "/relations", {
             plan_id: tid,
-            oid: parseInt(self.finalProductId, 10),
+            oid: Number(self.finalProductId),
             vid: 0,
             type: 1,
-            status: "active",
+            status: "draft",
             exclude: false,
-            data: { regular_price: price, sale_price: "", discount_value: 0 },
-          }),
-        );
+            data: { regular_price: $.trim(row.price), sale_price: "", discount_value: 0 },
+          }).then(function (record) {
+            self.relationIds[idx] = Number(record.id);
+          });
+        });
+      }, Promise.resolve());
+    },
+
+    // Read the canonical records independently before activation and before done.
+    verifyStoredCommitment: function (status) {
+      var self = this;
+      return this.api("GET", "/groups/" + this.groupId).then(function (group) {
+        if (!group || Number(group.id) !== self.groupId || group.status !== status || group.title !== self.intent.title) {
+          throw new Error("Saved plan status could not be confirmed. Check existing plans and products.");
+        }
+        return self.termIds.reduce(function (pending, id, idx) {
+          return pending.then(function () {
+            return self.api("GET", "/terms/" + id).then(function (term) {
+              var expected = self.intent.terms[idx];
+              if (!term || Number(term.id) !== id || Number(term.plan_group_id) !== self.groupId || term.title !== expected.title || term.status !== status || Number(term.billing_frequency) !== expected.billing_frequency || Number(term.billing_interval) !== expected.billing_interval || Number(term.billing_length) !== expected.billing_length || String(term.free_trial || "") !== expected.free_trial || Number((term.signup_fee || {}).amount || 0) !== 0 || (self.intent.type === "installments" && Number((term.data || {}).installment_count) !== expected.data.installment_count)) {
+                throw new Error("Saved billing commitment could not be confirmed. Check existing plans and products.");
+              }
+              var row = self.intent.rows[idx];
+              if (row && row.enabled) {
+                var plan = (group.plans || []).find(function (candidate) { return Number(candidate.id) === id; });
+                var relation = plan && (plan.relations || []).find(function (candidate) { return Number(candidate.id) === self.relationIds[idx]; });
+                if (!relation || Number(relation.oid) !== Number(self.finalProductId) || Number(relation.vid) !== 0 || relation.status !== status || String((relation.data || {}).regular_price || "") !== $.trim(row.price) || Number((relation.data || {}).discount_value || 0) !== 0 || String((relation.data || {}).sale_price || "") !== "") {
+                  throw new Error("Saved product pricing could not be confirmed. Check existing plans and products.");
+                }
+              }
+            });
+          });
+        }, Promise.resolve());
       });
-      return Promise.all(calls);
+    },
+
+    // Verify staged records first; publish only after explicit opt-in activation.
+    completePublication: function () {
+      var self = this;
+      if (this.publicationComplete) {
+        return Promise.resolve();
+      }
+      var chain = this.verifyStoredCommitment("draft");
+      if (this.intent.publish) {
+        this.termIds.forEach(function (id) {
+          chain = chain.then(function () {
+            return self.writeRecord("PUT", "/terms/" + id, { status: "active" });
+          });
+        });
+        chain = chain.then(function () {
+          return self.writeRecord("PUT", "/groups/" + self.groupId, { status: "active" });
+        });
+        Object.keys(this.relationIds).forEach(function (idx) {
+          chain = chain.then(function () {
+            return self.writeRecord("PUT", "/relations/" + self.relationIds[idx], { status: "active" });
+          });
+        });
+        chain = chain.then(function () {
+          return self.verifyStoredCommitment("active");
+        });
+      }
+      if (this.intent.publish && this.intent.mode === "new") {
+        chain = chain.then(function () {
+          return self.productRequest("subscrpt_publish_wizard_product", { product_id: self.finalProductId, publish_confirmed: "yes" });
+        });
+      }
+      return chain.then(function () {
+        self.publicationComplete = true;
+      }).catch(function (err) {
+        self.uncertainWrite = true;
+        throw err;
+      });
     },
 
     showDone: function (productName) {
+      $("#subscrpt-done-heading").text(this.intent.publish ? "Your plan is active." : "Your draft is saved.");
+      $("#subscrpt-done-summary").text(this.intent.publish ? (this.intent.mode === "new" ? "The plan is active and the new product is published. Checkout applies taxes, shipping and coupons." : "The plan is active. The existing product's publication status was not changed; storefront availability depends on that status.") : "The plan and durations are draft. A new product remains draft; an existing product's publication status was not changed. This plan is not offered to customers until activated separately.");
       if (productName) {
         $("#subscrpt-preview-prod").text(productName);
       }
@@ -873,6 +1115,9 @@
 
     restart: function (e) {
       e.preventDefault();
+      if (this.finalizeRunning || this.planPending || this.uncertainWrite || !this.publicationComplete) {
+        return;
+      }
       var self = this;
       $.post(
         this.cfg.ajax_url,
@@ -881,6 +1126,11 @@
           nonce: $("#subscrpt_wizard_nonce").val(),
         },
         function () {
+          self.intent = null;
+          self.reviewedIntent = null;
+          self.seededTermId = 0;
+          self.relationIds = {};
+          self.publicationComplete = false;
           self.groupId = 0;
           self.termIds = [];
           self.planTitle = "";
