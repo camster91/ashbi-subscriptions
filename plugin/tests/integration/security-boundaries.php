@@ -743,6 +743,8 @@ function ashbi_run_security_boundary_integration_checks() {
 			)
 		);
 		$check( 1 === $early_relation_count, 'Early renewal duplicate protection did not preserve one relation.' );
+		require_once __DIR__ . '/early-renewal-due.php';
+		ashbi_check_early_renewal_due( $check, (int) $early_subscription_id, $early_order_one );
 		if ( $early_order_one instanceof \WC_Order ) {
 			$early_order_one->delete( true );
 		}
@@ -1209,6 +1211,8 @@ function ashbi_run_security_boundary_integration_checks() {
 				$recurring_renewal_order instanceof \WC_Order && 34.0 === (float) $recurring_renewal_order->get_total(),
 				'Renewal total did not include the recurring coupon discount.'
 			);
+			require_once __DIR__ . '/recurring-coupon-limits.php';
+			ashbi_check_recurring_coupon_limits( $check, (int) $recurring_subscription_id, $recurring_source_order, $recurring_source_order->get_item( $recurring_source_item_id ) );
 		} finally {
 			remove_filter( 'subscrpt_coupon_is_recurring', $recurring_coupon_filter, 10 );
 			remove_filter( 'subscrpt_coupon_recurring_limit', $recurring_limit_filter, 10 );

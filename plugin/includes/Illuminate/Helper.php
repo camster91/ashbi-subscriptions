@@ -505,6 +505,13 @@ class Helper {
 			return false;
 		}
 
+		foreach ( self::early_renewal_orders_for_period( (int) $subscription_id, $period_anchor ) as $early_order ) {
+			if ( (int) $early_order->get_id() !== (int) $order_id ) {
+				subscrpt_write_log( "Renewal checkout #{$order_id} rejected because an early invoice already reserves subscription #{$subscription_id}'s current period." );
+				return false;
+			}
+		}
+
 		$claim = RenewalClaim::acquire( (int) $subscription_id, 0, $period_anchor );
 		if ( ! $claim || ( empty( $claim['acquired'] ) && (int) $claim['order_id'] !== (int) $order_id ) ) {
 			subscrpt_write_log( "Renewal order #{$order_id} rejected because another order owns the current period for subscription #{$subscription_id}." );
@@ -929,42 +936,25 @@ class Helper {
 			'exhausted' => false,
 		);
 
-		// Memoized per request: list views and the single view each resolve the same.
-		// subscription two or three times, and a coupon'd subscription costs a query.
-		static $cache = array();
-
-		$cache_key = $subscription_id . '|' . ( $order_item ? $order_item->get_id() : 0 );
-
-		if ( isset( $cache[ $cache_key ] ) ) {
-			return $cache[ $cache_key ];
-		}
-
 		if ( ! $order ) {
 			$order_item_id = get_post_meta( $subscription_id, '_subscrpt_order_item_id', true );
 			$order         = $order_item_id ? wc_get_order( wc_get_order_id_by_order_item_id( $order_item_id ) ) : null;
 		}
 
 		if ( ! $order ) {
-			$cache[ $cache_key ] = $result;
 			return $result;
 		}
 
 		$coupon_lines = $order->get_items( 'coupon' );
 		if ( empty( $coupon_lines ) ) {
-			$cache[ $cache_key ] = $result;
 			return $result;
 		}
 
-		/*
-		 * Position the next renewal will take in this subscription's order sequence.
-		 *
-		 * Note this is deliberately one more than the current order count, and so is NOT the
-		 * same renewal-position expression the order builder evaluates: that
-		 * runs after the new order's relation row is already inserted, so its count includes
-		 * the order being created. Both mean "is this order still within the limit".
-		 */
-		$next_order_position = count( self::get_related_orders( (int) $subscription_id ) ) + 1;
-		$limits              = array();
+		// Match the existing paid-installment counter: attempts and duplicate links
+		// cannot consume a discount promised for a number of payments. Read again
+		// after payment/price changes within a long-lived worker request.
+		$next_payment_position = null;
+		$limits                = array();
 
 		foreach ( $coupon_lines as $coupon_line ) {
 			$coupon = new \WC_Coupon( $coupon_line->get_code() );
@@ -980,8 +970,12 @@ class Helper {
 			if ( $limit > 0 ) {
 				$limits[] = $limit;
 
-				// The next renewal is past the limit, so it will be charged full price.
-				if ( $next_order_position > $limit ) {
+				// First-payment-only coupons never extend to a renewal, even when
+				// legacy history is missing. Unlimited coupons need no history read.
+				if ( null === $next_payment_position && $limit > 1 ) {
+					$next_payment_position = subscrpt_count_payments_made( (int) $subscription_id ) + 1;
+				}
+				if ( 1 === $limit || $next_payment_position > $limit ) {
 					$result['exhausted'] = true;
 					continue;
 				}
@@ -999,8 +993,6 @@ class Helper {
 		if ( $result['amount'] > 0 && $discounted_subtotal > 0 && abs( $discounted_subtotal - $recurring_subtotal ) > 0.01 ) {
 			$result['amount'] = $result['amount'] * ( $recurring_subtotal / $discounted_subtotal );
 		}
-
-		$cache[ $cache_key ] = $result;
 
 		return $result;
 	}
@@ -1308,6 +1300,17 @@ class Helper {
 			return false;
 		}
 
+		$early_orders = self::early_renewal_orders_for_period( (int) $subscription_id, $period_anchor );
+		if ( count( $early_orders ) > 1 ) {
+			subscrpt_write_log( "Multiple early invoices require reconciliation for subscription #{$subscription_id}; no renewal was created or dispatched." );
+			return false;
+		}
+		$early_order = $early_orders ? reset( $early_orders ) : false;
+		if ( $early_order && $early_order->get_meta( '_subscrpt_early_renewal_applied' ) ) {
+			subscrpt_write_log( "An applied early invoice conflicts with the due date for subscription #{$subscription_id}; manual review is required." );
+			return false;
+		}
+
 		$claim = RenewalClaim::acquire( (int) $subscription_id, 0, $period_anchor );
 		if ( ! $claim ) {
 			subscrpt_write_log( "Renewal claim storage unavailable. Skipping renewal for subscription #{$subscription_id}." );
@@ -1317,11 +1320,25 @@ class Helper {
 		if ( empty( $claim['acquired'] ) ) {
 			$claimed_order = ! empty( $claim['order_id'] ) ? wc_get_order( (int) $claim['order_id'] ) : false;
 			if ( $claimed_order ) {
+				if ( $early_order && (int) $early_order->get_id() !== (int) $claimed_order->get_id() ) {
+					subscrpt_write_log( "An early invoice conflicts with the canonical renewal for subscription #{$subscription_id}; manual review is required." );
+					return false;
+				}
 				return self::resume_canonical_renewal_order( $claimed_order, $old_order, (int) $subscription_id );
 			}
 
 			subscrpt_write_log( "Renewal period is already being processed for subscription #{$subscription_id}." );
 			return false;
+		}
+
+		if ( $early_order ) {
+			if ( ! RenewalClaim::finalize( (int) $subscription_id, $claim['period_key'], $claim['token'], (int) $early_order->get_id() ) ) {
+				RenewalClaim::release( (int) $subscription_id, $claim['period_key'], $claim['token'] );
+				return false;
+			}
+			// Preserve the quoted amounts, early relation and payment identity. Only
+			// the existing durable period claim gains its canonical order.
+			return self::resume_canonical_renewal_order( $early_order, $old_order, (int) $subscription_id );
 		}
 
 		// Recover an order whose relation and period metadata were persisted before.
@@ -1445,6 +1462,27 @@ class Helper {
 		}
 
 		return self::resume_canonical_renewal_order( $new_order, $old_order, (int) $subscription_id, (int) $new_order_item_id );
+	}
+
+	/**
+	 * Find unique, non-voided early invoices for an exact stored billing date.
+	 *
+	 * @param int $subscription_id Subscription ID.
+	 * @param int $period_anchor Due timestamp.
+	 * @return array<int,\WC_Order> Matching invoices keyed by order ID.
+	 */
+	private static function early_renewal_orders_for_period( int $subscription_id, int $period_anchor ): array {
+		$orders = array();
+		foreach ( self::get_related_orders( $subscription_id ) as $relation ) {
+			if ( 'early-renew' !== ( $relation->type ?? '' ) ) {
+				continue;
+			}
+			$order = wc_get_order( (int) ( $relation->order_id ?? 0 ) );
+			if ( $order && ! in_array( $order->get_status(), array( 'cancelled', 'refunded' ), true ) && $period_anchor === (int) $order->get_meta( '_subscrpt_early_renewal_anchor' ) ) {
+				$orders[ $order->get_id() ] = $order;
+			}
+		}
+		return $orders;
 	}
 
 	/**
@@ -1627,7 +1665,7 @@ class Helper {
 
 		if ( ! $order_item_id ) {
 			foreach ( self::get_related_orders( $subscription_id ) as $relation ) {
-				if ( (int) ( $relation->order_id ?? 0 ) === (int) $renewal_order->get_id() && 'renew' === ( $relation->type ?? '' ) ) {
+				if ( (int) ( $relation->order_id ?? 0 ) === (int) $renewal_order->get_id() && in_array( ( $relation->type ?? '' ), array( 'renew', 'early-renew' ), true ) ) {
 					$order_item_id = (int) ( $relation->order_item_id ?? 0 );
 					break;
 				}
@@ -1650,7 +1688,14 @@ class Helper {
 		}
 
 		if ( ! $renewal_order->has_status( 'pending' ) || ! $renewal_order->needs_payment() ) {
-			RenewalClaim::mark_payment_complete( $subscription_id, (int) $renewal_order->get_id() );
+			if ( $renewal_order->is_paid() ) {
+				if ( 'early-renew' === $renewal_order->get_meta( '_subscrpt_renewal_type' ) ) {
+					// Also recover a crash between claiming an already-paid early
+					// invoice and applying its schedule. Paid callbacks are replay safe.
+					do_action( 'subscrpt_retry_subscription_schedule', $subscription_id, (int) $renewal_order->get_id() );
+				}
+				RenewalClaim::mark_payment_complete( $subscription_id, (int) $renewal_order->get_id() );
+			}
 			return $renewal_order;
 		}
 
@@ -1671,7 +1716,7 @@ class Helper {
 		}
 
 		$renewal_order = wc_get_order( $renewal_order ? $renewal_order->get_id() : 0 );
-		if ( $renewal_order && ( ! $renewal_order->has_status( 'pending' ) || ! $renewal_order->needs_payment() ) ) {
+		if ( $renewal_order && $renewal_order->is_paid() ) {
 			RenewalClaim::mark_payment_complete( $subscription_id, (int) $renewal_order->get_id() );
 		}
 
@@ -2219,9 +2264,7 @@ class Helper {
 	 * @return void
 	 */
 	private static function add_recurring_coupons_to_renewal_order( \WC_Order $new_order, \WC_Order $old_order, \WC_Order_Item_Product $order_item, int $new_order_item_id, int $subscription_id = 0 ) {
-		$next_order_position    = $subscription_id > 0
-			? count( self::get_related_orders( $subscription_id ) ) + 1
-			: 1;
+		$next_payment_position  = null;
 		$source_subtotal        = (float) $order_item->get_subtotal();
 		$renewal_subtotal       = $subscription_id > 0
 			? (float) self::get_subscription_total( $subscription_id ) * max( 1, (int) $order_item->get_quantity() )
@@ -2246,8 +2289,16 @@ class Helper {
 
 			/** This filter is documented in includes/Illuminate/Helper.php. */
 			$limit = (int) apply_filters( 'subscrpt_coupon_recurring_limit', 0, $coupon, '' );
-			if ( $limit > 0 && $next_order_position > $limit ) {
+			if ( 1 === $limit ) {
 				continue;
+			}
+			if ( $limit > 1 ) {
+				if ( null === $next_payment_position ) {
+					$next_payment_position = $subscription_id > 0 ? subscrpt_count_payments_made( $subscription_id ) + 1 : 1;
+				}
+				if ( $next_payment_position > $limit ) {
+					continue;
+				}
 			}
 
 			$discount = (float) $coupon_line->get_discount() * $price_ratio;

@@ -105,6 +105,7 @@ disabled, or not classified as sandbox/offline.
 - [Architecture](docs/ARCHITECTURE.md)
 - [Security and payments](docs/SECURITY.md)
 - [Customer cancellation receipts](docs/PERSISTENT_CANCELLATION_RECEIPTS.md)
+- [Simple checkout consent and account routes](docs/SIMPLE_CONSENT_ACCOUNT_ROUTES.md)
 - [Database migration 1.5.0](docs/MIGRATION_1.5.0.md)
 - [Per-site staging rehearsal and rollback](docs/SITE_REHEARSAL_RUNBOOK.md)
 - [Public release checklist](docs/PUBLIC_RELEASE_CHECKLIST.md)

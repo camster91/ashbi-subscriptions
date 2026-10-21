@@ -1,9 +1,40 @@
 # Changelog
 
+## Unreleased — optional contact request review adapter
+
+- Add a separately installed, disabled-by-default Elementor intake review queue.
+  Preserve requests before email, deduplicate open receipts, flag aging requests,
+  and require staff resolution/notification plus verified cancellation proof.
+  No core billing behavior, live setting, outgoing mail or historical data changes.
+  See `docs/CONTACT_REQUEST_REVIEW.md` for configuration and staging gates.
+
 All notable Ashbi-maintained changes after the immutable upstream import are
 documented here. The original vendor changelog remains at `plugin/changelog.txt`.
 
 ## 2.2.0 candidate - 2026-10-10
+
+- Accept the existing singular billing units from simple subscription products
+  without weakening explicit consent or snapshot checks. Register account routes
+  on normal admin requests so permalink refreshes retain subscription pages.
+- Keep contact cancellation requests open when confirmation is stale, conflicting
+  or unavailable, using the canonical core receipt reader for staff closure.
+  Recheck request storage after locking so stale staff pages cannot overwrite
+  an outcome already recorded by another reviewer.
+- Count recurring coupon limits using the existing unique paid-payment counter,
+  so failed, pending and duplicate order links do not remove a promised discount.
+  Refresh discount calculations after in-request payment or price changes; keep
+  first-payment-only coupons out of renewals, even with missing legacy links.
+  Read payment history only for finite multi-payment coupon limits. Preserve
+  saved invoices, coupon filters, price/tax policy and historical evidence.
+  See `docs/RECURRING_COUPON_LIMITS.md`.
+- Reuse an unpaid early-renewal invoice when its billing date arrives, preserving
+  its quote and payment identity instead of creating a second invoice. Route
+  claimed early invoices through durable paid activation/repair after expiry;
+  failed/on-hold orders are never marked paid merely because dispatch stopped.
+  Conflicting invoices stop automatic creation for manual reconciliation.
+  Refuse a fresh cart renewal while an early invoice reserves the same period,
+  before creating another relation/claim or processing checkout payment.
+  See `docs/EARLY_RENEWAL_DUE.md`.
 
 - Save merchant cancellation through the same durable renewal barrier as customer
   cancellation. Preserve immediate versus configured access timing, original
