@@ -8,6 +8,7 @@
 namespace SpringDevs\Subscription\Admin;
 
 use SpringDevs\Subscription\Illuminate\Action;
+use SpringDevs\Subscription\Illuminate\CancellationEvidence;
 use SpringDevs\Subscription\Illuminate\Helper;
 
 // HPOS: This file is compatible with WooCommerce High-Performance Order Storage (HPOS).
@@ -309,13 +310,20 @@ class Subscriptions {
 	 * @param int    $post_id Subscription (subscrpt_order) post ID.
 	 * @param string $action  Target status slug.
 	 *
-	 * @return void
+	 * @return array|null Cancellation evidence result, or null for other actions.
+	 * @throws \Throwable When a non-cancellation notification fails.
 	 */
 	public static function process_status_change( $post_id, $action ) {
 		$old_status = get_post_status( $post_id );
 
-		// Apply the shared barrier guard before any status or order/email side effect.
-		if ( ! Action::status( $action, (int) $post_id ) ) {
+		$result = null;
+		if ( in_array( $action, array( 'cancelled', 'pe_cancelled' ), true ) ) {
+			$result = CancellationEvidence::request_admin( (int) $post_id, (int) get_current_user_id(), wp_generate_uuid4(), $action );
+			if ( empty( $result['recorded'] ) || empty( $result['barrier'] ) ) {
+				return $result;
+			}
+		} elseif ( ! Action::status( $action, (int) $post_id ) ) {
+			// Apply the shared barrier guard before order/email side effects.
 			return;
 		}
 		$action = get_post_status( $post_id );
@@ -323,17 +331,25 @@ class Subscriptions {
 		if ( $old_status !== $action ) {
 			$old_status_object = get_post_status_object( $old_status );
 			$new_status_object = get_post_status_object( $action );
-			WC()->mailer();
-			do_action( 'subscrpt_status_changed_admin_email_notification', $post_id, $old_status_object->label, $new_status_object->label );
+			try {
+				WC()->mailer();
+				do_action( 'subscrpt_status_changed_admin_email_notification', $post_id, $old_status_object->label, $new_status_object->label );
+			} catch ( \Throwable $error ) {
+				// A notification failure cannot undo the persisted cancellation.
+				if ( null === $result ) {
+					throw $error;
+				}
+			}
 		}
 
 		$order_id = get_post_meta( $post_id, '_subscrpt_order_id', true );
-		if ( 'active' === $action ) {
+		if ( 'active' === $action && null === $result ) {
 			$order = wc_get_order( $order_id );
 			if ( $order ) {
 				$order->update_status( 'completed' );
 			}
 		}
+		return $result;
 	}
 
 	/**
