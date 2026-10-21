@@ -1,5 +1,10 @@
-<?php
-/** Reviewed site-local configuration, installed separately as an MU plugin. */
+<?php // phpcs:ignore WordPress.Files.FileName.NotHyphenatedLowercase -- Documented configuration example filename.
+/**
+ * Reviewed site-local configuration, installed separately as an MU plugin.
+ *
+ * @package AshbiSubscriptions
+ */
+
 defined( 'ABSPATH' ) || exit;
 add_filter(
 	'ashbi_contact_review_config',
