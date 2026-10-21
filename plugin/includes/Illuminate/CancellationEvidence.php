@@ -67,6 +67,43 @@ final class CancellationEvidence {
 	}
 
 	/**
+	 * Read a customer receipt directly from recorded intent and confirmation.
+	 *
+	 * A status or cached metadata alone cannot prove that a request was saved.
+	 * Conflicting confirmation rows remain pending rather than overstating proof.
+	 *
+	 * @param int $subscription_id Authorized subscription ID from the account view.
+	 * @return array Read-only state and original access end; no provider requests.
+	 */
+	public static function receipt( int $subscription_id ): array {
+		global $wpdb;
+		try {
+			$row = $wpdb->get_row(
+				$wpdb->prepare(
+					'SELECT b.access_end, MIN(CASE WHEN m.meta_value = %s THEN 1 ELSE 0 END) AS confirmed FROM %i b LEFT JOIN %i m ON m.post_id = b.subscription_id AND m.meta_key = %s WHERE b.subscription_id = %d GROUP BY b.subscription_id, b.access_end',
+					'1',
+					$wpdb->prefix . 'subscrpt_cancellation_barrier',
+					$wpdb->postmeta,
+					'_ashbi_cancellation_confirmed',
+					$subscription_id
+				)
+			);
+		} catch ( \Throwable $error ) {
+			return array( 'state' => 'unavailable', 'access_end' => 0 );
+		}
+		if ( $wpdb->last_error || ( $row && ! isset( $row->access_end, $row->confirmed ) ) ) {
+			return array( 'state' => 'unavailable', 'access_end' => 0 );
+		}
+		if ( ! $row ) {
+			return array( 'state' => 'none', 'access_end' => 0 );
+		}
+		return array(
+			'state'      => '1' === (string) $row->confirmed ? 'confirmed' : 'pending',
+			'access_end' => max( 0, (int) $row->access_end ),
+		);
+	}
+
+	/**
 	 * Shared subscription mutex used by cancellation and provider dispatch.
 	 *
 	 * @param int $subscription_id Subscription ID.

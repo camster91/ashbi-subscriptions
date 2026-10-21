@@ -92,12 +92,13 @@ disabled, or not classified as sandbox/offline.
 
 ## Documentation
 
-- [Cancellation confirmation review filter](docs/CANCELLATION_REVIEW_FILTER.md)
 - [Small-store workflow review and merchant procedure](docs/SMALL_STORE_REVIEW.md)
+- [Cancellation confirmation review filter](docs/CANCELLATION_REVIEW_FILTER.md)
 - [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
 - [Feature matrix](docs/FEATURE_MATRIX.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Security and payments](docs/SECURITY.md)
+- [Customer cancellation receipts](docs/PERSISTENT_CANCELLATION_RECEIPTS.md)
 - [Database migration 1.5.0](docs/MIGRATION_1.5.0.md)
 - [Per-site staging rehearsal and rollback](docs/SITE_REHEARSAL_RUNBOOK.md)
 - [Public release checklist](docs/PUBLIC_RELEASE_CHECKLIST.md)

@@ -5,18 +5,23 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 
 ## 2.2.0 candidate - 2026-10-10
 
-- Add a read-only "Cancellation needs review" filter to the existing merchant
-  subscription list, using saved cancellation barriers and confirmation results.
-  Keep conflicting confirmation flags visible for review.
-  Distinguish missing storage from an empty result and keep contact/email intake
-  separate. Correct the row's order-item reference when displaying quantities
-  and recurring totals. See `docs/CANCELLATION_REVIEW_FILTER.md`.
+- Keep the customer cancellation receipt visible after account reload, distinguishing
+  confirmed billing protection, recorded requests awaiting confirmation, and
+  unavailable evidence. Read existing durable intent without trusting stale cache;
+  display the original access-end date in the store timezone.
+  See `docs/PERSISTENT_CANCELLATION_RECEIPTS.md`.
 - Align account reactivation with durable cancellation protection. Show full
   cancellation statuses and omit misleading future-payment dates after cancellation.
   Keep pending cancellations out of payment-grace display so old billing dates
   cannot relabel them Active in customer or merchant views.
   Preserve legacy reversible cancellations and stored billing/access dates.
   See `docs/SMALL_STORE_REVIEW.md` for the workflow audit and remaining priorities.
+- Add a read-only "Cancellation needs review" filter to the existing merchant
+  subscription list, using saved cancellation barriers and confirmation results.
+  Keep conflicting confirmation flags visible for review.
+  Distinguish missing storage from an empty result and keep contact/email intake
+  separate. Correct the row's order-item reference when displaying quantities
+  and recurring totals. See `docs/CANCELLATION_REVIEW_FILTER.md`.
 
 - Preserve classic subscription variation cart lines and their selected billing
   interval through checkout, including exact parent/variation identity. Keep
