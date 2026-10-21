@@ -20,6 +20,13 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
   or unavailable, using the canonical core receipt reader for staff closure.
   Recheck request storage after locking so stale staff pages cannot overwrite
   an outcome already recorded by another reviewer.
+- Count recurring coupon limits using the existing unique paid-payment counter,
+  so failed, pending and duplicate order links do not remove a promised discount.
+  Refresh discount calculations after in-request payment or price changes; keep
+  first-payment-only coupons out of renewals, even with missing legacy links.
+  Read payment history only for finite multi-payment coupon limits. Preserve
+  saved invoices, coupon filters, price/tax policy and historical evidence.
+  See `docs/RECURRING_COUPON_LIMITS.md`.
 
 - Save merchant cancellation through the same durable renewal barrier as customer
   cancellation. Preserve immediate versus configured access timing, original

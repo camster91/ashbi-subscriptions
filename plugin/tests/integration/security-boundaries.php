@@ -1209,6 +1209,8 @@ function ashbi_run_security_boundary_integration_checks() {
 				$recurring_renewal_order instanceof \WC_Order && 34.0 === (float) $recurring_renewal_order->get_total(),
 				'Renewal total did not include the recurring coupon discount.'
 			);
+			require_once __DIR__ . '/recurring-coupon-limits.php';
+			ashbi_check_recurring_coupon_limits( $check, (int) $recurring_subscription_id, $recurring_source_order, $recurring_source_order->get_item( $recurring_source_item_id ) );
 		} finally {
 			remove_filter( 'subscrpt_coupon_is_recurring', $recurring_coupon_filter, 10 );
 			remove_filter( 'subscrpt_coupon_recurring_limit', $recurring_limit_filter, 10 );

@@ -127,3 +127,15 @@ cancellation matrix, including failed/abandoned renewal coupon limits.
 Rollback this presentation patch by restoring the four changed frontend/template
 files and `Helper.php` from protective main `c70272f`. Preserve the installed cancellation engine,
 barriers, orders and evidence. No database rollback is needed or authorized.
+
+
+## Recurring coupon follow-up
+
+The earlier coupon-payment-limit finding is reproduced in actual helper tests:
+unpaid/duplicate relations remove a promised discount, and request-static cached
+discounts survive price/payment changes. The focused correction reuses the
+existing unique paid-order counter for both display and new renewal pricing.
+First-payment-only coupons never recur, and unlimited/non-recurring eligibility
+avoids a payment-history scan. No saved invoice or historical evidence is changed.
+See `RECURRING_COUPON_LIMITS.md` for verification and rollback; real provider
+sandbox/crash-window validation remains a release gate.
