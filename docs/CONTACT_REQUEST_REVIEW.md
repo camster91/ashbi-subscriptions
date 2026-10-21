@@ -122,3 +122,31 @@ missing, changed-type or unreadable row cannot be overwritten from cached state.
 The failure message asks staff to refresh and check the existing outcome rather
 than falsely claiming the request is still open. Offline and real MySQL stale-post
 checks preserve the original outcome and source. No new lock, state or table.
+
+## Next verification slice
+
+Exercise the complete optional workflow against the actual WooCommerce/core
+cancellation service, with fabricated validated-form records: receipt first,
+closure denied before cancellation, explicit merchant action, pending confirmation
+kept open, supported local billing proof, reply attestation, immutable closure.
+Run with HPOS on/off and block all HTTP/mail. Assert intake and closure do not
+change orders, subscription state or original cancellation evidence. This adds
+verification only; it still does not execute the installed Elementor Pro plugin.
+
+The current-main follow-up passes 296 unit tests / 3,639 assertions. The new
+real WordPress/WooCommerce lifecycle test passes **22 checks in each HPOS mode**,
+including the actual active data-store check. The standalone CI-site activation
+sequence also passed locally with legacy order storage. No source/closure changes
+orders or cancellation evidence; the unavailable-provider request remains open.
+Full PHPCS on the new script and the compatibility contract pass. CI now repeats
+this workflow with fresh MySQL databases for HPOS on/off, with email/provider
+requests blocked and pipeline failures propagated.
+
+The initial snapshot assertion compared an in-memory new WooCommerce order with
+its persisted representation. Reading both snapshots through WooCommerce CRUD
+fixed that fixture mismatch; no runtime behavior or cancellation guard changed.
+Local CI-site setup initially lacked a plugins directory; creating the disposable
+directory allowed the standard activation sequence to pass. These checks use a
+fabricated validated-record interface, not Elementor Pro itself, and record only
+fabricated reply attestations. Installed-form, provider sandbox and actual message
+delivery verification remain separate staging gates.

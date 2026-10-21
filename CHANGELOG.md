@@ -29,6 +29,7 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
   caches during repair and prevent pending cancellation from completing an order.
   No historical backfill.
   See `docs/MERCHANT_CANCELLATION.md`.
+
 - Keep the customer cancellation receipt visible after account reload, distinguishing
   confirmed billing protection, recorded requests awaiting confirmation, and
   unavailable evidence. Read existing durable intent without trusting stale cache;
