@@ -7,6 +7,7 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 
 - Add a read-only "Cancellation needs review" filter to the existing merchant
   subscription list, using saved cancellation barriers and confirmation results.
+  Keep conflicting confirmation flags visible for review.
   Distinguish missing storage from an empty result and keep contact/email intake
   separate. Correct the row's order-item reference when displaying quantities
   and recurring totals. See `docs/CANCELLATION_REVIEW_FILTER.md`.

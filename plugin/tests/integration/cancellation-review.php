@@ -75,6 +75,10 @@ function ashbi_check_cancellation_review( callable $check ): void {
 		$check( array_slice( $expected, 2 ) === array_map( 'intval', $second->posts ), 'Cancellation review second page lost a request.' );
 		$cancelled = \SpringDevs\Subscription\Admin\CancellationReview::query( array_merge( $query_args, array( 'post_status' => 'cancelled' ) ) );
 		$check( array( $ids['unknown'] ) === array_map( 'intval', $cancelled->posts ), 'Cancellation review failed to combine status filters.' );
+		add_post_meta( $ids['confirmed'], '_ashbi_cancellation_confirmed', 0 );
+		$conflicting = \SpringDevs\Subscription\Admin\CancellationReview::query( array_merge( $query_args, array( 'post__in' => array( $ids['confirmed'] ) ) ) );
+		$check( array( $ids['confirmed'] ) === array_map( 'intval', $conflicting->posts ), 'Conflicting confirmation flags hid a cancellation that still needs review.' );
+		delete_post_meta( $ids['confirmed'], '_ashbi_cancellation_confirmed', 0 );
 		update_post_meta( $ids['pending'], '_ashbi_cancellation_confirmed', 1 );
 		$updated = \SpringDevs\Subscription\Admin\CancellationReview::query( $query_args );
 		$check( array_slice( $expected, 1 ) === array_map( 'intval', $updated->posts ), 'Newly confirmed request remained cached in review.' );

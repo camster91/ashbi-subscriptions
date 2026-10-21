@@ -7,8 +7,9 @@ owner must be able to find recorded cancellation requests without confirmed
 outcomes, including requests whose status write failed or whose provider is
 unavailable. This is not a contact-form/email intake queue (separate PR #45).
 
-- Match a `subscrpt_order` with an existing cancellation barrier and without
-  `_ashbi_cancellation_confirmed=1`. Legacy pending cancellations without durable
+- Match a `subscrpt_order` with an existing cancellation barrier unless its
+  confirmation metadata exists and every saved value is `1`. Missing, negative
+  or conflicting flags need review. Legacy pending cancellations without durable
   request evidence do not match. A confirmation marker without a barrier does
   not invent a request. Confirmed requests are excluded even while access continues.
 - Reuse existing customer/order/detail links, pagination and permission boundaries.
@@ -35,7 +36,7 @@ Use PHP 7.4-compatible namespaced WordPress style, for example
 `public static function query( array $args ): \WP_Query`. Preserve legacy keys.
 Unit fixtures live under `tests/fixtures/`, PHPUnit tests under `tests/unit/`;
 real-database coverage stays under `plugin/tests/integration/` (not packaged).
-SQL `EXISTS` predicates keep filtering, counts and pagination in the database;
+SQL predicates keep filtering, counts and pagination in the database;
 the screen does not load an unbounded list of request IDs first.
 
 Run `composer test`, `composer lint:phpstan`, `composer lint:syntax`, and
@@ -101,3 +102,13 @@ checks (138 PHP files), PHPStan, PHP syntax, security-sensitive PHPCS and whites
 checks passed. This independent branch starts at main `c70272f`; PR #47's separate
 customer-screen/grace tests are not included in this count. Hosted checks for this
 branch remain separate from PR #47's results. No new JavaScript is introduced.
+
+Follow-up consistency regression: conflicting saved confirmation flags (`0` and
+`1`) previously disappeared from the merchant filter despite still needing review.
+The real-database test failed before the fix. Only records whose flags all confirm
+the result are now excluded; absent, negative or conflicting evidence stays in
+the existing review list. No metadata is repaired or rewritten. This matches the
+conservative customer receipt in PR #49 and adds no query or status system.
+
+The follow-up passed the focused real-database regression with HPOS off and on,
+the 288-test / 3,499-assertion suite, and changed-file coding checks.

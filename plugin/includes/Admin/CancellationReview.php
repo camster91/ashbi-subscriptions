@@ -32,13 +32,13 @@ final class CancellationReview {
 				return $where;
 			}
 			return $where . $wpdb->prepare(
-				' AND EXISTS (SELECT 1 FROM %i cancellation_request WHERE cancellation_request.subscription_id = %i.ID) AND NOT EXISTS (SELECT 1 FROM %i confirmation WHERE confirmation.post_id = %i.ID AND confirmation.meta_key = %s AND confirmation.meta_value = %s)',
+				' AND EXISTS (SELECT 1 FROM %i cancellation_request WHERE cancellation_request.subscription_id = %i.ID) AND COALESCE((SELECT MIN(CASE WHEN confirmation.meta_value = %s THEN 1 ELSE 0 END) FROM %i confirmation WHERE confirmation.post_id = %i.ID AND confirmation.meta_key = %s), 0) = 0',
 				$wpdb->prefix . 'subscrpt_cancellation_barrier',
 				$wpdb->posts,
+				'1',
 				$wpdb->postmeta,
 				$wpdb->posts,
-				'_ashbi_cancellation_confirmed',
-				'1'
+				'_ashbi_cancellation_confirmed'
 			);
 		};
 		add_filter( 'posts_where', $where_filter, 10, 2 );
