@@ -4,16 +4,23 @@ on:
     paths:
       - 'tools/contact-request-review/**'
       - 'plugin/includes/Illuminate/CancellationEvidence.php'
+      - 'plugin/includes/Illuminate/Helper.php'
+      - 'plugin/includes/Admin/Subscriptions.php'
       - 'tests/**/ContactRequestReviewTest.php'
       - 'tests/fixtures/run-contact-request-review.php'
       - 'scripts/contact-review-integration.php'
+      - 'scripts/contact-cancellation-lifecycle.php'
       - '.github/workflows/contact-request-review.yml'
 permissions:
   contents: read
 jobs:
   wordpress-mysql:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        hpos: ['yes', 'no']
     services:
       mysql:
         image: mysql:8.0
@@ -37,6 +44,7 @@ jobs:
         run: php tests/fixtures/run-contact-request-review.php
       - name: Disposable WordPress and MySQL
         run: |
+          set -euo pipefail
           mkdir /tmp/contact-review-wordpress
           wp core download --path=/tmp/contact-review-wordpress
           wp config create --path=/tmp/contact-review-wordpress --dbname=ashbi_contact_ci --dbuser=root --dbpass=fixture-only --dbhost=127.0.0.1:3306
@@ -45,3 +53,25 @@ jobs:
           wp core install --path=/tmp/contact-review-wordpress --url=http://localhost:8099 --title='Contact Review CI' --admin_user=admin --admin_password=fixture-only --admin_email=admin@example.invalid --skip-email
           wp eval-file "$GITHUB_WORKSPACE/scripts/contact-review-integration.php" --path=/tmp/contact-review-wordpress | tee /tmp/contact-review-result.txt
           grep -q CONTACT_REVIEW_INTEGRATION_PASS /tmp/contact-review-result.txt
+      - name: Actual merchant cancellation and request closure
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/contact-review-wordpress/wp-content/mu-plugins
+          cat > /tmp/contact-review-wordpress/wp-content/mu-plugins/contact-ci-safety.php <<'PHP'
+          <?php
+          add_filter( 'pre_wp_mail', '__return_false', PHP_INT_MAX );
+          add_filter( 'pre_http_request', static function ( $response, $args, $url ) {
+              $host = (string) wp_parse_url( $url, PHP_URL_HOST );
+              return preg_match( '/(^|\.)(stripe|paypal)\.com$/', $host ) ? new WP_Error( 'ci_no_provider' ) : $response;
+          }, PHP_INT_MAX, 3 );
+          PHP
+          wp config set ACTION_SCHEDULER_DISABLE_DEFAULT_QUEUE_RUNNER true --raw --path=/tmp/contact-review-wordpress
+          wp option update woocommerce_custom_orders_table_enabled '${{ matrix.hpos }}' --path=/tmp/contact-review-wordpress
+          wp plugin install woocommerce --version=11.2.1 --activate --path=/tmp/contact-review-wordpress
+          cat >> /tmp/contact-review-wordpress/wp-content/mu-plugins/contact-ci-safety.php <<'PHP'
+          add_filter( 'pre_http_request', static function () { return new WP_Error( 'ci_no_network' ); }, PHP_INT_MAX );
+          PHP
+          ln -s "$GITHUB_WORKSPACE/plugin" /tmp/contact-review-wordpress/wp-content/plugins/subscription
+          wp plugin activate subscription --path=/tmp/contact-review-wordpress
+          ASHBI_EXPECT_HPOS='${{ matrix.hpos }}' wp eval-file "$GITHUB_WORKSPACE/scripts/contact-cancellation-lifecycle.php" --user=admin --path=/tmp/contact-review-wordpress | tee /tmp/contact-lifecycle-result.txt
+          grep -q CONTACT_CANCELLATION_LIFECYCLE_PASS /tmp/contact-lifecycle-result.txt
