@@ -66,3 +66,10 @@ The cold-session checkout check and changed-file coding check pass. This changes
 only test initialization, preserves the normal WooCommerce request lifecycle,
 and does not change customer billing, consent or cancellation behavior. Updated
 hosted results must be checked for the new head rather than reusing old passes.
+
+
+After merging merchant cancellation protection (#50), the updated branch passes
+296 unit tests / 3,657 assertions and the complete cold-session source integration
+harness with HPOS off/on. Both the simple checkout fixture and merchant durable
+cancellation fixture run together. Only adjacent changelog content required a
+merge resolution; consent, routes and cancellation behavior were preserved.
