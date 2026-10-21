@@ -1,5 +1,11 @@
-<?php
-/** Isolated real-adapter regressions. No WordPress, mail or gateway connections. */
+<?php // phpcs:ignore WordPress.Files.FileName.InvalidClassFileName -- Isolated runtime fixture, not an autoloaded class.
+/**
+ * Isolated real-adapter regressions. No WordPress, mail or gateway connections.
+ *
+ * @package AshbiSubscriptions\Tests
+ */
+
+// phpcs:disable Squiz.Commenting.FunctionComment.Missing,Squiz.Commenting.ClassComment.Missing,Squiz.Commenting.VariableComment.Missing,Generic.Files.OneObjectStructurePerFile.MultipleFound,Universal.Files.SeparateFunctionsFromOO.Mixed -- This isolated process co-locates small WordPress/Elementor doubles and their assertions; production code retains full standards.
 define( 'ABSPATH', __DIR__ );
 define( 'DAY_IN_SECONDS', 86400 );
 $GLOBALS['records']     = array();
@@ -77,14 +83,16 @@ function sanitize_key( $s ) {
 function absint( $s ) {
 	return abs( (int) $s ); }
 function wp_die( $s, ...$args ) {
+	// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Intercept a raw fixture message without rendering it.
 	throw new Review_Test_Die( $s ); }
 function check_admin_referer( $action ) {
 	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- This fixture implements the nonce verifier itself.
-	if ( ! $GLOBALS['nonce'] || $action !== 'ashbi_contact_resolve_' . ( $_POST['request_id'] ?? '' ) ) {
+	if ( ! $GLOBALS['nonce'] || 'ashbi_contact_resolve_' . ( $_POST['request_id'] ?? '' ) !== $action ) {
 		wp_die( 'bad_nonce' ); } }
 function admin_url( $s ) {
 	return 'https://example.invalid/wp-admin/' . $s; }
 function wp_safe_redirect( $s ) {
+	// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Intercept a raw fixture redirect without rendering it.
 	throw new Review_Test_Redirect( $s ); }
 function esc_html( $s ) {
 	return htmlspecialchars( (string) $s, ENT_QUOTES, 'UTF-8' ); }
@@ -148,14 +156,17 @@ class Review_DB {
 			if ( ! $this->barrier ) {
 				return null;
 			}
-			$flags = $GLOBALS['stored_flags'] ?? array( $GLOBALS['meta'][ $q[1][4] ]['_ashbi_cancellation_confirmed'] ?? '' );
+			$flags     = $GLOBALS['stored_flags'] ?? array( $GLOBALS['meta'][ $q[1][4] ]['_ashbi_cancellation_confirmed'] ?? '' );
 			$confirmed = count( $flags ) > 0;
 			foreach ( $flags as $flag ) {
 				$confirmed = $confirmed && '1' === (string) $flag;
 			}
-			return (object) array( 'access_end' => 0, 'confirmed' => $confirmed ? '1' : '0' );
+			return (object) array(
+				'access_end' => 0,
+				'confirmed'  => $confirmed ? '1' : '0',
+			);
 		}
-		$rows             = array_filter(
+		$rows = array_filter(
 			$GLOBALS['records'],
 			static function ( $p ) {
 				return 'ashbi_contact_review' === $p->post_type && 'private' === $p->post_status;
@@ -167,6 +178,7 @@ class Review_DB {
 		);
 	}
 }
+// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Install the isolated database double; WordPress is absent.
 $wpdb = new Review_DB();
 require dirname( __DIR__, 2 ) . '/plugin/includes/Illuminate/CancellationEvidence.php';
 require dirname( __DIR__, 2 ) . '/tools/contact-request-review/ashbi-contact-request-review.php';
@@ -174,7 +186,7 @@ $checks = array();
 function verify_review( $truth, $label ) {
 	global $checks;
 	if ( ! $truth ) {
-		throw new RuntimeException( $label );
+		throw new RuntimeException( esc_html( $label ) );
 	} $checks[] = $label; }
 function err_review( $v, $code ) {
 	return is_wp_error( $v ) && $v->code === $code; }
@@ -186,7 +198,8 @@ $GLOBALS['cfg']['enabled']       = true;
 $GLOBALS['cfg']['owner_user_id'] = 9;
 verify_review( ! $adapter::config(), 'owner must be an authorized site manager' );
 $GLOBALS['cfg']['owner_user_id'] = 1;
-$id                              = $adapter::capture( 'Owner@Example.invalid', 'Please cancel my subscription. Thank you.', 'Synthetic owner' );
+// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Synthetic request ID in this isolated process, not WordPress state.
+$id = $adapter::capture( 'Owner@Example.invalid', 'Please cancel my subscription. Thank you.', 'Synthetic owner' );
 verify_review( is_int( $id ), 'explicit cancellation is durably queued' );
 verify_review( $id === $adapter::capture( 'owner@example.invalid', 'Please cancel my subscription. Thank you.' ), 'open duplicate does not create another request' );
 verify_review( is_int( $adapter::capture( 'second@example.invalid', 'I need to stop the next shipment.' ) ), 'wording without cancel is still queued' );
@@ -225,7 +238,7 @@ verify_review( ! $adapter::confirmed( 99 ), 'status alone without durable barrie
 $wpdb->barrier     = true;
 $wpdb->fail_lookup = true;
 verify_review( ! $adapter::confirmed( 99 ), 'unreadable barrier is not cancellation proof' );
-$wpdb->fail_lookup = false;
+$wpdb->fail_lookup       = false;
 $GLOBALS['stored_flags'] = array( 0 );
 verify_review( ! $adapter::confirmed( 99 ), 'stale cached confirmation cannot close a request' );
 $GLOBALS['stored_flags'] = array( 0, 1 );
@@ -239,13 +252,14 @@ $GLOBALS['fail_update'] = true;
 verify_review( err_review( $adapter::resolve( $id, 'cancellation_confirmed', 99, $note, true ), 'closure_unverified' ) && 'private' === get_post( $id )->post_status, 'failed closure stays open' );
 $GLOBALS['fail_update'] = false;
 verify_review( true === $adapter::resolve( $id, 'cancellation_confirmed', 99, $note, true ), 'confirmed cancellation can be closed' );
-verify_review( $source === get_post( $id )->post_content && 1 === json_decode( get_post( $id )->post_excerpt, true )['actor_id'], 'source preserved with staff outcome attribution' );
+verify_review( get_post( $id )->post_content === $source && 1 === json_decode( get_post( $id )->post_excerpt, true )['actor_id'], 'source preserved with staff outcome attribution' );
 verify_review( err_review( $adapter::resolve( $id, 'other_request', 0, $note, true ), 'not_open' ), 'replay cannot rewrite closed outcome' );
-$closed_outcome = $GLOBALS['records'][ $id ]->post_excerpt;
+$closed_outcome                = $GLOBALS['records'][ $id ]->post_excerpt;
 $GLOBALS['stale_posts'][ $id ] = $open_snapshot;
 verify_review( err_review( $adapter::resolve( $id, 'other_request', 0, $note, true ), 'not_open' ) && $closed_outcome === $GLOBALS['records'][ $id ]->post_excerpt, 'stale open-request cache cannot overwrite an already closed outcome' );
 unset( $GLOBALS['stale_posts'][ $id ] );
-verify_review( is_int( $again = $adapter::capture( 'owner@example.invalid', 'Please cancel my subscription. Thank you.' ) ) && $again !== $id, 'new request after closure is not swallowed' );
+$again = $adapter::capture( 'owner@example.invalid', 'Please cancel my subscription. Thank you.' );
+verify_review( is_int( $again ) && $again !== $id, 'new request after closure is not swallowed' );
 class Review_Record {
 	public $name = 'Support review';
 	public function get_form_settings( $s ) {
@@ -269,17 +283,17 @@ $handler      = new Review_Handler();
 $before       = count( $GLOBALS['records'] );
 $record->name = 'Unrelated form';
 $adapter::process( $record, $handler );
-verify_review( $before === count( $GLOBALS['records'] ), 'unconfigured form ignored' );
+verify_review( count( $GLOBALS['records'] ) === $before, 'unconfigured form ignored' );
 $record->name           = 'Support review';
 $GLOBALS['fail_insert'] = true;
 $adapter::process( $record, $handler );
-verify_review( count( $handler->errors ) === 1 && empty( $handler->data ), 'storage failure returns form error without receipt' );
+verify_review( 1 === count( $handler->errors ) && empty( $handler->data ), 'storage failure returns form error without receipt' );
 $GLOBALS['fail_insert'] = false;
 $handler                = new Review_Handler();
 $adapter::process( $record, $handler );
 verify_review( isset( $handler->data['ashbi_request_reference'] ), 'successful process returns durable request reference' );
 // Simulated email failure after the documented pre-email hook leaves the receipt intact.
-verify_review( $before + 1 === count( $GLOBALS['records'] ), 'later notification failure cannot remove queued request' );
+verify_review( count( $GLOBALS['records'] ) === $before + 1, 'later notification failure cannot remove queued request' );
 $_POST            = array(
 	'request_id' => $again,
 	'outcome'    => 'other_request',
@@ -311,7 +325,7 @@ $adapter::notice();
 $notice = ob_get_clean();
 verify_review( strpos( $notice, '24 hours' ) !== false, 'overdue open request has persistent warning' );
 verify_review( isset( $GLOBALS['hooks']['elementor_pro/forms/process'] ) && ! isset( $GLOBALS['hooks']['elementor_pro/forms/new_record'] ), 'intake hook runs before email actions' );
-verify_review( $GLOBALS['records'][99]->post_status === 'cancelled' && count( $GLOBALS['meta'][99] ) === 1, 'review adapter does not modify subscription or payment state' );
+verify_review( 'cancelled' === $GLOBALS['records'][99]->post_status && 1 === count( $GLOBALS['meta'][99] ), 'review adapter does not modify subscription or payment state' );
 echo json_encode(
 	array(
 		'passed' => count( $checks ),
