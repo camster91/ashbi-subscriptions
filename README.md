@@ -17,6 +17,12 @@ data and an exact database/package rollback rehearsal. Docker-backed gateway
 tests, gateway sandbox validation, and per-site client-clone reconciliation
 remain release gates.
 
+Merchant cancellation: open a subscription from **Ashbi Subscriptions**, choose
+**End subscription now** or **Schedule cancellation**, and read the saved result.
+A pending payment confirmation still needs review. Contact-form and email messages
+require a merchant to verify and act; saving a message does not cancel billing.
+See [merchant cancellation guidance](docs/MERCHANT_CANCELLATION.md).
+
 ## Core operating model
 
 The plugin's core responsibility is intentionally straightforward: retain a
