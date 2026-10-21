@@ -1,15 +1,100 @@
 # Changelog
 
+## Unreleased — optional contact request review adapter
+
+- Add a separately installed, disabled-by-default Elementor intake review queue.
+  Preserve requests before email, deduplicate open receipts, flag aging requests,
+  and require staff resolution/notification plus verified cancellation proof.
+  No core billing behavior, live setting, outgoing mail or historical data changes.
+  See `docs/CONTACT_REQUEST_REVIEW.md` for configuration and staging gates.
+
 All notable Ashbi-maintained changes after the immutable upstream import are
 documented here. The original vendor changelog remains at `plugin/changelog.txt`.
 
-## Unreleased
+## 2.2.0 candidate - 2026-10-10
 
+- Accept the existing singular billing units from simple subscription products
+  without weakening explicit consent or snapshot checks. Register account routes
+  on normal admin requests so permalink refreshes retain subscription pages.
+- Keep contact cancellation requests open when confirmation is stale, conflicting
+  or unavailable, using the canonical core receipt reader for staff closure.
+  Recheck request storage after locking so stale staff pages cannot overwrite
+  an outcome already recorded by another reviewer.
+- Count recurring coupon limits using the existing unique paid-payment counter,
+  so failed, pending and duplicate order links do not remove a promised discount.
+  Refresh discount calculations after in-request payment or price changes; keep
+  first-payment-only coupons out of renewals, even with missing legacy links.
+  Read payment history only for finite multi-payment coupon limits. Preserve
+  saved invoices, coupon filters, price/tax policy and historical evidence.
+  See `docs/RECURRING_COUPON_LIMITS.md`.
+- Reuse an unpaid early-renewal invoice when its billing date arrives, preserving
+  its quote and payment identity instead of creating a second invoice. Route
+  claimed early invoices through durable paid activation/repair after expiry;
+  failed/on-hold orders are never marked paid merely because dispatch stopped.
+  Conflicting invoices stop automatic creation for manual reconciliation.
+  Refuse a fresh cart renewal while an early invoice reserves the same period,
+  before creating another relation/claim or processing checkout payment.
+  See `docs/EARLY_RENEWAL_DUE.md`.
+
+- Save merchant cancellation through the same durable renewal barrier as customer
+  cancellation. Preserve immediate versus configured access timing, original
+  cancellation evidence, edit permissions and notification failure safety.
+  Show the saved billing result and next action on the existing admin details
+  page; hide reopening actions protected by a barrier. Refresh stale lifecycle
+  caches during repair and prevent pending cancellation from completing an order.
+  No historical backfill.
+  See `docs/MERCHANT_CANCELLATION.md`.
+
+- Keep the customer cancellation receipt visible after account reload, distinguishing
+  confirmed billing protection, recorded requests awaiting confirmation, and
+  unavailable evidence. Read existing durable intent without trusting stale cache;
+  display the original access-end date in the store timezone.
+  See `docs/PERSISTENT_CANCELLATION_RECEIPTS.md`.
+- Align account reactivation with durable cancellation protection. Show full
+  cancellation statuses and omit misleading future-payment dates after cancellation.
+  Keep pending cancellations out of payment-grace display so old billing dates
+  cannot relabel them Active in customer or merchant views.
+  Preserve legacy reversible cancellations and stored billing/access dates.
+  See `docs/SMALL_STORE_REVIEW.md` for the workflow audit and remaining priorities.
+- Add a read-only "Cancellation needs review" filter to the existing merchant
+  subscription list, using saved cancellation barriers and confirmation results.
+  Keep conflicting confirmation flags visible for review.
+  Distinguish missing storage from an empty result and keep contact/email intake
+  separate. Correct the row's order-item reference when displaying quantities
+  and recurring totals. See `docs/CANCELLATION_REVIEW_FILTER.md`.
+
+- Preserve classic subscription variation cart lines and their selected billing
+  interval through checkout, including exact parent/variation identity. Keep
+  mapped plans and one-time purchases separate. Missing or invalid legacy
+  intervals fail closed. No catalog or schema migration is performed.
+  See `docs/CLASSIC_VARIATION_CART.md` for scope and verification.
+
+- Require verified durable cancellation intent before displaying a recorded-request
+  receipt; retain fail-closed billing on storage errors. Export accepted payment
+  type, billing length and installment total. Guard admin status transitions before
+  status-related email and order completion, preserving existing permissions.
+
+- Add immutable cancellation barriers, append-only evidence, durable repair and
+  review of already-dispatched payments. Keep finalization independent of mail
+  availability and preserve previous survey feedback.
+- Add disabled-by-default approved contract snapshots bound to final WooCommerce
+  orders and immutable acceptance. Preserve unchanged retries and reject unsupported
+  subscription checkout routes while enabled. Add scoped private evidence export.
+  See `docs/MIGRATION_1.6.0.md` for compatibility and remaining rollout gates.
+
+- Validate renewal modes as exact `auto`/`manual` values rather than customer
+  roles. Present corrupt modes resolve to Manual without option migration;
+  genuinely absent settings retain the historical Automatic default.
+- Preserve customer auto-renew opt-outs across account refresh, renewal metadata
+  preparation, canonical-order resume, and Stripe dispatch. Recheck consent and
+  store availability at the final payment entry and before Bancontact lookup.
+  See `docs/BILLING_CONSENT.md` for compatibility and verification boundaries.
 - Reject direct access to the runtime bootstrap before loading bundled vendor code.
 - Opt this fork out of WordPress.org updates with the supported `Update URI: false`
-  header while retaining the legacy basename, storage, hooks, and version 2.1.2.
+  header while retaining the legacy basename, storage and hooks.
   No network updater is provided. Use reviewed, checksum-verified release ZIPs;
-  rollback restores the previous package without a schema migration.
+  preserve schema 1.6.0, cancellation barriers and protective runtime during rollback.
+  See `docs/RELEASE_2.2.0.md` for candidate traceability and release gates.
 
 ## 2.1.2 — 2026-10-04
 

@@ -159,6 +159,8 @@ class Paypal extends \WC_Payment_Gateway {
 		// Cancel subscription.
 		add_action( 'subscrpt_subscription_expired', array( $this, 'handle_subscription_cancellation' ) );
 		add_action( 'subscrpt_subscription_cancelled', array( $this, 'handle_subscription_cancellation' ) );
+		add_action( 'subscrpt_subscription_pending_cancellation', array( $this, 'handle_subscription_cancellation' ) );
+		add_action( 'subscrpt_cancellation_provider_stop', array( $this, 'handle_subscription_cancellation' ) );
 	}
 
 	/**
@@ -1504,6 +1506,9 @@ class Paypal extends \WC_Payment_Gateway {
 		$order_id = get_post_meta( $subscription_id, '_subscrpt_order_id', true );
 		$order    = wc_get_order( $order_id );
 
+		if ( ! $order ) {
+			return;
+		}
 		// Get order payment method.
 		$payment_method = $order->get_payment_method();
 
@@ -1511,7 +1516,7 @@ class Paypal extends \WC_Payment_Gateway {
 		$paypal_subs_status = get_post_meta( $subscription_id, $this->get_meta_key( 'paypal_subs_status' ), true );
 
 		// Only process if the payment method is PayPal and the subscription is not already cancelled.
-		if ( ( $payment_method !== $this->id ) || ( ! empty( $paypal_subs_status ) && 'cancelled' === $paypal_subs_status ) ) {
+		if ( $payment_method !== $this->id || 'paypal' === get_post_meta( $subscription_id, '_ashbi_cancel_provider_confirmed', true ) ) {
 			return;
 		}
 
@@ -1534,6 +1539,9 @@ class Paypal extends \WC_Payment_Gateway {
 				// Get order ID from history.
 				$order_id = $history->order_id ?? null;
 				$order    = wc_get_order( $order_id );
+				if ( ! $order ) {
+					continue;
+				}
 
 				// Get PayPal subscription ID from order meta.
 				$tmp_paypal_subs_id = $order->get_meta( $this->get_meta_key( 'subscription_id' ) );
@@ -1558,6 +1566,9 @@ class Paypal extends \WC_Payment_Gateway {
 		}
 
 		// Get PayPal Access Token.
+		if ( empty( $paypal_subscription_id ) ) {
+			return;
+		}
 		$access_token = $this->get_paypal_access_token();
 		if ( ! $access_token ) {
 			subscrpt_write_log( 'Access token not found. Retrying.' );
@@ -1573,11 +1584,20 @@ class Paypal extends \WC_Payment_Gateway {
 
 		// Cancel subscription in PayPal.
 		$result = $this->cancel_paypal_subscription( $paypal_subscription_id, $access_token, 'Customer requested cancellation.' );
+		if ( ! $result ) {
+			// A timeout or repeated cancellation can follow a successful provider stop.
+			// Legacy local status alone is never authoritative confirmation.
+			$remote = $this->get_paypal_subscription( $paypal_subscription_id );
+			$result = $remote && hash_equals( $paypal_subscription_id, (string) ( $remote->id ?? '' ) ) && 'CANCELLED' === ( $remote->status ?? '' );
+		}
 		if ( $result ) {
 			update_post_meta( $subscription_id, $this->get_meta_key( 'paypal_subs_status' ), 'cancelled' );
+			update_post_meta( $subscription_id, '_ashbi_cancel_provider_confirmed', 'paypal' );
+			\SpringDevs\Subscription\Illuminate\CancellationEvidence::record( 'provider_confirmed', $subscription_id, 0, 'paypal-stop', array( 'provider_state' => 'cancelled' ) );
 
 			subscrpt_write_log( "Subscription #{$subscription_id} cancelled successfully in PayPal." );
 		} else {
+			\SpringDevs\Subscription\Illuminate\CancellationEvidence::record( 'provider_pending', $subscription_id, 0, 'paypal-stop', array( 'provider_state' => 'unknown' ) );
 			subscrpt_write_log( "Failed to cancel subscription #{$subscription_id} in PayPal." );
 		}
 	}
@@ -1883,6 +1903,9 @@ class Paypal extends \WC_Payment_Gateway {
 			);
 
 			$response      = wp_remote_post( $url, $args );
+			if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
+				return null;
+			}
 			$response_data = json_decode( wp_remote_retrieve_body( $response ) );
 
 			if ( isset( $response_data->error ) || ! isset( $response_data->access_token ) ) {
@@ -2185,6 +2208,10 @@ class Paypal extends \WC_Payment_Gateway {
 			$response      = wp_remote_post( $url, $args );
 			$response_data = json_decode( wp_remote_retrieve_body( $response ) );
 
+			if ( is_wp_error( $response ) || 204 !== (int) wp_remote_retrieve_response_code( $response ) ) {
+				return false;
+			}
+
 			if ( ! empty( $response_data->message ?? null ) ) {
 				$log_message = 'Error cancelling PayPal subscription: ' . ( $response_data->message ?? 'Unknown error' );
 				subscrpt_write_log( $log_message );
@@ -2225,6 +2252,9 @@ class Paypal extends \WC_Payment_Gateway {
 			);
 
 			$response      = wp_remote_get( $url, $args );
+			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
+				return null;
+			}
 			$response_data = json_decode( wp_remote_retrieve_body( $response ) );
 
 			if ( empty( $response_data->id ?? null ) ) {

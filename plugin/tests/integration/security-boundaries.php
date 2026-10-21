@@ -10,6 +10,7 @@
 use SpringDevs\Subscription\Ajax;
 use SpringDevs\Subscription\Api\DiagnosticsController;
 use SpringDevs\Subscription\Frontend\ActionController;
+use SpringDevs\Subscription\Installer;
 use SpringDevs\Subscription\Illuminate\Action;
 use SpringDevs\Subscription\Illuminate\AutoRenewal;
 use SpringDevs\Subscription\Illuminate\GuestCheckout;
@@ -44,6 +45,84 @@ function ashbi_run_security_boundary_integration_checks() {
 				$failures[] = $message;
 			}
 		};
+
+		$billing_consent_readbacks = false;
+		if ( function_exists( 'subscrpt_subscription_auto_renew_enabled' ) ) {
+			$missing_mode      = new stdClass();
+			$old_mode          = get_option( 'wp_subscription_renewal_process', $missing_mode );
+			$old_stripe_mode   = get_option( 'wp_subscription_stripe_auto_renew', '1' );
+			$consent_post      = 0;
+			$consent_old_order = null;
+			$consent_new_order = null;
+			$provider_requests = 0;
+			$deny_provider     = static function ( $response, $args, $url ) use ( &$provider_requests ) {
+				$provider_host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+				if ( preg_match( '/(^|\.)(stripe|paypal)\.com$/', $provider_host ) ) {
+					++$provider_requests;
+					return new WP_Error( 'ashbi_readback_no_provider', 'Provider requests are forbidden in billing readback checks.' );
+				}
+				return $response;
+			};
+			try {
+				// REST readbacks explicitly load the same Core helper available on the settings screen.
+				if ( ! function_exists( 'add_settings_error' ) ) {
+					require_once ABSPATH . 'wp-admin/includes/template.php';
+				}
+				$settings_readback = new \SpringDevs\Subscription\Admin\Settings();
+				$settings_readback->register_settings();
+				foreach ( array( 'auto', 'manual' ) as $mode ) {
+					update_option( 'wp_subscription_renewal_process', $mode );
+					$check( get_option( 'wp_subscription_renewal_process' ) === $mode && subscrpt_get_renewal_process() === $mode, 'Renewal mode did not survive actual WordPress setting save/readback.' );
+				}
+				update_option( 'wp_subscription_renewal_process', 'subscriber' );
+				$check( 'manual' === get_option( 'wp_subscription_renewal_process' ) && ! subscrpt_is_auto_renew_enabled(), 'Invalid role-like renewal mode was not safely rejected.' );
+				update_option( 'wp_subscription_renewal_process', 'auto' );
+				update_option( 'wp_subscription_stripe_auto_renew', '1' );
+				$consent_post = wp_insert_post(
+					array(
+						'post_type'   => 'subscrpt_order',
+						'post_status' => 'active',
+						'post_title'  => 'Fabricated consent readback',
+						'post_author' => $administrator_id,
+					)
+				);
+				$check( $consent_post > 0, 'Could not create disposable consent readback record.' );
+				$consent_old_order = wc_create_order();
+				$consent_new_order = wc_create_order();
+				$consent_old_order->set_payment_method( 'stripe' );
+				$consent_old_order->update_meta_data( '_stripe_customer_id', 'cus_ashbi_fixture_readback' );
+				$consent_old_order->update_meta_data( '_stripe_source_id', 'pm_ashbi_fixture_readback' );
+				foreach ( array( 0, '0', false, '', 'no' ) as $opt_out ) {
+					update_post_meta( $consent_post, '_subscrpt_auto_renew', $opt_out );
+					$before_consent = get_post_meta( $consent_post, '_subscrpt_auto_renew', true );
+					$check( metadata_exists( 'post', $consent_post, '_subscrpt_auto_renew' ) && ! subscrpt_subscription_auto_renew_enabled( $consent_post ), 'Explicit stored opt-out inherited Automatic in real WordPress.' );
+					Helper::clone_stripe_metadata_for_renewal( $consent_post, $consent_old_order, $consent_new_order );
+					$check( get_post_meta( $consent_post, '_subscrpt_auto_renew', true ) === $before_consent, 'Stripe preparation rewrote stored opt-out.' );
+					$check( '' === $consent_new_order->get_meta( '_stripe_customer_id' ) && '' === $consent_new_order->get_meta( '_stripe_source_id' ), 'Opted-out renewal inherited Stripe identifiers.' );
+				}
+				add_filter( 'pre_http_request', $deny_provider, PHP_INT_MAX, 3 );
+				$stripe_readback = ( new ReflectionClass( \SpringDevs\Subscription\Illuminate\Gateways\Stripe\Stripe::class ) )->newInstanceWithoutConstructor();
+				$refused_payment = $stripe_readback->pay_renew_order( $consent_new_order, (int) $consent_post );
+				$check( is_wp_error( $refused_payment ) && 'stripe_renewal_consent' === $refused_payment->get_error_code() && 0 === $provider_requests, 'Opted-out final dispatch did not refuse before provider HTTP.' );
+				update_post_meta( $consent_post, '_subscrpt_auto_renew', 1 );
+				$check( subscrpt_subscription_auto_renew_enabled( $consent_post ), 'Explicit opt-in was not recognized.' );
+				delete_post_meta( $consent_post, '_subscrpt_auto_renew' );
+				$check( subscrpt_subscription_auto_renew_enabled( $consent_post ), 'Missing legacy consent did not retain documented Automatic inheritance.' );
+				$billing_consent_readbacks = true;
+			} finally {
+				remove_filter( 'pre_http_request', $deny_provider, PHP_INT_MAX );
+				if ( $consent_old_order instanceof \WC_Order ) {
+					$consent_old_order->delete( true ); }
+				if ( $consent_new_order instanceof \WC_Order ) {
+					$consent_new_order->delete( true ); }
+				if ( $consent_post > 0 ) {
+					wp_delete_post( $consent_post, true ); }
+				if ( $old_mode === $missing_mode ) {
+					delete_option( 'wp_subscription_renewal_process' ); } else {
+					update_option( 'wp_subscription_renewal_process', $old_mode ); }
+					update_option( 'wp_subscription_stripe_auto_renew', $old_stripe_mode );
+			}
+		}
 
 		$subscription_type = get_post_type_object( 'subscrpt_order' );
 		$item_type         = get_post_type_object( 'subscrpt_order_item' );
@@ -359,7 +438,11 @@ function ashbi_run_security_boundary_integration_checks() {
 		// checks prove the candidate was actually activated in the disposable site,.
 		// rather than merely loaded for this request.
 		$check( (int) get_option( 'subscrpt_installed', 0 ) > 0, 'Activation did not persist the installed marker.' );
-		$check( '1.5.0' === (string) get_option( 'subscrpt_db_version', '' ), 'Activation did not persist the current schema version.' );
+		$check( Installer::DB_VERSION === (string) get_option( 'subscrpt_db_version', '' ), 'Activation did not persist the current schema version.' );
+		foreach ( array( 'subscrpt_cancellation_barrier', 'subscrpt_evidence_event', 'subscrpt_contract_acceptance' ) as $evidence_table ) {
+			$evidence_table = $wpdb->prefix . $evidence_table;
+			$check( $evidence_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $evidence_table ) ) ), 'Activation did not create an evidence table.' );
+		}
 
 		$customer    = get_user_by( 'login', 'ashbi-existing-customer' );
 		$customer_id = $customer ? $customer->ID : wp_insert_user(
@@ -660,6 +743,8 @@ function ashbi_run_security_boundary_integration_checks() {
 			)
 		);
 		$check( 1 === $early_relation_count, 'Early renewal duplicate protection did not preserve one relation.' );
+		require_once __DIR__ . '/early-renewal-due.php';
+		ashbi_check_early_renewal_due( $check, (int) $early_subscription_id, $early_order_one );
 		if ( $early_order_one instanceof \WC_Order ) {
 			$early_order_one->delete( true );
 		}
@@ -1126,6 +1211,8 @@ function ashbi_run_security_boundary_integration_checks() {
 				$recurring_renewal_order instanceof \WC_Order && 34.0 === (float) $recurring_renewal_order->get_total(),
 				'Renewal total did not include the recurring coupon discount.'
 			);
+			require_once __DIR__ . '/recurring-coupon-limits.php';
+			ashbi_check_recurring_coupon_limits( $check, (int) $recurring_subscription_id, $recurring_source_order, $recurring_source_order->get_item( $recurring_source_item_id ) );
 		} finally {
 			remove_filter( 'subscrpt_coupon_is_recurring', $recurring_coupon_filter, 10 );
 			remove_filter( 'subscrpt_coupon_recurring_limit', $recurring_limit_filter, 10 );
@@ -1213,7 +1300,11 @@ function ashbi_run_security_boundary_integration_checks() {
 		}
 		require_once SUBSCRPT_PATH . '/uninstall.php';
 		$check( get_post( $subscription_id ) instanceof WP_Post, 'Default uninstall removed the subscription record.' );
-		$check( '1.5.0' === (string) get_option( 'subscrpt_db_version', '' ), 'Default uninstall removed the schema marker.' );
+		$check( Installer::DB_VERSION === (string) get_option( 'subscrpt_db_version', '' ), 'Default uninstall removed the schema marker.' );
+		foreach ( array( 'subscrpt_cancellation_barrier', 'subscrpt_evidence_event', 'subscrpt_contract_acceptance' ) as $evidence_table ) {
+			$evidence_table = $wpdb->prefix . $evidence_table;
+			$check( $evidence_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $evidence_table ) ) ), 'Default uninstall removed an evidence table.' );
+		}
 		if ( false === $previous_remove_data ) {
 			delete_option( 'subscrpt_remove_data_on_uninstall' );
 		} else {
@@ -1312,15 +1403,23 @@ function ashbi_run_security_boundary_integration_checks() {
 		$check( 'subscription_note' === get_comment( $activity_ids[0] )->comment_type, 'Rendering rewrote legacy note type.' );
 		$check( 'Fabricated legacy label' === get_comment_meta( $activity_ids[0], 'subscrpt_activity', true ), 'Rendering rewrote legacy metadata.' );
 
+		require_once __DIR__ . '/evidence-contract.php';
+		wp_set_current_user( (int) $administrator_id );
+		$mysql_cancellation_contention = ashbi_check_evidence_contract( $check );
+		require_once __DIR__ . '/classic-variation-cart.php';
+		$classic_variations = ashbi_verify_classic_variation_cart( $check );
 		if ( $failures ) {
 			wp_send_json_error( array( 'failures' => $failures ), 500 );
 		}
 
 		wp_send_json_success(
 			array(
-				'message'      => 'Ashbi security-boundary integration checks passed.',
-				'hpos_mode'    => $hpos_mode,
-				'hpos_enabled' => \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled(),
+				'message'                          => 'Ashbi security-boundary integration checks passed.',
+				'hpos_mode'                        => $hpos_mode,
+				'billing_consent_readbacks'        => $billing_consent_readbacks,
+				'cancellation_mysql_contention'    => $mysql_cancellation_contention,
+				'classic_variation_cart_lifecycle' => $classic_variations,
+				'hpos_enabled'                     => \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled(),
 			)
 		);
 	} catch ( \Throwable $error ) {

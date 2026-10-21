@@ -341,7 +341,15 @@ function subscrpt_get_renamed_option( $option, $legacy_option, $default_value = 
  * @return string 'auto' or 'manual'.
  */
 function subscrpt_get_renewal_process() {
-	return (string) subscrpt_get_renamed_option( 'wp_subscription_renewal_process', 'subscrpt_renewal_process', 'auto' );
+	// Only a genuinely missing option inherits the legacy/default contract.
+	// Present empty, false, or corrupt modes must never enable charges.
+	$missing = new stdClass();
+	$mode    = get_option( 'wp_subscription_renewal_process', $missing );
+	if ( $missing === $mode ) {
+		$mode = get_option( 'subscrpt_renewal_process', 'auto' );
+	}
+
+	return in_array( $mode, array( 'auto', 'manual' ), true ) ? $mode : 'manual';
 }
 
 /**
@@ -360,6 +368,24 @@ function subscrpt_get_manual_renew_cart_notice() {
  */
 function subscrpt_is_auto_renew_enabled() {
 	return 'auto' === subscrpt_get_renewal_process();
+}
+
+/**
+ * Read authoritative customer auto-renew consent without modifying it.
+ *
+ * Only absent metadata inherits the historical store default. Existing false,
+ * empty, or unrecognized values are not consent and must not be overwritten.
+ * Store/gateway availability remains a separate gate before payment dispatch.
+ *
+ * @param int $subscription_id Subscription post ID.
+ * @return bool
+ */
+function subscrpt_subscription_auto_renew_enabled( $subscription_id ): bool {
+	if ( ! metadata_exists( 'post', $subscription_id, '_subscrpt_auto_renew' ) ) {
+		return subscrpt_is_auto_renew_enabled();
+	}
+
+	return in_array( get_post_meta( $subscription_id, '_subscrpt_auto_renew', true ), array( 1, '1', true, 'true', 'yes' ), true );
 }
 
 /**

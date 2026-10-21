@@ -429,41 +429,13 @@ class Cancellation {
 			'created_at'      => current_time( 'mysql', true ),
 		);
 
-		// One row per subscription: overwrite any previous feedback (e.g. after a.
-		// reactivate → cancel-again cycle) rather than accumulating a log, so the.
-		// row always reflects the latest cancellation reason.
-		$existing_id = (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
-			$wpdb->prepare(
-				"SELECT id FROM {$wpdb->prefix}subscrpt_cancellation_feedback WHERE subscription_id = %d ORDER BY id DESC LIMIT 1",
-				$subscription_id
-			)
-		);
-
-		if ( $existing_id ) {
-			// Clear any stray duplicates from earlier writes, keep the one we update.
-			$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
-				$wpdb->prepare(
-					"DELETE FROM {$wpdb->prefix}subscrpt_cancellation_feedback WHERE subscription_id = %d AND id <> %d",
-					$subscription_id,
-					$existing_id
-				)
-			);
-			$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
-				$table,
-				$data,
-				array( 'id' => $existing_id ),
-				array( '%d', '%d', '%s', '%s', '%s', '%s' ),
-				array( '%d' )
-			);
-			$data['id'] = $existing_id;
-		} else {
-			$wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
-				$table,
-				$data,
-				array( '%d', '%d', '%s', '%s', '%s', '%s' )
-			);
-			$data['id'] = (int) $wpdb->insert_id;
+		// Append each explicitly sent survey; the latest-row view stays compatible.
+		// Prior feedback survives corrections and repeated cancellation attempts.
+		$inserted = $wpdb->insert( $table, $data, array( '%d', '%d', '%s', '%s', '%s', '%s' ) );
+		if ( false === $inserted ) {
+			wp_send_json_error( array( 'message' => 'feedback_unavailable' ) );
 		}
+		$data['id'] = (int) $wpdb->insert_id;
 
 		/**
 		 * Fires after a cancellation-feedback row is stored.
@@ -954,11 +926,9 @@ class Cancellation {
 			return;
 		}
 
-		// Ensure the mailer is ready so the cancellation email can be sent.
-		if ( function_exists( 'WC' ) && WC()->mailer() ) {
-			foreach ( $subscriptions as $subscription_id ) {
-				$this->cancel( (int) $subscription_id );
-			}
+		// Access termination must not depend on an optional notification service.
+		foreach ( $subscriptions as $subscription_id ) {
+			$this->cancel( (int) $subscription_id );
 		}
 	}
 
@@ -972,12 +942,18 @@ class Cancellation {
 	 */
 	public function cancel( $subscription_id ) {
 		$subscription_id = (int) $subscription_id;
+		if ( CancellationEvidence::blocked( $subscription_id ) ) {
+			CancellationEvidence::repair( $subscription_id );
+			return;
+		}
 
 		if ( 'pe_cancelled' === get_post_status( $subscription_id ) ) {
 			Action::status( 'cancelled', $subscription_id );
 		}
 
-		delete_post_meta( $subscription_id, self::CANCEL_AT_META );
+		if ( 'pe_cancelled' !== get_post_status( $subscription_id ) ) {
+			delete_post_meta( $subscription_id, self::CANCEL_AT_META );
+		}
 	}
 
 	/**
@@ -987,51 +963,42 @@ class Cancellation {
 	 * @return void
 	 */
 	public function clear_scheduled_cancellation( $subscription_id ) {
+		if ( CancellationEvidence::blocked( (int) $subscription_id ) ) {
+			return;
+		}
 		delete_post_meta( (int) $subscription_id, self::CANCEL_AT_META );
 	}
 
 	/**
-	 * Show a notice on the subscription details page when a cancellation is pending.
+	 * Show recorded cancellation confirmation and any scheduled access end.
 	 *
-	 * Uses `_subscrpt_cancel_at` (the resolved final-cancellation time), falling back
-	 * to the next renewal date for legacy subscriptions.
+	 * Prefers immutable intent access end; legacy notices use `_subscrpt_cancel_at`
+	 * and then the next renewal date without inventing confirmation.
 	 *
 	 * @param int $subscription_id Subscription ID.
 	 * @return void
 	 */
 	public function display_pending_cancellation_notice( $subscription_id ) {
-		if ( 'pe_cancelled' !== get_post_status( $subscription_id ) ) {
+		$receipt = CancellationEvidence::receipt( (int) $subscription_id );
+		$status  = get_post_status( $subscription_id );
+		if ( 'none' === $receipt['state'] && 'pe_cancelled' !== $status ) {
 			return;
 		}
 
-		$cancel_at = (int) get_post_meta( $subscription_id, self::CANCEL_AT_META, true );
-		if ( ! $cancel_at ) {
+		$cancel_at = $receipt['access_end'];
+		if ( 'none' === $receipt['state'] ) {
+			$cancel_at = (int) get_post_meta( $subscription_id, self::CANCEL_AT_META, true );
+		}
+		if ( 'none' === $receipt['state'] && ! $cancel_at ) {
 			$cancel_at = (int) get_post_meta( $subscription_id, '_subscrpt_next_date', true );
 		}
 
 		wp_enqueue_style( 'subscrpt_cancellation_css', SUBSCRPT_ASSETS . '/css/cancellation.css', array(), SUBSCRPT_VERSION );
-		?>
-		<div class="subscrpt-pending-cancel-notice" role="status">
-			<span class="subscrpt-pending-cancel-notice__icon" aria-hidden="true">
-				<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-			</span>
-			<div class="subscrpt-pending-cancel-notice__body">
-				<p class="subscrpt-pending-cancel-notice__text">
-					<?php
-					if ( $cancel_at ) {
-						$effective = date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $cancel_at );
-						printf(
-							/* translators: %s: cancellation date and time. */
-							esc_html__( 'This subscription is scheduled to be cancelled on %s. You can continue accessing it until then.', 'subscription' ),
-							'<strong>' . esc_html( $effective ) . '</strong>'
-						);
-					} else {
-						esc_html_e( 'This subscription is scheduled to be cancelled at the end of the current billing period. You can continue accessing it until then.', 'subscription' );
-					}
-					?>
-				</p>
-			</div>
-		</div>
-		<?php
+		wc_get_template(
+			'myaccount/cancellation-notice.php',
+			array( 'receipt_state' => $receipt['state'], 'cancel_at' => $cancel_at, 'subscription_status' => $status ),
+			'subscription',
+			SUBSCRPT_TEMPLATES
+		);
 	}
 }

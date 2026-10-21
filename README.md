@@ -17,6 +17,12 @@ data and an exact database/package rollback rehearsal. Docker-backed gateway
 tests, gateway sandbox validation, and per-site client-clone reconciliation
 remain release gates.
 
+Merchant cancellation: open a subscription from **Ashbi Subscriptions**, choose
+**End subscription now** or **Schedule cancellation**, and read the saved result.
+A pending payment confirmation still needs review. Contact-form and email messages
+require a merchant to verify and act; saving a message does not cancel billing.
+See [merchant cancellation guidance](docs/MERCHANT_CANCELLATION.md).
+
 ## Core operating model
 
 The plugin's core responsibility is intentionally straightforward: retain a
@@ -104,10 +110,14 @@ disabled, or not classified as sandbox/offline.
 
 ## Documentation
 
+- [Small-store workflow review and merchant procedure](docs/SMALL_STORE_REVIEW.md)
+- [Cancellation confirmation review filter](docs/CANCELLATION_REVIEW_FILTER.md)
 - [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
 - [Feature matrix](docs/FEATURE_MATRIX.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Security and payments](docs/SECURITY.md)
+- [Customer cancellation receipts](docs/PERSISTENT_CANCELLATION_RECEIPTS.md)
+- [Simple checkout consent and account routes](docs/SIMPLE_CONSENT_ACCOUNT_ROUTES.md)
 - [Database migration 1.5.0](docs/MIGRATION_1.5.0.md)
 - [Per-site staging rehearsal and rollback](docs/SITE_REHEARSAL_RUNBOOK.md)
 - [Public release checklist](docs/PUBLIC_RELEASE_CHECKLIST.md)

@@ -1,4 +1,4 @@
-name: Published RC package validation
+name: Candidate and historical package validation
 
 on:
   pull_request:
@@ -19,6 +19,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
@@ -31,7 +32,7 @@ jobs:
       - run: bash -n scripts/run-integration.sh
 
   package-runtime:
-    name: Published ZIP / HPOS ${{ matrix.hpos }}
+    name: Historical v2.1.2-rc.2 ZIP / HPOS ${{ matrix.hpos }}
     needs: harness-regressions
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -44,6 +45,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
@@ -69,6 +71,60 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  candidate-runtime:
+    name: Candidate ZIP / HPOS ${{ matrix.hpos }}
+    needs: harness-regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        hpos: ['off', 'on']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.2'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm audit --audit-level=moderate
+      - name: Build exact source candidate and clean-tree manifest
+        run: |
+          mkdir -p dist
+          bash scripts/build-release.sh dist/candidate.zip
+          bash scripts/build-release-evidence.sh dist/candidate.zip dist/candidate
+          grep -q '^source_commit=${{ github.sha }}$' dist/candidate.manifest
+          grep -q '^dirty_tree=no$' dist/candidate.manifest
+          (cd dist && sha256sum --check candidate.sha256)
+      - name: Install candidate ZIP and exercise current feature assertions
+        run: |
+          checksum="$(sha256sum dist/candidate.zip | cut -d ' ' -f 1)"
+          python3 scripts/validate-published-release.py run --target candidate --package dist/candidate.zip --expected-sha256 "$checksum" --source-commit '${{ github.sha }}' --hpos '${{ matrix.hpos }}' --output 'reports/candidate-${{ matrix.hpos }}'
+      - name: Destroy only the owned candidate environment
+        if: always()
+        run: python3 scripts/validate-published-release.py cleanup --output 'reports/candidate-${{ matrix.hpos }}'
+      - name: Preserve actual candidate archive and runtime evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: candidate-zip-hpos-${{ matrix.hpos }}-${{ github.sha }}
+          path: |
+            dist/candidate.zip
+            dist/candidate.manifest
+            dist/candidate.sha256
+            reports/candidate-${{ matrix.hpos }}/*.json
+            reports/candidate-${{ matrix.hpos }}/*.txt
+            reports/candidate-${{ matrix.hpos }}/*.stderr
+            reports/candidate-${{ matrix.hpos }}/*.stdout
+            reports/candidate-${{ matrix.hpos }}/*.exit-code
+          if-no-files-found: warn
+          retention-days: 14
+
   plugin-check-diagnostic:
     name: Official Plugin Check / initial nonblocking findings
     needs: [harness-regressions, package-runtime]
@@ -79,6 +135,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'

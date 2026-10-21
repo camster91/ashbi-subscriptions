@@ -6,7 +6,8 @@
   ],
   "phpVersion": "8.2",
   "mappings": {
-    "wp-content/mu-plugins": "./scripts/playground-mu-plugins"
+    "wp-content/mu-plugins": "./scripts/playground-mu-plugins",
+    "wp-content/ashbi-recovery": "./tools"
   },
   "config": {
     "WP_ENVIRONMENT_TYPE": "local",

@@ -81,7 +81,7 @@ class Settings {
 				'field_data' => array(
 					'id'          => 'wp_subscription_renewal_process',
 					'title'       => __( 'Renewal Process', 'subscription' ),
-					'description' => __( 'How renewal process will be done after Subscription Expired.', 'subscription' ),
+					'description' => __( 'Choose how expired subscriptions renew. Unrecognized saved modes use Manual for safety; select Automatic explicitly to enable automatic renewals.', 'subscription' ),
 					'options'     => array(
 						'auto'   => __( 'Automatic', 'subscription' ),
 						'manual' => __( 'Manual', 'subscription' ),
@@ -168,6 +168,25 @@ class Settings {
 	}
 
 	/**
+	 * Validate the renewal mode without treating it as a customer role.
+	 *
+	 * @param mixed $mode Submitted renewal mode.
+	 * @return string
+	 */
+	public static function sanitize_renewal_process( $mode ): string {
+		if ( in_array( $mode, array( 'auto', 'manual' ), true ) ) {
+			return $mode;
+		}
+
+		add_settings_error(
+			'wp_subscription_renewal_process',
+			'invalid_renewal_process',
+			__( 'Invalid renewal mode. Manual renewal is used for safety; select Automatic explicitly to enable automatic renewals.', 'subscription' )
+		);
+		return 'manual';
+	}
+
+	/**
 	 * Register settings options.
 	 **/
 	public function register_settings() {
@@ -176,7 +195,7 @@ class Settings {
 			'wp_subscription_renewal_process',
 			array(
 				'type'              => 'string',
-				'sanitize_callback' => array( RoleManagement::class, 'sanitize_customer_role' ),
+				'sanitize_callback' => array( self::class, 'sanitize_renewal_process' ),
 			)
 		);
 		register_setting(

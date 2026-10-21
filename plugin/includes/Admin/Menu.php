@@ -10,6 +10,7 @@
 
 namespace SpringDevs\Subscription\Admin;
 
+use SpringDevs\Subscription\Illuminate\CancellationEvidence;
 use SpringDevs\Subscription\Illuminate\Helper;
 use SpringDevs\Subscription\Illuminate\Stats;
 
@@ -441,7 +442,7 @@ class Menu {
 	 */
 	public function render_dashboard_page() {
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended
-		$list_args = array( 'post_status', 's', 'paged', 'filter_action', 'orderby', 'order', 'subscrpt_status', 'date_filter', 'per_page', 'renewal_due' );
+		$list_args = array( 'post_status', 's', 'paged', 'filter_action', 'orderby', 'order', 'subscrpt_status', 'date_filter', 'per_page', 'renewal_due', 'cancellation_review' );
 
 		foreach ( $list_args as $arg ) {
 			if ( isset( $_GET[ $arg ] ) && '' !== $_GET[ $arg ] ) {
@@ -470,6 +471,9 @@ class Menu {
 	 * Render Subscriptions page
 	 */
 	public function render_subscriptions_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to manage subscriptions.', 'subscription' ) );
+		}
 		$this->render_admin_header( __( 'Subscriptions', 'subscription' ), __( 'Manage your subscriptions', 'subscription' ) );
 
 		// Handle filters.
@@ -479,6 +483,8 @@ class Menu {
 		$per_page    = isset( $_GET['per_page'] ) ? max( 1, intval( $_GET['per_page'] ) ) : 20;
 		$paged       = isset( $_GET['paged'] ) ? max( 1, intval( $_GET['paged'] ) ) : 1;
 		$renewal_due = isset( $_GET['renewal_due'] ) ? min( 366, absint( $_GET['renewal_due'] ) ) : 0;
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Strictly allowlisted read-only list filter; POST changes use the existing list nonce.
+		$cancellation_review = isset( $_GET['cancellation_review'] ) && '1' === wp_unslash( $_GET['cancellation_review'] );
 
 		// Handle form submissions (both filters and bulk actions).
 		$request_method = isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : '';
@@ -524,6 +530,9 @@ class Menu {
 			// Handle filter form submission.
 			if ( isset( $_POST['filter_action'] ) ) {
 				$filter_params = array();
+				if ( isset( $_POST['cancellation_review'] ) && '1' === wp_unslash( $_POST['cancellation_review'] ) ) {
+					$filter_params['cancellation_review'] = '1';
+				}
 
 				if ( ! empty( $_POST['subscrpt_status'] ) ) {
 					$filter_params['subscrpt_status'] = sanitize_text_field( wp_unslash( $_POST['subscrpt_status'] ) );
@@ -678,10 +687,20 @@ class Menu {
 			$args['orderby']     = array( 'subscrpt_next_date' => 'ASC' );
 		}
 
-		$query         = new \WP_Query( $args );
-		$subscriptions = $query->posts;
-		$total         = $query->found_posts;
-		$max_num_pages = $query->max_num_pages;
+		$review_error = '';
+		if ( $cancellation_review ) {
+			try {
+				$query = CancellationReview::query( $args );
+			} catch ( \RuntimeException $error ) {
+				$query        = null;
+				$review_error = __( 'Cancellation requests could not be loaded. Please try again or contact support.', 'subscription' );
+			}
+		} else {
+			$query = new \WP_Query( $args );
+		}
+		$subscriptions = $query ? $query->posts : array();
+		$total         = $query ? $query->found_posts : 0;
+		$max_num_pages = $query ? $query->max_num_pages : 0;
 
 		// Get all possible statuses for filter dropdown.
 		$all_statuses = get_post_stati( array( 'show_in_admin_all_list' => true ), 'objects' );
@@ -726,7 +745,13 @@ class Menu {
 
 			$action = sanitize_text_field( wp_unslash( $_POST['subscrpt_order_action'] ) );
 			if ( '' !== $action ) {
-				Subscriptions::process_status_change( $subscription_id, $action );
+				$result = Subscriptions::process_status_change( $subscription_id, $action );
+				if ( in_array( $action, array( 'cancelled', 'pe_cancelled' ), true ) && ( empty( $result['recorded'] ) || empty( $result['barrier'] ) ) ) {
+					wp_die( esc_html__( 'Cancellation could not be verified. Refresh this subscription and check its cancellation history before trying again.', 'subscription' ) );
+				}
+				if ( 'cancelled' === $action && 'cancelled' !== get_post_status( $subscription_id ) ) {
+					wp_die( esc_html__( 'The cancellation request is saved and future renewals are blocked. Ending access now is still pending. Refresh this subscription and retry End subscription now after the current operation finishes.', 'subscription' ) );
+				}
 			}
 
 			wp_safe_redirect( $form_action );
@@ -785,11 +810,11 @@ class Menu {
 				'value' => 'expired',
 			),
 			'pe_cancelled' => array(
-				'label' => __( 'Pending Cancel Subscription', 'subscription' ),
+				'label' => __( 'Schedule cancellation', 'subscription' ),
 				'value' => 'pe_cancelled',
 			),
 			'cancelled'    => array(
-				'label' => __( 'Cancel Subscription', 'subscription' ),
+				'label' => __( 'End subscription now', 'subscription' ),
 				'value' => 'cancelled',
 			),
 		);
@@ -801,10 +826,16 @@ class Menu {
 			'cancelled'    => array( 'active' ),
 			'expired'      => array( 'active', 'cancelled' ),
 			'completed'    => array( 'cancelled' ),
+			'on_hold'      => array( 'cancelled' ),
+			'on-hold'      => array( 'cancelled' ),
 		);
 
 		$status  = get_post_status( $subscription_id );
 		$actions = $map_actions[ $status ] ?? array();
+		$cancellation_receipt = CancellationEvidence::receipt( $subscription_id );
+		if ( 'none' !== $cancellation_receipt['state'] ) {
+			$actions = array_values( array_intersect( $actions, array( 'cancelled', 'pe_cancelled' ) ) );
+		}
 
 		// Gather subscription data for the view.
 		$subscription_data = Helper::get_subscription_data( $subscription_id );

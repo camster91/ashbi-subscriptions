@@ -11,6 +11,16 @@ use PHPUnit\Framework\TestCase;
  * Frontend rewrite contract tests.
  */
 final class FrontendRewriteContractTest extends TestCase {
+	/** Admin permalink generation must keep the configured customer routes. */
+	public function test_account_endpoints_register_once_in_admin_frontend_and_ajax(): void {
+		$fixture = dirname( __DIR__ ) . '/fixtures/account-admin-bootstrap.php';
+		foreach ( array( 'admin', 'frontend', 'ajax' ) as $scenario ) {
+			$output = \PHPUnit\Util\PHP\AbstractPhpProcess::factory()->runJob( '<?php $argv[1] = ' . var_export( $scenario, true ) . '; require ' . var_export( $fixture, true ) . ';' );
+			self::assertSame( '', $output['stderr'], $scenario );
+			self::assertSame( array( array( 'my-plans', 4160 ), array( 'my-plan', 4160 ) ), json_decode( $output['stdout'], true ), $scenario );
+		}
+	}
+
 	/**
 	 * Source for the customer account controller.
 	 *

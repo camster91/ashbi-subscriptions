@@ -45,6 +45,18 @@ class Order {
 		if ( $order instanceof \WC_Order && $order->get_meta( '_subscrpt_renewal_quarantined' ) ) {
 			return false;
 		}
+		if ( $needs_payment && $order instanceof \WC_Order ) {
+			global $wpdb;
+			$subscriptions = $wpdb->get_results( $wpdb->prepare( 'SELECT subscription_id FROM %i WHERE order_id = %d AND type IN (%s, %s)', $wpdb->prefix . 'subscrpt_order_relation', (int) $order->get_id(), 'renew', 'early-renew' ) );
+			if ( ! empty( $wpdb->last_error ) && Helper::order_has_subscription_item( $order ) ) {
+				return false;
+			}
+			foreach ( (array) $subscriptions as $subscription ) {
+				if ( CancellationEvidence::blocked( (int) $subscription->subscription_id ) ) {
+					return false;
+				}
+			}
+		}
 
 		return $needs_payment;
 	}
@@ -127,7 +139,7 @@ class Order {
 
 			update_post_meta( $subscription_id, '_subscrpt_start_date', $start_date );
 
-		} elseif ( 'renew' === $subscription_history->type ) {
+		} elseif ( 'renew' === $subscription_history->type || ( 'early-renew' === $subscription_history->type && $this->is_claimed_renewal_order( (int) $subscription_id, (int) $subscription_history->order_id ) ) ) {
 			$this->persist_renewal_schedule(
 				(int) $subscription_id,
 				(int) $subscription_history->order_id,
@@ -380,7 +392,7 @@ class Order {
 		$table_name = $wpdb->prefix . 'subscrpt_order_relation';
 		$relation   = $wpdb->get_row(
 			$wpdb->prepare(
-				"SELECT order_item_id FROM %i WHERE subscription_id = %d AND order_id = %d AND type = 'renew' LIMIT 1",
+				"SELECT order_item_id FROM %i WHERE subscription_id = %d AND order_id = %d AND type IN ('renew', 'early-renew') LIMIT 1",
 				array( $table_name, $subscription_id, $renewal_order_id )
 			)
 		);
@@ -512,6 +524,24 @@ class Order {
 		$histories = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i WHERE order_id=%d', array( $table_name, $order_id ) ) );
 
 		foreach ( $histories as $history ) {
+			$barrier_subscription_id = (int) $history->subscription_id;
+			if ( ! CancellationEvidence::lock( $barrier_subscription_id ) ) {
+				continue;
+			}
+			try {
+				if ( CancellationEvidence::blocked( $barrier_subscription_id ) ) {
+					if ( $order->is_paid() ) {
+						CancellationEvidence::record( 'dispatch_review', $barrier_subscription_id, 0, 'order-' . $order_id, array( 'order_id' => $order_id, 'code' => 'paid_after_cancellation' ) );
+					}
+					continue;
+				}
+			$schedule_history_type = (string) $history->type;
+			// At the due date an existing early invoice can own the normal period
+			// claim. Use durable renewal activation/repair without rewriting history.
+			if ( 'early-renew' === $history->type && $this->is_claimed_renewal_order( $barrier_subscription_id, (int) $order_id ) ) {
+				$history       = clone $history;
+				$history->type = 'renew';
+			}
 			// Early renewal is a prepaid order for the next period. A failed or.
 			// cancelled early checkout must not cancel an otherwise active.
 			// subscription; only a verified payment advances its schedule.
@@ -589,7 +619,7 @@ class Order {
 					if ( 'renew' === $history->type && in_array( $target_status, array( 'active', 'completed' ), true ) ) {
 						if (
 							'active' === $target_status
-							&& ! $this->persist_renewal_schedule( (int) $subscription_id, (int) $order_id, (int) $history->order_item_id, (string) $history->type )
+							&& ! $this->persist_renewal_schedule( (int) $subscription_id, (int) $order_id, (int) $history->order_item_id, $schedule_history_type )
 						) {
 							continue;
 						}
@@ -615,7 +645,7 @@ class Order {
 				if (
 					'renew' === $history->type
 					&& 'active' === $target_status
-					&& ! $this->persist_renewal_schedule( (int) $subscription_id, (int) $order_id, (int) $history->order_item_id, (string) $history->type )
+					&& ! $this->persist_renewal_schedule( (int) $subscription_id, (int) $order_id, (int) $history->order_item_id, $schedule_history_type )
 				) {
 					continue;
 				}
@@ -660,6 +690,9 @@ class Order {
 				Action::write_comment( $target_status, $history->subscription_id );
 			} else {
 				do_action( 'subscrpt_order_status_changed', $order, $history );
+			}
+			} finally {
+				CancellationEvidence::unlock( $barrier_subscription_id );
 			}
 		}
 	}
@@ -1076,7 +1109,7 @@ class Order {
 		}
 
 		foreach ( $this->renewal_histories_for_order( (int) $order_id ) as $history ) {
-			if ( 'renew' === ( $history->type ?? '' ) && $this->is_claimed_renewal_order( (int) $history->subscription_id, (int) $order_id ) ) {
+			if ( in_array( ( $history->type ?? '' ), array( 'renew', 'early-renew' ), true ) && $this->is_claimed_renewal_order( (int) $history->subscription_id, (int) $order_id ) ) {
 				$this->defer_renewal_activation( (int) $history->subscription_id, (int) $order_id, 'Queued trial-order completion did not persist.' );
 			}
 		}
