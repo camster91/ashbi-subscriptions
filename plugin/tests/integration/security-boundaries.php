@@ -743,6 +743,8 @@ function ashbi_run_security_boundary_integration_checks() {
 			)
 		);
 		$check( 1 === $early_relation_count, 'Early renewal duplicate protection did not preserve one relation.' );
+		require_once __DIR__ . '/early-renewal-due.php';
+		ashbi_check_early_renewal_due( $check, (int) $early_subscription_id, $early_order_one );
 		if ( $early_order_one instanceof \WC_Order ) {
 			$early_order_one->delete( true );
 		}

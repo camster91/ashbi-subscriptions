@@ -5,6 +5,13 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 
 ## 2.2.0 candidate - 2026-10-10
 
+- Reuse an unpaid early-renewal invoice when its billing date arrives, preserving
+  its quote and payment identity instead of creating a second invoice. Route
+  claimed early invoices through durable paid activation/repair after expiry;
+  failed/on-hold orders are never marked paid merely because dispatch stopped.
+  Conflicting invoices stop automatic creation for manual reconciliation.
+  See `docs/EARLY_RENEWAL_DUE.md`.
+
 - Save merchant cancellation through the same durable renewal barrier as customer
   cancellation. Preserve immediate versus configured access timing, original
   cancellation evidence, edit permissions and notification failure safety.
