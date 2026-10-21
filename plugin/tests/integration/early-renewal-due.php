@@ -24,7 +24,8 @@ function ashbi_check_early_renewal_due( callable $check, int $subscription_id, W
 	$period_key  = $early_order->get_meta( '_subscrpt_renewal_period_key' );
 	$helper      = \SpringDevs\Subscription\Illuminate\Helper::class;
 	$claim_class = \SpringDevs\Subscription\Illuminate\RenewalClaim::class;
-	$duplicate   = wc_create_order();
+	ashbi_check_cart_early_invoice_collision( $check, $subscription_id, $early_order );
+	$duplicate = wc_create_order();
 	$duplicate->update_meta_data( '_subscrpt_early_renewal_anchor', $anchor );
 	$duplicate->save();
 	$wpdb->insert(
@@ -162,5 +163,160 @@ function ashbi_check_paid_early_invoice_due( callable $check, int $source_subscr
 		$wpdb->delete( $wpdb->prefix . 'subscrpt_order_relation', array( 'subscription_id' => $subscription_id ), array( '%d' ) );
 		$wpdb->delete( $wpdb->prefix . 'subscrpt_renewal_claim', array( 'subscription_id' => $subscription_id ), array( '%d' ) );
 		wp_delete_post( $subscription_id, true );
+	}
+}
+
+/**
+ * Reject a fresh cart invoice while an unpaid early invoice reserves the period.
+ *
+ * @param callable $check Assertion collector.
+ * @param int      $subscription_id Fabricated subscription with an early invoice.
+ * @param WC_Order $early_order Fabricated unpaid early invoice.
+ */
+function ashbi_check_cart_early_invoice_collision( callable $check, int $subscription_id, WC_Order $early_order ): void {
+	global $wpdb;
+	$items           = $early_order->get_items();
+	$source_item     = reset( $items );
+	$product         = $source_item->get_product();
+	$source_status   = get_post_status( $subscription_id );
+	$source_plan_id  = get_post_meta( $subscription_id, '_subscrpt_plan_id', true );
+	$source_order_id = get_post_meta( $subscription_id, '_subscrpt_order_id', true );
+	$source_item_id  = get_post_meta( $subscription_id, '_subscrpt_order_item_id', true );
+	$product_meta    = array();
+	foreach ( array( '_subscrpt_enabled', '_subscrpt_plan_connected_before', '_subscrpt_timing_per', '_subscrpt_timing_option' ) as $key ) {
+		$product_meta[ $key ] = $product->get_meta( $key );
+	}
+	$repository         = \SpringDevs\Subscription\Illuminate\Plans\PlanRepository::class;
+	$plan_controller    = ( new ReflectionClass( \SpringDevs\Subscription\Frontend\PlanCheckout::class ) )->newInstanceWithoutConstructor();
+	$classic_controller = ( new ReflectionClass( \SpringDevs\Subscription\Frontend\Checkout::class ) )->newInstanceWithoutConstructor();
+	foreach ( array( 'helper', 'classic-controller', 'plan-controller' ) as $entry ) {
+		$order    = wc_create_order( array( 'customer_id' => $early_order->get_customer_id() ) );
+		$group_id = 0;
+		try {
+			wp_update_post(
+				array(
+					'ID'          => $subscription_id,
+					'post_status' => 'expired',
+				)
+			);
+			$product->update_meta_data( '_subscrpt_enabled', 'yes' );
+			$product->update_meta_data( '_subscrpt_plan_connected_before', 'no' );
+			$product->update_meta_data( '_subscrpt_timing_per', 1 );
+			$product->update_meta_data( '_subscrpt_timing_option', 'month' );
+			$product->save();
+			$item_id = $order->add_product( $product, 1 );
+			$item    = $order->get_item( $item_id );
+			$item->update_meta_data( '_renew_subscrpt', $subscription_id );
+			if ( 'plan-controller' === $entry ) {
+				// The earlier harness group is deliberately deleted before this
+				// fixture. Create an owned group/term/mapping and remove it below.
+				$group_id = $repository::insert_group(
+					array(
+						'title'        => 'Fabricated cart collision',
+						'type'         => 'installments',
+						'product_type' => 0,
+						'status'       => 'active',
+					)
+				);
+				$plan_id  = $repository::insert_plan(
+					array(
+						'plan_group_id'     => $group_id,
+						'title'             => 'Fabricated monthly term',
+						'type'              => 'installments',
+						'billing_frequency' => 1,
+						'billing_interval'  => 3,
+						'billing_length'    => 3,
+						'data'              => array( 'installment_count' => 3 ),
+						'status'            => 'active',
+					)
+				);
+				$repository::insert_relation(
+					array(
+						'plan_id' => $plan_id,
+						'oid'     => $source_item->get_product_id(),
+						'vid'     => $source_item->get_variation_id(),
+						'type'    => $repository::REL_PRODUCT,
+						'data'    => array(
+							'price'          => '24.00',
+							'regular_price'  => '24.00',
+							'max_no_payment' => 3,
+						),
+					)
+				);
+				$plans = $repository::resolve_for_product( $source_item->get_product_id(), $source_item->get_variation_id() );
+				$check( $plan_id > 0 && (int) ( $plans[0]['plan_id'] ?? 0 ) === $plan_id, 'The cart collision fixture could not resolve its fabricated plan.' );
+				update_post_meta( $subscription_id, '_subscrpt_plan_id', $plan_id );
+				$item->update_meta_data( '_subscrpt_plan_id', $plan_id );
+			}
+			$item->save();
+			$order->calculate_totals( false );
+			$order->save();
+			$helper = \SpringDevs\Subscription\Illuminate\Helper::class;
+			$check( $subscription_id === $helper::resolve_checkout_renewal_subscription( $item, $product ), 'Cart collision setup did not resolve the exact subscription owner and product.' );
+			$rejected = false;
+			if ( 'helper' === $entry ) {
+				$rejected = false === $helper::process_order_renewal( $subscription_id, $order->get_id(), $item_id );
+			} else {
+				try {
+					if ( 'classic-controller' === $entry ) {
+						$classic_controller->create_subscription_after_checkout( $order->get_id() );
+					} else {
+						$plan_controller->create_plan_subscription( $item, $product, 'pending' );
+					}
+				} catch ( Exception $error ) {
+					$rejected = 'A renewal order already exists for this subscription period. Please pay the existing order from your account.' === $error->getMessage();
+				}
+			}
+			$check( $rejected, 'Cart renewal attached a second invoice despite the existing unpaid early invoice (' . $entry . ').' );
+			if ( 'helper' !== $entry ) {
+				$check( 'cancelled' === wc_get_order( $order->get_id() )->get_status() && ! wc_get_order( $order->get_id() )->needs_payment(), 'Checkout left the rejected duplicate invoice payable (' . $entry . ').' );
+			}
+			$linked = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE subscription_id = %d AND order_id = %d', $wpdb->prefix . 'subscrpt_order_relation', $subscription_id, $order->get_id() ) );
+			$check( 0 === $linked && ! \SpringDevs\Subscription\Illuminate\RenewalClaim::is_claimed_order( $subscription_id, $order->get_id() ), 'Rejected cart renewal still acquired a relation or billing-period claim.' );
+			$check( wc_get_order( $early_order->get_id() )->needs_payment(), 'Rejecting cart duplication made the original early invoice unpayable.' );
+			$check( (string) get_post_meta( $subscription_id, '_subscrpt_order_id', true ) === (string) $source_order_id && (string) get_post_meta( $subscription_id, '_subscrpt_order_item_id', true ) === (string) $source_item_id, 'Rejected cart renewal changed the subscription source order.' );
+		} finally {
+			$wpdb->delete(
+				$wpdb->prefix . 'subscrpt_order_relation',
+				array(
+					'subscription_id' => $subscription_id,
+					'order_id'        => $order->get_id(),
+				),
+				array( '%d', '%d' )
+			);
+			$wpdb->delete(
+				$wpdb->prefix . 'subscrpt_renewal_claim',
+				array(
+					'subscription_id' => $subscription_id,
+					'order_id'        => $order->get_id(),
+				),
+				array( '%d', '%d' )
+			);
+			$order->delete( true );
+			if ( $group_id ) {
+				$repository::delete_group( $group_id );
+			}
+			foreach ( $product_meta as $key => $value ) {
+				if ( '' === $value ) {
+					$product->delete_meta_data( $key );
+				} else {
+					$product->update_meta_data( $key, $value );
+				}
+			}
+			$product->save();
+			if ( '' === $source_plan_id ) {
+				delete_post_meta( $subscription_id, '_subscrpt_plan_id' );
+			} else {
+				update_post_meta( $subscription_id, '_subscrpt_plan_id', $source_plan_id );
+			}
+			update_post_meta( $subscription_id, '_subscrpt_order_id', $source_order_id );
+			update_post_meta( $subscription_id, '_subscrpt_order_item_id', $source_item_id );
+			wp_update_post(
+				array(
+					'ID'          => $subscription_id,
+					'post_status' => $source_status,
+				)
+			);
+		}
 	}
 }

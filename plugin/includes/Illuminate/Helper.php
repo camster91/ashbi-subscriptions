@@ -505,6 +505,13 @@ class Helper {
 			return false;
 		}
 
+		foreach ( self::early_renewal_orders_for_period( (int) $subscription_id, $period_anchor ) as $early_order ) {
+			if ( (int) $early_order->get_id() !== (int) $order_id ) {
+				subscrpt_write_log( "Renewal checkout #{$order_id} rejected because an early invoice already reserves subscription #{$subscription_id}'s current period." );
+				return false;
+			}
+		}
+
 		$claim = RenewalClaim::acquire( (int) $subscription_id, 0, $period_anchor );
 		if ( ! $claim || ( empty( $claim['acquired'] ) && (int) $claim['order_id'] !== (int) $order_id ) ) {
 			subscrpt_write_log( "Renewal order #{$order_id} rejected because another order owns the current period for subscription #{$subscription_id}." );
