@@ -14,11 +14,14 @@ GitHub RC2 ZIP is retained separately; it is not rebuilt or relabeled as the
 community artifact.
 
 The community candidate is not an in-place basename replacement and is not
-WordPress.org approved, reserved, submitted, or hosted. The proposed slug and
-contributor account require maintainer confirmation and directory approval.
-The inherited `Contributors: ashbi` is not an account-ownership attestation;
-review that field against the actual submitting account before submission.
-No account registration or public publication is part of this work.
+WordPress.org approved, reserved, submitted, or hosted. The proposed slug still requires directory approval. The maintainer confirmed
+`camster91` as the submitting account and contributor on 2026-10-21. Actual
+submission is authorized after verification; account access and release gates
+remain prerequisites. No new account registration is part of this work.
+
+Both distributions display **Ashbi Subscriptions**. WordPress derives the initial
+slug from the display name; adding “Community” would suggest a different slug.
+The installation path, domain and update policy distinguish the archives.
 
 ## Audited build boundary
 
@@ -30,7 +33,7 @@ or package evidence when a required tool is unavailable.
 
 The only approved differences are:
 
-- New directory/main filename, community plugin name, unique text-domain header,
+- New directory/main filename, unique text-domain header,
   removed Update URI, and the WooCommerce dependency header.
 - PHP `token_get_all(..., TOKEN_PARSE)` selects **only literal domain argument
   positions** in WordPress gettext functions and translation registrations.

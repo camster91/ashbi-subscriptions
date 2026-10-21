@@ -11,7 +11,7 @@ slug requires directory review/approval and the maintainer's verified account.
    fork before activation. Never activate these distributions alongside one another.
 4. Upload this ZIP as ashbi-subscriptions/ashbi-subscriptions.php. Do not rename
    it to subscription/subscription.php. No uninstall or record deletion is needed.
-5. Activate Ashbi Subscriptions Community and reconcile retained records. The
+5. Activate Ashbi Subscriptions and reconcile retained records. The
    package preserves storage, hooks, aliases, REST namespaces and billing logic.
 6. Test checkout/renewal and the HPOS matrix before resuming any workers.
 

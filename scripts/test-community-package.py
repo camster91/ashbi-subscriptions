@@ -194,9 +194,13 @@ class DomainTransformTests(unittest.TestCase):
             'subscription/THIRD_PARTY_NOTICES.md': b'Copyright GPL legal notice\n',
             'subscription/languages/subscription.pot': b'legacy catalog',
             'subscription/bootstrap.php': b'<?php // bootstrap\n',
+            'subscription/readme.txt': (ROOT / 'plugin/readme.txt').read_bytes(),
         }
         members = self.builder.community_members(canonical)
         main = members['ashbi-subscriptions/ashbi-subscriptions.php']
+        self.assertIn(b' * Plugin Name: Ashbi Subscriptions\n', main)
+        self.assertIn(b'=== Ashbi Subscriptions ===\n', members['ashbi-subscriptions/readme.txt'])
+        self.assertIn(b'Contributors: camster91\n', members['ashbi-subscriptions/readme.txt'])
         self.assertNotIn(b'Update URI:', main)
         self.assertIn(b'Text Domain: ashbi-subscriptions', main)
         self.assertNotIn('subscription/subscription.php', members)

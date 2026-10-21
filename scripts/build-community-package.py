@@ -55,7 +55,6 @@ def community_members(canonical):
         if name == 'subscription.php':
             data = replace_once(data, b' * Update URI: false\n', b'')
             data = replace_once(data, b' * Text Domain: subscription', b' * Text Domain: ashbi-subscriptions')
-            data = replace_once(data, b' * Plugin Name: Ashbi Subscriptions', b' * Plugin Name: Ashbi Subscriptions Community')
             data = replace_once(data, b' * Requires PHP: 7.4', b' * Requires Plugins: woocommerce\n * Requires PHP: 7.4')
             name = 'ashbi-subscriptions.php'
         elif name == 'THIRD_PARTY_NOTICES.md':
@@ -66,7 +65,6 @@ def community_members(canonical):
                 raise ValueError('Reviewed installer basename selectors changed')
             data = data.replace(old, b'ashbi-subscriptions/ashbi-subscriptions.php')
         elif name == 'readme.txt':
-            data = replace_once(data, b'=== Ashbi Subscriptions ===', b'=== Ashbi Subscriptions Community ===')
             start = data.index(b'== Installation ==')
             end = data.index(b'== Frequently Asked Questions ==')
             data = data[:start] + (ROOT / 'scripts/community-installation.txt').read_bytes() + data[end:]
