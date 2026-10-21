@@ -5,6 +5,12 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 
 ## 2.2.0 candidate - 2026-10-10
 
+- Keep the customer cancellation receipt visible after account reload, distinguishing
+  confirmed billing protection, recorded requests awaiting confirmation, and
+  unavailable evidence. Read existing durable intent without trusting stale cache;
+  display the original access-end date in the store timezone.
+  See `docs/PERSISTENT_CANCELLATION_RECEIPTS.md`.
+
 - Preserve classic subscription variation cart lines and their selected billing
   interval through checkout, including exact parent/variation identity. Keep
   mapped plans and one-time purchases separate. Missing or invalid legacy
