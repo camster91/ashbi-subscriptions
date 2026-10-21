@@ -5,6 +5,13 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 
 ## 2.2.0 candidate - 2026-10-10
 
+- Align account reactivation with durable cancellation protection. Show full
+  cancellation statuses and omit misleading future-payment dates after cancellation.
+  Keep pending cancellations out of payment-grace display so old billing dates
+  cannot relabel them Active in customer or merchant views.
+  Preserve legacy reversible cancellations and stored billing/access dates.
+  See `docs/SMALL_STORE_REVIEW.md` for the workflow audit and remaining priorities.
+
 - Preserve classic subscription variation cart lines and their selected billing
   interval through checkout, including exact parent/variation identity. Keep
   mapped plans and one-time purchases separate. Missing or invalid legacy
