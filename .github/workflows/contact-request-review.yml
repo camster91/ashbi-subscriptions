@@ -1,0 +1,47 @@
+name: Contact request review
+on:
+  pull_request:
+    paths:
+      - 'tools/contact-request-review/**'
+      - 'plugin/includes/Illuminate/CancellationEvidence.php'
+      - 'tests/**/ContactRequestReviewTest.php'
+      - 'tests/fixtures/run-contact-request-review.php'
+      - 'scripts/contact-review-integration.php'
+      - '.github/workflows/contact-request-review.yml'
+permissions:
+  contents: read
+jobs:
+  wordpress-mysql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: fixture-only
+          MYSQL_DATABASE: ashbi_contact_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pfixture-only"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.2'
+          extensions: mysqli
+          tools: wp-cli
+          coverage: none
+      - name: Offline adapter regressions
+        run: php tests/fixtures/run-contact-request-review.php
+      - name: Disposable WordPress and MySQL
+        run: |
+          mkdir /tmp/contact-review-wordpress
+          wp core download --path=/tmp/contact-review-wordpress
+          wp config create --path=/tmp/contact-review-wordpress --dbname=ashbi_contact_ci --dbuser=root --dbpass=fixture-only --dbhost=127.0.0.1:3306
+          wp config set WP_ENVIRONMENT_TYPE local --path=/tmp/contact-review-wordpress
+          wp config set DISABLE_WP_CRON true --raw --path=/tmp/contact-review-wordpress
+          wp core install --path=/tmp/contact-review-wordpress --url=http://localhost:8099 --title='Contact Review CI' --admin_user=admin --admin_password=fixture-only --admin_email=admin@example.invalid --skip-email
+          wp eval-file "$GITHUB_WORKSPACE/scripts/contact-review-integration.php" --path=/tmp/contact-review-wordpress | tee /tmp/contact-review-result.txt
+          grep -q CONTACT_REVIEW_INTEGRATION_PASS /tmp/contact-review-result.txt

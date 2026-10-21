@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — optional contact request review adapter
+
+- Add a separately installed, disabled-by-default Elementor intake review queue.
+  Preserve requests before email, deduplicate open receipts, flag aging requests,
+  and require staff resolution/notification plus verified cancellation proof.
+  No core billing behavior, live setting, outgoing mail or historical data changes.
+  See `docs/CONTACT_REQUEST_REVIEW.md` for configuration and staging gates.
+
 All notable Ashbi-maintained changes after the immutable upstream import are
 documented here. The original vendor changelog remains at `plugin/changelog.txt`.
 
@@ -8,6 +16,9 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 - Accept the existing singular billing units from simple subscription products
   without weakening explicit consent or snapshot checks. Register account routes
   on normal admin requests so permalink refreshes retain subscription pages.
+- Keep contact cancellation requests open when confirmation is stale, conflicting
+  or unavailable, using the canonical core receipt reader for staff closure.
+
 - Keep the customer cancellation receipt visible after account reload, distinguishing
   confirmed billing protection, recorded requests awaiting confirmation, and
   unavailable evidence. Read existing durable intent without trusting stale cache;
