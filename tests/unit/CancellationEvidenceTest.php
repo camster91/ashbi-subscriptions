@@ -10,6 +10,23 @@ use PHPUnit\Util\PHP\AbstractPhpProcess;
 
 /** Regressions against the actual isolated plugin runtime. */
 final class CancellationEvidenceTest extends TestCase {
+	/** Owner cancellation through the actual controller survives mail failure and replay. */
+	public function test_customer_cancellation_survives_mail_failure_and_replay(): void {
+		$case = $this->fixture()['customer_mail_replay'];
+		self::assertCount( 1, $case['first']['barriers'] );
+		self::assertSame( $case['first']['barriers'], $case['replay']['barriers'] );
+		foreach ( array( 'first', 'replay' ) as $attempt ) {
+			self::assertTrue( $case[ $attempt ]['blocked'] );
+			self::assertSame( 'pe_cancelled', $case[ $attempt ]['status'] );
+			self::assertSame( 0, (int) $case[ $attempt ]['meta']['_subscrpt_auto_renew'] );
+		}
+		self::assertCount( 2, $case['notices'] );
+		foreach ( $case['notices'] as $notice ) {
+			self::assertSame( 'success', $notice['type'] );
+			self::assertStringContainsString( 'Future automatic billing is blocked', $notice['text'] );
+		}
+	}
+
 	/**
 	 * Execute the isolated fixture and read its result.
 	 */

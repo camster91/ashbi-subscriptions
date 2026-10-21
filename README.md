@@ -92,6 +92,8 @@ disabled, or not classified as sandbox/offline.
 
 ## Documentation
 
+- [Small-store workflow review and merchant procedure](docs/SMALL_STORE_REVIEW.md)
+- [Cancellation confirmation review filter](docs/CANCELLATION_REVIEW_FILTER.md)
 - [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
 - [Feature matrix](docs/FEATURE_MATRIX.md)
 - [Architecture](docs/ARCHITECTURE.md)

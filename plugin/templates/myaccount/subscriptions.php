@@ -103,14 +103,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 							</span>
 						<?php else : ?>
 							<span class="subscrpt-legacy-status subscrpt-legacy-status--<?php echo esc_attr( strtolower( $subscrpt_status ) ); ?>">
-								<?php echo esc_html( strlen( $verbose_status ) > 9 ? substr( $verbose_status, 0, 9 ) . '...' : $verbose_status ); ?>
+								<?php echo esc_html( $verbose_status ); ?>
 							</span>
 						<?php endif; ?>
 					</td>
 					
 					<td data-title="Product"><?php echo esc_html( $product_name ); ?></td>
 					
-					<?php if ( 'on' !== $trial_mode ) : ?>
+					<?php if ( in_array( $subscrpt_status, array( 'pe_cancelled', 'cancelled' ), true ) ) : ?>
+						<td data-title="Next Payment">&mdash;</td>
+					<?php elseif ( 'on' !== $trial_mode ) : ?>
 						<td data-title="Next Payment"><?php echo esc_html( $next_date ); ?></td>
 					<?php else : ?>
 						<td data-title="Next Payment"><small>First Billing : </small><?php echo esc_html( $start_date ); ?></td>
