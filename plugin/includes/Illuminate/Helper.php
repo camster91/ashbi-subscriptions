@@ -1293,6 +1293,17 @@ class Helper {
 			return false;
 		}
 
+		$early_orders = self::early_renewal_orders_for_period( (int) $subscription_id, $period_anchor );
+		if ( count( $early_orders ) > 1 ) {
+			subscrpt_write_log( "Multiple early invoices require reconciliation for subscription #{$subscription_id}; no renewal was created or dispatched." );
+			return false;
+		}
+		$early_order = $early_orders ? reset( $early_orders ) : false;
+		if ( $early_order && $early_order->get_meta( '_subscrpt_early_renewal_applied' ) ) {
+			subscrpt_write_log( "An applied early invoice conflicts with the due date for subscription #{$subscription_id}; manual review is required." );
+			return false;
+		}
+
 		$claim = RenewalClaim::acquire( (int) $subscription_id, 0, $period_anchor );
 		if ( ! $claim ) {
 			subscrpt_write_log( "Renewal claim storage unavailable. Skipping renewal for subscription #{$subscription_id}." );
@@ -1302,11 +1313,25 @@ class Helper {
 		if ( empty( $claim['acquired'] ) ) {
 			$claimed_order = ! empty( $claim['order_id'] ) ? wc_get_order( (int) $claim['order_id'] ) : false;
 			if ( $claimed_order ) {
+				if ( $early_order && (int) $early_order->get_id() !== (int) $claimed_order->get_id() ) {
+					subscrpt_write_log( "An early invoice conflicts with the canonical renewal for subscription #{$subscription_id}; manual review is required." );
+					return false;
+				}
 				return self::resume_canonical_renewal_order( $claimed_order, $old_order, (int) $subscription_id );
 			}
 
 			subscrpt_write_log( "Renewal period is already being processed for subscription #{$subscription_id}." );
 			return false;
+		}
+
+		if ( $early_order ) {
+			if ( ! RenewalClaim::finalize( (int) $subscription_id, $claim['period_key'], $claim['token'], (int) $early_order->get_id() ) ) {
+				RenewalClaim::release( (int) $subscription_id, $claim['period_key'], $claim['token'] );
+				return false;
+			}
+			// Preserve the quoted amounts, early relation and payment identity. Only
+			// the existing durable period claim gains its canonical order.
+			return self::resume_canonical_renewal_order( $early_order, $old_order, (int) $subscription_id );
 		}
 
 		// Recover an order whose relation and period metadata were persisted before.
@@ -1430,6 +1455,27 @@ class Helper {
 		}
 
 		return self::resume_canonical_renewal_order( $new_order, $old_order, (int) $subscription_id, (int) $new_order_item_id );
+	}
+
+	/**
+	 * Find unique, non-voided early invoices for an exact stored billing date.
+	 *
+	 * @param int $subscription_id Subscription ID.
+	 * @param int $period_anchor Due timestamp.
+	 * @return array<int,\WC_Order> Matching invoices keyed by order ID.
+	 */
+	private static function early_renewal_orders_for_period( int $subscription_id, int $period_anchor ): array {
+		$orders = array();
+		foreach ( self::get_related_orders( $subscription_id ) as $relation ) {
+			if ( 'early-renew' !== ( $relation->type ?? '' ) ) {
+				continue;
+			}
+			$order = wc_get_order( (int) ( $relation->order_id ?? 0 ) );
+			if ( $order && ! in_array( $order->get_status(), array( 'cancelled', 'refunded' ), true ) && $period_anchor === (int) $order->get_meta( '_subscrpt_early_renewal_anchor' ) ) {
+				$orders[ $order->get_id() ] = $order;
+			}
+		}
+		return $orders;
 	}
 
 	/**
@@ -1612,7 +1658,7 @@ class Helper {
 
 		if ( ! $order_item_id ) {
 			foreach ( self::get_related_orders( $subscription_id ) as $relation ) {
-				if ( (int) ( $relation->order_id ?? 0 ) === (int) $renewal_order->get_id() && 'renew' === ( $relation->type ?? '' ) ) {
+				if ( (int) ( $relation->order_id ?? 0 ) === (int) $renewal_order->get_id() && in_array( ( $relation->type ?? '' ), array( 'renew', 'early-renew' ), true ) ) {
 					$order_item_id = (int) ( $relation->order_item_id ?? 0 );
 					break;
 				}
@@ -1635,7 +1681,14 @@ class Helper {
 		}
 
 		if ( ! $renewal_order->has_status( 'pending' ) || ! $renewal_order->needs_payment() ) {
-			RenewalClaim::mark_payment_complete( $subscription_id, (int) $renewal_order->get_id() );
+			if ( $renewal_order->is_paid() ) {
+				if ( 'early-renew' === $renewal_order->get_meta( '_subscrpt_renewal_type' ) ) {
+					// Also recover a crash between claiming an already-paid early
+					// invoice and applying its schedule. Paid callbacks are replay safe.
+					do_action( 'subscrpt_retry_subscription_schedule', $subscription_id, (int) $renewal_order->get_id() );
+				}
+				RenewalClaim::mark_payment_complete( $subscription_id, (int) $renewal_order->get_id() );
+			}
 			return $renewal_order;
 		}
 
@@ -1656,7 +1709,7 @@ class Helper {
 		}
 
 		$renewal_order = wc_get_order( $renewal_order ? $renewal_order->get_id() : 0 );
-		if ( $renewal_order && ( ! $renewal_order->has_status( 'pending' ) || ! $renewal_order->needs_payment() ) ) {
+		if ( $renewal_order && $renewal_order->is_paid() ) {
 			RenewalClaim::mark_payment_complete( $subscription_id, (int) $renewal_order->get_id() );
 		}
 

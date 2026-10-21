@@ -139,3 +139,27 @@ First-payment-only coupons never recur, and unlimited/non-recurring eligibility
 avoids a payment-history scan. No saved invoice or historical evidence is changed.
 See `RECURRING_COUPON_LIMITS.md` for verification and rollback; real provider
 sandbox/crash-window validation remains a release gate.
+## Early-invoice due-date follow-up — 2026-10-21
+
+A real disposable WooCommerce reproduction found that an unpaid early-renewal
+invoice did not reserve its billing period against the scheduled renewal path.
+At the due date, that path created a second invoice. This is a billing bug,
+independent of whether a coupon is present. The focused fix reuses the original
+invoice through the existing durable period claim and preserves its financial
+quote, identifiers and history. Paid activation after expiry uses normal renewal
+repairs; failed/on-hold invoices are no longer marked paid by the resume helper.
+See `EARLY_RENEWAL_DUE.md` for acceptance criteria and verification limits.
+
+Rank the remaining work as follows:
+
+1. Verify real gateway reconciliation, crash windows and cancellation races in
+   an approved disposable sandbox before allowing production billing.
+2. Review and combine the small pending checkout/account, coupon and early-invoice
+   fixes, then verify that exact combined candidate, including HPOS on/off.
+3. Finish the optional contact-request workflow review and merchant attention
+   handling. A saved request still requires an explicit cancellation, confirmation
+   review and customer reply. Historical invoice conflicts also need clearer
+   attention handling; they currently stop dispatch and log the subscription ID.
+
+Keep duplicate dashboards, campaign/report expansion and new integrations
+deferred while these billing and cancellation gaps remain.
