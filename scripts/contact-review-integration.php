@@ -51,6 +51,14 @@ contact_ci_assert( is_wp_error( $a::resolve( $id, 'other_request', 0, 'Synthetic
 contact_ci_assert( true === $a::resolve( $id, 'other_request', 0, 'Not a cancellation; answered question, TEST-001.', true ), 'actual closure persists' );
 contact_ci_assert( 'draft' === get_post_status( $id ) && $source === get_post( $id )->post_content, 'source preserved on closure' );
 contact_ci_assert( is_wp_error( $a::resolve( $id, 'other_request', 0, 'Attempted overwrite, TEST-002.', true ) ), 'closed outcome immutable on replay' );
+$closed_excerpt = get_post( $id )->post_excerpt;
+$stale_post = get_post( $id );
+$stale_post->post_status = 'private';
+wp_cache_set( $id, $stale_post, 'posts' );
+contact_ci_assert( is_wp_error( $a::resolve( $id, 'other_request', 0, 'Stale concurrent request, TEST-002.', true ) ), 'stale open-post cache cannot overwrite a closed outcome' );
+wp_cache_delete( $id, 'posts' );
+contact_ci_assert( $closed_excerpt === get_post( $id )->post_excerpt, 'original closure survives a stale concurrent request' );
+
 $second = $a::capture( 'synthetic@example.invalid', 'Please stop my next delivery.' );
 contact_ci_assert( is_int( $second ) && $second !== $id, 'repeat after closure makes a new request' );
 global $wpdb;

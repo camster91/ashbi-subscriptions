@@ -43,7 +43,7 @@ function wp_slash( $v ) {
 function wp_unslash( $v ) {
 	return is_array( $v ) ? array_map( 'wp_unslash', $v ) : stripslashes( $v ); }
 function get_post( $id ) {
-	return isset( $GLOBALS['records'][ $id ] ) ? clone $GLOBALS['records'][ $id ] : null; }
+	return isset( $GLOBALS['stale_posts'][ $id ] ) ? clone $GLOBALS['stale_posts'][ $id ] : ( isset( $GLOBALS['records'][ $id ] ) ? clone $GLOBALS['records'][ $id ] : null ); }
 function wp_insert_post( $data, $error = false ) {
 	if ( $GLOBALS['fail_insert'] ) {
 		return new WP_Error( 'insert_failed' ); }
@@ -141,6 +141,9 @@ class Review_DB {
 	}
 	public function get_row( $q ) {
 		$this->last_error = $this->fail_lookup ? 'unavailable' : '';
+		if ( strpos( $q[0], 'SELECT * FROM %i WHERE ID' ) !== false ) {
+			return isset( $GLOBALS['records'][ $q[1][1] ] ) ? clone $GLOBALS['records'][ $q[1][1] ] : null;
+		}
 		if ( strpos( $q[0], 'MIN(CASE' ) !== false ) {
 			if ( ! $this->barrier ) {
 				return null;
@@ -230,6 +233,7 @@ verify_review( ! $adapter::confirmed( 99 ), 'conflicting confirmation flags cann
 unset( $GLOBALS['stored_flags'] );
 verify_review( err_review( $adapter::resolve( $id, 'cancellation_confirmed', 99, $note, false ), 'review_required' ), 'customer reply attestation required' );
 verify_review( err_review( $adapter::resolve( $id, 'other_request', 0, 'done', true ), 'review_required' ), 'unexplained dismissal rejected' );
+$open_snapshot          = get_post( $id );
 $source                 = get_post( $id )->post_content;
 $GLOBALS['fail_update'] = true;
 verify_review( err_review( $adapter::resolve( $id, 'cancellation_confirmed', 99, $note, true ), 'closure_unverified' ) && 'private' === get_post( $id )->post_status, 'failed closure stays open' );
@@ -237,6 +241,10 @@ $GLOBALS['fail_update'] = false;
 verify_review( true === $adapter::resolve( $id, 'cancellation_confirmed', 99, $note, true ), 'confirmed cancellation can be closed' );
 verify_review( $source === get_post( $id )->post_content && 1 === json_decode( get_post( $id )->post_excerpt, true )['actor_id'], 'source preserved with staff outcome attribution' );
 verify_review( err_review( $adapter::resolve( $id, 'other_request', 0, $note, true ), 'not_open' ), 'replay cannot rewrite closed outcome' );
+$closed_outcome = $GLOBALS['records'][ $id ]->post_excerpt;
+$GLOBALS['stale_posts'][ $id ] = $open_snapshot;
+verify_review( err_review( $adapter::resolve( $id, 'other_request', 0, $note, true ), 'not_open' ) && $closed_outcome === $GLOBALS['records'][ $id ]->post_excerpt, 'stale open-request cache cannot overwrite an already closed outcome' );
+unset( $GLOBALS['stale_posts'][ $id ] );
 verify_review( is_int( $again = $adapter::capture( 'owner@example.invalid', 'Please cancel my subscription. Thank you.' ) ) && $again !== $id, 'new request after closure is not swallowed' );
 class Review_Record {
 	public $name = 'Support review';
