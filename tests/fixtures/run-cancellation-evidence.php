@@ -185,4 +185,12 @@ foreach(array('normal','write_failure','storage_failure') as $case){
  SpringDevs\Subscription\Admin\Subscriptions::process_status_change(99,'active');
  $results['admin_status'][$case]=array('status'=>$GLOBALS['ce_status'],'order_writes'=>$GLOBALS['ce_order_status_writes'],'hooks'=>$GLOBALS['ce_hooks']);
 }
+reset_cancellation_evidence_fixture();$GLOBALS['ce_mail_fail']=true;$GLOBALS['ce_notices']=array();
+$_GET=array('subscrpt_id'=>'99','action'=>'cancelled','wpnonce'=>'fixture');
+$controller=(new ReflectionClass('SpringDevs\\Subscription\\Frontend\\ActionController'))->newInstanceWithoutConstructor();
+foreach(array('first','replay') as $attempt){
+ try{$controller->control_action_subscrpt();}catch(RuntimeException $error){if('fixture_redirect'!==$error->getMessage()){throw $error;}}
+ $results['customer_mail_replay'][$attempt]=array('barriers'=>$GLOBALS['wpdb']->barriers,'status'=>$GLOBALS['ce_status'],'meta'=>$GLOBALS['ce_meta'],'blocked'=>$service::blocked(99));
+}
+$results['customer_mail_replay']['notices']=$GLOBALS['ce_notices'];
 echo json_encode($results);
