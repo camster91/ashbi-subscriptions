@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -20,6 +21,42 @@ def load(name):
 
 
 class CommunityRuntimeTests(unittest.TestCase):
+    def test_archive_members_follow_verified_source_not_a_historical_file_count(self):
+        from unittest.mock import patch
+        module = load('validate-community-package')
+        with tempfile.TemporaryDirectory() as temp:
+            bundle = Path(temp)
+            canonical = {'subscription/subscription.php': b'canonical fixture'}
+            community = {'ashbi-subscriptions/ashbi-subscriptions.php': b'community fixture'}
+            community.update({f'ashbi-subscriptions/file-{i}.php': b'fixture' for i in range(215)})
+
+            def write_bundle(actual):
+                manifest = {'distribution': 'community-directory-candidate',
+                            'source_commit': 'offline', 'dirty_tree': False,
+                            'transform_scripts_sha256': {}}
+                for filename, members, hash_key, member_key in (
+                    ('github-compatibility.zip', canonical, 'canonical_archive_sha256', 'canonical_members_sha256'),
+                    ('community-candidate.zip', actual, 'archive_sha256', 'members_sha256'),
+                ):
+                    with zipfile.ZipFile(bundle / filename, 'w') as archive:
+                        for name, data in members.items():
+                            archive.writestr(name, data)
+                    manifest[hash_key] = module.digest(bundle / filename)
+                    manifest[member_key] = {name: hashlib.sha256(data).hexdigest() for name, data in members.items()}
+                (bundle / 'community-candidate.manifest.json').write_text(json.dumps(manifest))
+
+            with patch.object(module, 'source_commit', return_value='offline'), \
+                 patch.object(module, 'transform_hashes', return_value={}), \
+                 patch.object(module.builder, 'validate_canonical', side_effect=lambda actual: self.assertEqual(canonical, actual)) as canonical_check, \
+                 patch.object(module.builder, 'community_members', return_value=community):
+                write_bundle(community)
+                self.assertEqual(216, len(module.validate_candidate(bundle)['members_sha256']))
+                canonical_check.assert_called_once_with(canonical)
+                # Even a freshly forged matching manifest cannot authorize an extra file.
+                write_bundle({**community, 'ashbi-subscriptions/foreign.php': b'foreign'})
+                with self.assertRaisesRegex(ValueError, 'member set differs'):
+                    module.validate_candidate(bundle)
+
     def test_community_environment_installs_canonical_dependencies_and_same_zip(self):
         module = load('validate-published-release')
         with tempfile.TemporaryDirectory() as temp:

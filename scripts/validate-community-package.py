@@ -72,8 +72,10 @@ def validate_candidate(bundle):
     for members, key in [(canonical, 'canonical_members_sha256'), (community, 'members_sha256')]:
         if {n: hashlib.sha256(data).hexdigest() for n, data in members.items()} != manifest.get(key):
             raise ValueError('Downloaded artifact member manifest mismatch: ' + key)
-    if len(community) != 211 or 'ashbi-subscriptions/ashbi-subscriptions.php' not in community:
-        raise ValueError('Community artifact must contain the approved 211 members and exact main entry')
+    if 'ashbi-subscriptions/ashbi-subscriptions.php' not in community:
+        raise ValueError('Community artifact must contain the exact main entry')
+    # Membership is bound to the complete current source and reviewed transform
+    # below. A historical file count rejects valid additions without adding trust.
     # This rebuilds only the unchanged canonical package to enforce complete source
     # membership. It never builds or substitutes a community ZIP for the downloaded one.
     builder.validate_canonical(canonical)
