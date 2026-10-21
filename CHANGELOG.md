@@ -10,6 +10,8 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
   claimed early invoices through durable paid activation/repair after expiry;
   failed/on-hold orders are never marked paid merely because dispatch stopped.
   Conflicting invoices stop automatic creation for manual reconciliation.
+  Refuse a fresh cart renewal while an early invoice reserves the same period,
+  before creating another relation/claim or processing checkout payment.
   See `docs/EARLY_RENEWAL_DUE.md`.
 
 - Save merchant cancellation through the same durable renewal barrier as customer

@@ -76,8 +76,27 @@ staging/release gates. No live provider requests were made during local checks.
   order double and a cancellation fixture using a customer as merchant. Corrected
   those before the final passing runs; no production safeguard was relaxed.
 
-The separate cart-based renewal attachment entry point
-`Helper::process_order_renewal()` is unchanged. Its checkout behavior when an
-unpaid early invoice already exists still needs a focused reproduction and
-pre-payment validation review. Passing the due-job tests is not evidence that
-every alternate checkout entry point shares this reuse behavior.
+## Cart-based renewal attachment follow-up
+
+A second reproduction confirmed that a fresh cart checkout could claim the due
+period before the due job, while an existing early invoice remained payable.
+`Helper::process_order_renewal()` now checks the same exact-period early invoices
+under the existing cancellation mutex before acquiring a new claim or relation.
+A non-voided invoice for the period refuses the duplicate; cancelled/refunded
+invoices retain the existing renewal behavior. Existing checkout controllers
+cancel the refused new order and direct the customer to their account invoice.
+No automatic cancellation, conversion or repricing of the original invoice.
+
+The shared guard covers classic and plan checkout attachment; tests must verify
+actual controller refusal before calling this path complete. Real provider and
+persistent-cache concurrency tests remain separate release gates.
+
+Follow-up verification: actual-helper reproduction failed with a pending early
+invoice incorrectly accepted for cart renewal. After the guard, **296 tests /
+3,657 assertions** pass on the focused branch, including **2 tests / 21
+assertions** for early-period selection and pending/failed/on-hold/paid versus
+cancelled/refunded cart collisions. Real helper, classic and plan checkout
+refusal assertions passed in the combined harness; the first plan fixture
+incorrectly relied on an already-deleted group and was replaced with its own
+owned plan setup/cleanup. Final combined HPOS/package results are recorded in
+`SMALL_STORE_CANDIDATE.md` rather than inferred from individual PR checks.
