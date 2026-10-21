@@ -6,6 +6,7 @@ vendor/
 .composer-home/
 composer.phar
 coverage/
+__pycache__/
 .phpunit.result.cache
 dist/
 build/

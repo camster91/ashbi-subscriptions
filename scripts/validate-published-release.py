@@ -115,8 +115,20 @@ def preflight(mode, inherited=None, occupied=port_in_use):
         raise RuntimeError('Refusing occupied port 8888; never stop an unknown environment')
 
 
-def prepare_environment(output, repo, integration_dir=None):
-    owned = output / 'owned-environment'
+def owned_path(output, profile='published'):
+    if profile == 'community':
+        # Stable host-derived identity, never a pointer read from writable reports.
+        identity = hashlib.sha256(str(output.resolve()).encode('utf-8')).hexdigest()
+        return output.resolve().parent / ('.ashbi-community-owned-' + identity)
+    if profile != 'published':
+        raise ValueError('Unknown package validation profile')
+    return output / 'owned-environment'
+
+
+def prepare_environment(output, repo, integration_dir=None, profile='published'):
+    if profile not in ('published', 'community'):
+        raise ValueError('Unknown package validation profile')
+    owned = owned_path(output, profile)
     owned.mkdir()  # Refuse to adopt an earlier or unknown environment.
     mu = owned / 'mu'
     mu.mkdir()
@@ -125,7 +137,7 @@ def prepare_environment(output, repo, integration_dir=None):
     shutil.copyfile(repo / 'scripts/package-validation/safety.php', mu / 'safety.php')
     config = owned / '.wp-env.json'
     config.write_text(json.dumps({
-        'plugins': [
+        'plugins': [] if profile == 'community' else [
             'https://downloads.wordpress.org/plugin/woocommerce.latest-stable.zip',
             'https://downloads.wordpress.org/plugin/woocommerce-gateway-stripe.latest-stable.zip'],
         'phpVersion': '8.2', 'port': 8888, 'testsEnvironment': False,
@@ -139,11 +151,11 @@ def prepare_environment(output, repo, integration_dir=None):
     }, indent=2), encoding='utf-8')
     marker = {'id': str(uuid.uuid4()), 'config_sha256': hashlib.sha256(config.read_bytes()).hexdigest()}
     (owned / '.ashbi-owned.json').write_text(json.dumps(marker), encoding='utf-8')
-    return environment_details(output, repo)
+    return environment_details(output, repo, profile)
 
 
-def environment_details(output, repo=REPO):
-    owned = output / 'owned-environment'
+def environment_details(output, repo=REPO, profile='published'):
+    owned = owned_path(output, profile)
     config = owned / '.wp-env.json'
     marker = json.loads((owned / '.ashbi-owned.json').read_text(encoding='utf-8'))
     if (str(uuid.UUID(marker['id'])) != marker['id'] or owned.is_symlink()
@@ -163,30 +175,65 @@ def environment_details(output, repo=REPO):
                             COMPOSE_DISABLE_ENV_FILE='1')}
 
 
-def cleanup_environment(output, invoke=subprocess.run):
-    if not (output / 'owned-environment').exists():
+def cleanup_environment(output, invoke=subprocess.run, profile='published'):
+    if not owned_path(output, profile).exists():
         return
-    env = environment_details(output)
+    env = environment_details(output, profile=profile)
     invoke(env['command'] + ['cleanup', '--force'], env=env['environ'],
            check=True, timeout=180)
     shutil.rmtree(env['owned'])
 
 
-def run_environment(env, output, mode, kind, invoke=subprocess.run, target="published"):
+def run_environment(env, output, mode, kind, invoke=subprocess.run, profile='published', defer_cleanup=False, target='published'):
+    if profile not in ('published', 'community'):
+        raise ValueError('Unknown package validation profile')
+    root = 'ashbi-subscriptions' if profile == 'community' else 'subscription'
+    main = root + '.php'
+    journal = []
+
+    def captured(value):
+        return value.decode('utf-8', errors='replace') if isinstance(value, bytes) else (value or '')
+
+    def record(command, result):
+        if profile != 'community':
+            return
+        journal.append({'command': command, 'exit_code': getattr(result, 'returncode', None),
+                        'timed_out': isinstance(result, subprocess.TimeoutExpired)})
+        (output / 'wp-env-commands.json').write_text(json.dumps(journal, indent=2), encoding='utf-8')
+        for stream in ('stdout', 'stderr'):
+            with (output / ('wp-env.' + stream)).open('a', encoding='utf-8') as report:
+                report.write(captured(getattr(result, stream, None)))
     def run(args, **kwargs):
         if args[0] == 'run':
             args = args[:2] + ['--'] + args[2:]
-        return invoke(env['command'] + args, env=env['environ'],
-                      timeout=600, check=kwargs.pop('check', True), **kwargs)
+        command = env['command'] + args
+        if profile == 'community':
+            kwargs.update(capture_output=True, text=True)
+        try:
+            result = invoke(command, env=env['environ'],
+                            timeout=600, check=kwargs.pop('check', True), **kwargs)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+            record(command, error)
+            raise
+        record(command, result)
+        return result
 
     try:
         run(['start'])
+        if profile == 'community':
+            # Core Requires Plugins resolves the official directory slug, not URL-derived roots.
+            for dependency in ('woocommerce', 'woocommerce-gateway-stripe'):
+                run(['run', 'cli', 'wp', 'plugin', 'install', dependency, '--activate'])
+                run(['run', 'cli', 'wp', 'plugin', 'is-active', dependency])
         run(['run', 'cli', 'wp', 'plugin', 'install', '/var/www/html/ashbi-release/candidate.zip', '--activate'])
-        run(['run', 'cli', 'wp', 'plugin', 'is-active', 'subscription'])
+        run(['run', 'cli', 'wp', 'plugin', 'is-active', root])
         run(['run', 'cli', 'wp', 'option', 'update', 'woocommerce_custom_orders_table_enabled',
              'yes' if mode == 'on' else 'no'])
         run(['run', 'cli', 'wp', 'eval-file', '/var/www/html/ashbi-tools/verify-installed.php'])
-        run(['run', 'cli', 'wp', 'eval-file', '/var/www/html/ashbi-tools/verify-update-isolation.php'])
+        if profile == 'community':
+            shutil.copyfile(output / 'installed-package.json', output / 'installed-package.before.json')
+        if profile == 'published':
+            run(['run', 'cli', 'wp', 'eval-file', '/var/www/html/ashbi-tools/verify-update-isolation.php'])
         if kind == 'plugin-check':
             run(['run', 'cli', 'wp', 'plugin', 'install',
                  '/var/www/html/ashbi-release/plugin-check.zip', '--activate'])
@@ -197,14 +244,20 @@ def run_environment(env, output, mode, kind, invoke=subprocess.run, target="publ
         if kind == 'runtime':
             try:
                 result = invoke([shutil.which('bash') or 'bash', (REPO / 'scripts/run-integration.sh').as_posix()],
-                                env=dict(os.environ, ASHBI_INTEGRATION_PLUGIN_DIR='subscription',
+                                env=dict(env['environ'], ASHBI_INTEGRATION_PLUGIN_DIR=root,
+                                         ASHBI_INTEGRATION_PLUGIN_MAIN=main,
                                          ASHBI_PLAYGROUND_HPOS_MODE=mode),
                                 check=True, capture_output=True, text=True, timeout=600)
-            except subprocess.CalledProcessError as error:
-                (output / 'integration.stdout').write_text(error.stdout or '', encoding='utf-8')
-                (output / 'integration.stderr').write_text(error.stderr or '', encoding='utf-8')
-                (output / 'integration.exit-code').write_text(str(error.returncode), encoding='utf-8')
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+                if profile != 'community' and isinstance(error, subprocess.TimeoutExpired):
+                    raise
+                (output / 'integration.stdout').write_text(captured(error.stdout), encoding='utf-8')
+                (output / 'integration.stderr').write_text(captured(error.stderr), encoding='utf-8')
+                (output / 'integration.exit-code').write_text(str(getattr(error, 'returncode', 'timeout')), encoding='utf-8')
                 raise
+            if profile == 'community':
+                (output / 'integration.stdout').write_text(result.stdout, encoding='utf-8')
+                (output / 'integration.stderr').write_text(result.stderr or '', encoding='utf-8')
             (output / 'integration.json').write_text(result.stdout, encoding='utf-8')
             (output / 'integration.exit-code').write_text(str(result.returncode), encoding='utf-8')
             response = json.loads(result.stdout)
@@ -222,7 +275,7 @@ def run_environment(env, output, mode, kind, invoke=subprocess.run, target="publ
                  'wp plugin list-checks --format=json > /var/www/html/ashbi-release/plugin-check-checks.json'])
             # Redirect inside Docker so wp-env progress output cannot corrupt JSON.
             result = run(['run', 'cli', 'bash', '-c',
-                          'wp plugin check subscription/subscription.php --format=strict-json --fields=file,line,column,type,code,message,docs '
+                          f'wp plugin check {root}/{main} --format=strict-json --fields=file,line,column,type,code,message,docs '
                           '--require=./wp-content/plugins/plugin-check/cli.php '
                           '> /var/www/html/ashbi-release/plugin-check.stdout 2> /var/www/html/ashbi-release/plugin-check.stderr; '
                           'status=$?; printf "%s\\n" "$status" > /var/www/html/ashbi-release/plugin-check.exit-code; '
@@ -241,8 +294,11 @@ def run_environment(env, output, mode, kind, invoke=subprocess.run, target="publ
                 'format': 'strict-json; raw stdout preserved; exact no-findings success line normalized to []'}), encoding='utf-8')
             print('Plugin Check diagnostic exit status:', status, flush=True)
         run(['run', 'cli', 'wp', 'eval-file', '/var/www/html/ashbi-tools/verify-installed.php'])
+        if profile == 'community':
+            shutil.copyfile(output / 'installed-package.json', output / 'installed-package.after.json')
     finally:
-        cleanup_environment(output, invoke)
+        if not defer_cleanup:
+            cleanup_environment(output, invoke, profile=profile)
 
 
 def main():

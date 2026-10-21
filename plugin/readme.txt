@@ -1,45 +1,82 @@
 === Ashbi Subscriptions ===
-Contributors: ashbi
+Contributors: camster91
 Tags: woocommerce subscriptions, subscriptions, recurring payments, stripe, paypal
 Requires at least: 6.2
 Tested up to: 7.1
 Stable tag: 2.2.0
 Requires PHP: 7.4
 WC requires at least: 6.0
-WC tested up to: 10.3
+WC tested up to: 11.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Recurring purchases, subscription management, and automated renewals for WooCommerce stores.
+Subscriptions for small WooCommerce stores. Clear recurring orders, customer account controls and cancellation confirmation. No plugin license fee.
 
 == Description ==
 
-Ashbi Subscriptions adds subscription products and recurring purchase workflows
-to WooCommerce while retaining the storage and integration identifiers required
-to upgrade existing installations in place.
+Ashbi Subscriptions adds recurring purchases to WooCommerce, with subscription
+records linked to WooCommerce customers, orders and payment history. It retains
+the storage and integration identifiers required to upgrade existing installations in place.
 
-Core capabilities include:
+**Keep everyday work in WooCommerce**
 
-* Daily, weekly, monthly, and yearly billing schedules.
-* Free trials and one-time sign-up fees.
-* Automatic renewal orders with Stripe and PayPal support.
-* Manual renewal and customer payment-method updates.
-* Customer pause, cancellation, and reactivation controls.
-* Subscription activity and renewal-order history.
-* Fixed-count installment schedules.
-* WooCommerce HPOS compatibility.
+* Create subscription products with daily, weekly, monthly or yearly schedules.
+* Show the recurring price and billing terms before purchase.
+* Use WooCommerce orders and coupons for checkout and renewal invoices.
+* Let customers view subscriptions and request cancellation in My Account.
+* See the saved cancellation result, related orders and subscription activity.
+* Review failed payments and cancellations that need attention.
+* Use WooCommerce HPOS or traditional order storage.
 
-No commercial upgrade, vendor account, or license activation is required by this
-Ashbi-maintained build. Third-party services remain optional adapters and must be
-configured independently. For help, use the local Help page in WordPress or
-contact the administrator responsible for your managed site.
+**Cancellation has a saved result**
+
+A confirmed cancellation blocks future renewals. Depending on the store's policy,
+access may continue until the end of the paid period. Email delivery cannot undo
+a saved cancellation. A contact-form message or email alone does not cancel a
+subscription: the merchant must verify the request, cancel the correct record,
+check the saved result and reply. The optional contact-request review adapter is
+separate from this plugin ZIP; this plugin does not monitor an email inbox.
+
+**Payment integrations and limits**
+
+Stripe and PayPal integrations are included. Automatic billing requires a
+supported, configured gateway and valid customer authorization. Test checkout,
+renewals, failures and cancellation in sandbox mode before live sales. Local
+regression tests do not certify live provider payments. Saved Stripe payment
+methods can be updated; replacing a PayPal billing agreement locally is not
+supported. Provider charges, hosting and any separate gateway extensions may
+have fees. There is no plugin license activation or paid feature unlock.
+
+**External services**
+
+When configured and used for payments, the Stripe integration uses the installed
+WooCommerce Stripe gateway and its API client. It sends payment amounts/currency,
+saved customer/payment references and payment metadata to Stripe to create or
+retrieve charges and reconcile payments. When linking a Stripe customer to a
+WordPress account, it can also send billing email, first/last name, WordPress
+username and user ID to update the Stripe customer profile. Order and line-item
+details are sent when providing Level 3 payment data. See [Stripe terms](https://stripe.com/legal)
+and [Stripe privacy](https://stripe.com/privacy). The installed Stripe gateway
+also controls its checkout data collection.
+
+The PayPal integration connects to api-m.paypal.com, or
+api-m.sandbox.paypal.com in sandbox mode, for authentication, subscription/payment
+operations and webhook verification. Requests can include merchant credentials,
+customer/billing details, subscription/plan references, amounts/currency and
+transaction/webhook identifiers as required by the operation. Configure it only
+with an authorized merchant account. See [PayPal terms](https://www.paypal.com/legalhub/useragreement-full)
+and [PayPal privacy](https://www.paypal.com/legalhub/privacy-full).
+
+This is an Ashbi-maintained GPL fork of public upstream source. Original
+copyright and dependency notices are retained. Ashbi Subscriptions is independently
+maintained and is not endorsed by WooCommerce, WordPress, Stripe or PayPal.
 
 == Installation ==
 
 1. Back up the WordPress files and database.
 2. Upload the plugin so its directory remains named `subscription`.
 3. Activate Ashbi Subscriptions from the Plugins screen.
-4. Open **Ashbi Subscriptions > Setup Wizard** and confirm the store settings.
+4. Open **Ashbi Subscriptions > Settings** and review billing and cancellation settings.
 5. Test checkout and renewal behavior with gateway sandbox credentials before enabling live sales.
 
 When replacing an existing compatible installation, do not rename the plugin
@@ -67,20 +104,21 @@ and complete sandbox renewal tests for each store before enabling production use
 
 = Where can I get help? =
 
-Open **Ashbi Subscriptions > Help** in WordPress for local guidance, then contact
-the administrator or support contact responsible for your managed site.
+Open **Ashbi Subscriptions > Help** in WordPress for local guidance. Report
+reproducible bugs at https://github.com/camster91/ashbi-subscriptions/issues.
+Never include customer data, payment tokens, passwords or private store exports.
 
 == Screenshots ==
 
-1. Subscription overview.
-2. Subscription list and status filters.
-3. Subscription details and renewal history.
-4. Product subscription settings.
-5. Setup wizard.
+1. Merchant subscription details: saved cancellation confirmation, linked order and activity sections. Fabricated local test data; no payment was performed.
 
 == Changelog ==
 
 = 2.2.0 =
+* Keep one renewal invoice per period across early, due and cart checkout paths.
+* Apply recurring coupon payment limits using WooCommerce paid orders.
+* Restore customer account routes and simple-product billing consent wording.
+* Prepare a distinct directory package while preserving the GitHub update identity.
 * Fix cancellation receipt accuracy, retain contractual export fields and guard admin status side effects.
 * Add durable customer cancellation barriers, repair and private evidence export.
 * Add opt-in approved billing contracts and immutable order-bound checkout acceptance.
