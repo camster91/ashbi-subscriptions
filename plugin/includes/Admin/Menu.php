@@ -10,6 +10,7 @@
 
 namespace SpringDevs\Subscription\Admin;
 
+use SpringDevs\Subscription\Illuminate\CancellationEvidence;
 use SpringDevs\Subscription\Illuminate\Helper;
 use SpringDevs\Subscription\Illuminate\Stats;
 
@@ -744,7 +745,13 @@ class Menu {
 
 			$action = sanitize_text_field( wp_unslash( $_POST['subscrpt_order_action'] ) );
 			if ( '' !== $action ) {
-				Subscriptions::process_status_change( $subscription_id, $action );
+				$result = Subscriptions::process_status_change( $subscription_id, $action );
+				if ( in_array( $action, array( 'cancelled', 'pe_cancelled' ), true ) && ( empty( $result['recorded'] ) || empty( $result['barrier'] ) ) ) {
+					wp_die( esc_html__( 'Cancellation could not be verified. Refresh this subscription and check its cancellation history before trying again.', 'subscription' ) );
+				}
+				if ( 'cancelled' === $action && 'cancelled' !== get_post_status( $subscription_id ) ) {
+					wp_die( esc_html__( 'The cancellation request is saved and future renewals are blocked. Ending access now is still pending. Refresh this subscription and retry End subscription now after the current operation finishes.', 'subscription' ) );
+				}
 			}
 
 			wp_safe_redirect( $form_action );
@@ -803,11 +810,11 @@ class Menu {
 				'value' => 'expired',
 			),
 			'pe_cancelled' => array(
-				'label' => __( 'Pending Cancel Subscription', 'subscription' ),
+				'label' => __( 'Schedule cancellation', 'subscription' ),
 				'value' => 'pe_cancelled',
 			),
 			'cancelled'    => array(
-				'label' => __( 'Cancel Subscription', 'subscription' ),
+				'label' => __( 'End subscription now', 'subscription' ),
 				'value' => 'cancelled',
 			),
 		);
@@ -819,10 +826,16 @@ class Menu {
 			'cancelled'    => array( 'active' ),
 			'expired'      => array( 'active', 'cancelled' ),
 			'completed'    => array( 'cancelled' ),
+			'on_hold'      => array( 'cancelled' ),
+			'on-hold'      => array( 'cancelled' ),
 		);
 
 		$status  = get_post_status( $subscription_id );
 		$actions = $map_actions[ $status ] ?? array();
+		$cancellation_receipt = CancellationEvidence::receipt( $subscription_id );
+		if ( 'none' !== $cancellation_receipt['state'] ) {
+			$actions = array_values( array_intersect( $actions, array( 'cancelled', 'pe_cancelled' ) ) );
+		}
 
 		// Gather subscription data for the view.
 		$subscription_data = Helper::get_subscription_data( $subscription_id );
