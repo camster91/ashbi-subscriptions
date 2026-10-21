@@ -56,3 +56,13 @@ documentation and integration checks. Only adjacent changelog entries conflicted
 All data and wording were explicitly fabricated locally. No live setting, order,
 subscription, provider account, mail or historical consent was touched. Hosted
 results apply to their exact PR heads and remain separate from these local checks.
+
+Hosted follow-up: the first source/candidate HPOS runs failed because the new
+admin integration fixture assumed a preloaded WooCommerce session. The local
+runner had called `wc_load_cart()` first and masked that setup difference. A
+local cold-session run reproduced the null-session error; the fixture now uses
+WooCommerce's standard `wc_load_cart()` inside the guarded disposable harness.
+The cold-session checkout check and changed-file coding check pass. This changes
+only test initialization, preserves the normal WooCommerce request lifecycle,
+and does not change customer billing, consent or cancellation behavior. Updated
+hosted results must be checked for the new head rather than reusing old passes.
