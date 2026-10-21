@@ -75,3 +75,9 @@ staging/release gates. No live provider requests were made during local checks.
 - Initial local checks exposed a misplaced selection block, an incomplete offline
   order double and a cancellation fixture using a customer as merchant. Corrected
   those before the final passing runs; no production safeguard was relaxed.
+
+The separate cart-based renewal attachment entry point
+`Helper::process_order_renewal()` is unchanged. Its checkout behavior when an
+unpaid early invoice already exists still needs a focused reproduction and
+pre-payment validation review. Passing the due-job tests is not evidence that
+every alternate checkout entry point shares this reuse behavior.
