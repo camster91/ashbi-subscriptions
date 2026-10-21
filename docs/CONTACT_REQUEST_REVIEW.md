@@ -150,3 +150,11 @@ directory allowed the standard activation sequence to pass. These checks use a
 fabricated validated-record interface, not Elementor Pro itself, and record only
 fabricated reply attestations. Installed-form, provider sandbox and actual message
 delivery verification remain separate staging gates.
+
+The first hosted lifecycle matrix passed HPOS off but failed HPOS on: setting
+WooCommerce's option before activation bypassed its table-creation hook, leaving
+fresh custom order tables absent. The local databases already had those tables.
+The workflow now uses WooCommerce's native `wc hpos sync` setup and `wc hpos
+enable`/`disable` commands on the fresh disposable store, preserving compatibility
+checks and the exact-data-store assertion. No production bootstrap, schema code
+or cancellation safeguard changes. Updated hosted results must validate this fix.
