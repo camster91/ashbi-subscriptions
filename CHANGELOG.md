@@ -91,9 +91,11 @@ documented here. The original vendor changelog remains at `plugin/changelog.txt`
 - Add review-only Continue, default draft creation and explicit activation/new
   product publication choices. Read back stored commitments before activation;
   never change a linked existing product's publication status. Draft linking no
-  longer enables its legacy subscription metadata. See
-  `docs/ONBOARDING_REVIEW.md` for side effects, non-transactional failure recovery,
-  local fixture versus hosted-runtime verification and rollback boundaries.
+  longer enables its legacy subscription metadata. Setting a draft duration
+  active from Plans also publishes that duration's draft product relations and
+  a still-draft plan. See `docs/ONBOARDING_REVIEW.md` for side effects,
+  non-transactional failure recovery, local fixture versus hosted-runtime
+  verification and rollback boundaries.
 
 - Validate renewal modes as exact `auto`/`manual` values rather than customer
   roles. Present corrupt modes resolve to Manual without option migration;

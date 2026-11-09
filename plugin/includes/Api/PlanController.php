@@ -466,8 +466,40 @@ class PlanController {
 			return $guard;
 		}
 		PlanRepository::update_plan( $id, $params );
+		$saved = PlanRepository::get_plan( $id );
+		if ( $saved && isset( $params['status'] ) && 'active' === sanitize_key( (string) $params['status'] ) && 'active' === ( $saved['status'] ?? '' ) ) {
+			$this->promote_activated_term( $saved );
+		}
 
-		return rest_ensure_response( PlanRepository::get_plan( $id ) );
+		return rest_ensure_response( $saved );
+	}
+
+	/**
+	 * Publish draft product links when a duration is activated from Plans.
+	 *
+	 * The duration toggle and duration editor set the term active. They do not
+	 * send relation status, and the plan list has no group-status control.
+	 * Storefront resolution requires the group, duration and relation to be
+	 * active, so activation promotes this duration's draft relations and a
+	 * still-draft group. Relations in any other status stay as they are.
+	 *
+	 * @param array $term Saved plan term.
+	 * @return void
+	 */
+	protected function promote_activated_term( array $term ) {
+		$group_id = (int) ( $term['plan_group_id'] ?? 0 );
+		$group    = $group_id ? PlanRepository::get_group( $group_id ) : null;
+		if ( $group && 'draft' === ( $group['status'] ?? '' ) ) {
+			PlanRepository::update_group( $group_id, array( 'status' => 'active' ) );
+		}
+
+		foreach ( PlanRepository::get_relations( (int) $term['id'] ) as $relation ) {
+			if ( 'draft' !== ( $relation['status'] ?? '' ) ) {
+				continue;
+			}
+			PlanRepository::update_relation( (int) $relation['id'], array( 'status' => 'active' ) );
+			$this->enable_relation_product( $relation );
+		}
 	}
 
 	/**

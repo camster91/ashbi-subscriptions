@@ -20,7 +20,13 @@
 4. Review the choices and tick the confirmation. **Create reviewed draft** is the
    default: group, durations and relations stay draft; a new product stays draft.
    Draft linking does not enable legacy subscription metadata on existing
-   products. The plan is not offered to customers until separately activated.
+   products. The plan is not offered to customers until a duration is set active
+   from Plans (the duration toggle, or saving the duration, which stores it as
+   active). That activation also publishes the duration's draft product
+   relations and, if the plan is still draft, the plan itself. Relations that
+   are not draft are left unchanged. Setting the duration back to draft does
+   not draft those relations again; storefront resolution still requires the
+   duration to be active. A new product's publication status is unchanged.
 5. Optionally select activation/publication. The review explains the effects and
    a second explicit confirmation precedes writes. All records are first staged
    as drafts and read back before activation. New products are published only

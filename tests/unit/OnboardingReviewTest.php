@@ -27,6 +27,27 @@ final class OnboardingReviewTest extends TestCase {
 		self::assertSame( 'yes', $result['active']['_subscrpt_one_time_enabled'] );
 		self::assertSame( 'active', $result['relation']['status'] );
 	}
+
+	/**
+	 * The Plans duration toggle is the normal activation path. It must publish
+	 * the draft plan and that duration's draft relations without a relation-status control.
+	 */
+	public function test_activating_a_draft_term_promotes_its_draft_relations(): void {
+		$result = $this->run_fixture( 'activate-term' );
+		self::assertSame( $result['before'], $result['while_draft'] );
+		self::assertSame( 'draft', $result['while_draft_relation']['status'] );
+		self::assertSame( 'draft', $result['while_draft_group']['status'] );
+		self::assertSame( 'active', $result['term']['status'] );
+		self::assertSame( 'active', $result['group']['status'] );
+		self::assertSame( 'active', $result['relation']['status'] );
+		self::assertSame( 'hidden', $result['other_relation']['status'] );
+		self::assertSame( 'draft', $result['other_term']['status'] );
+		self::assertSame( 'draft', $result['other_term_relation']['status'] );
+		self::assertSame( 'yes', $result['active']['_subscrpt_enabled'] );
+		self::assertSame( 'yes', $result['active']['_subscrpt_plan_connected_before'] );
+		self::assertSame( 'yes', $result['active']['_subscrpt_one_time_enabled'] );
+		self::assertSame( 'unlimited', $result['active']['_subscrpt_limit'] );
+	}
 	/** Real validation, serialization and checkout quote agree on the count. */
 	public function test_installment_commitment_is_validated_serialized_and_quoted(): void {
 		$result = $this->run_fixture( 'commitment' );

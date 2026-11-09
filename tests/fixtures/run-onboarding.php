@@ -6,6 +6,7 @@
  */
 
 // phpcs:disable WordPress.Files.FileName.NotHyphenatedLowercase,Generic.Files.OneObjectStructurePerFile.MultipleFound,Universal.Files.SeparateFunctionsFromOO.Mixed,Squiz.Commenting.FunctionComment.Missing,Squiz.Commenting.ClassComment.Missing,Squiz.Commenting.VariableComment.Missing,Generic.CodeAnalysis.UnusedFunctionParameter,WordPress.WP.GlobalVariablesOverride.Prohibited,WordPress.WP.AlternativeFunctions.json_encode_json_encode -- Isolated API doubles keep compatible signatures and fabricate globals/JSON without WordPress. Nonce/SQL security sniffs remain enabled.
+// phpcs:disable Generic.Classes.DuplicateClassName.Found -- Separate fixture processes each define the isolated doubles they execute.
 define( 'ABSPATH', '/' );
 define( 'ARRAY_A', 'ARRAY_A' );
 function current_time( $type, $gmt = false ) {
@@ -189,7 +190,7 @@ $_POST              = array(
 try {
 	if ( 'template' === $mode ) {
 		require dirname( __DIR__, 2 ) . '/plugin/includes/Admin/views/onboarding-wizard.php';
-	} elseif ( in_array( $mode, array( 'commitment', 'draft-relation', 'persistence' ), true ) ) {
+	} elseif ( in_array( $mode, array( 'commitment', 'draft-relation', 'persistence', 'activate-term' ), true ) ) {
 		require dirname( __DIR__, 2 ) . '/plugin/includes/Illuminate/Plans/PlanRepository.php';
 		require dirname( __DIR__, 2 ) . '/plugin/includes/Api/PlanController.php';
 		require dirname( __DIR__, 2 ) . '/plugin/includes/functions.php';
@@ -330,6 +331,114 @@ try {
 					'draft'    => $draft,
 					'active'   => $GLOBALS['metadata'][51],
 					'relation' => $repo::get_relation( $record['id'] ),
+				)
+			);
+			exit;
+		}
+		if ( 'activate-term' === $mode ) {
+			$GLOBALS['wpdb']         = new FixtureDB();
+			$repo                    = '\SpringDevs\Subscription\Illuminate\Plans\PlanRepository';
+			$gid                     = $repo::insert_group(
+				array(
+					'title'        => 'Split',
+					'type'         => 3,
+					'product_type' => 1,
+					'status'       => 'draft',
+				)
+			);
+			$tid                     = $repo::insert_plan(
+				array(
+					'plan_group_id'     => $gid,
+					'title'             => 'Monthly',
+					'type'              => 3,
+					'status'            => 'draft',
+					'billing_frequency' => 1,
+					'billing_interval'  => 3,
+					'data'              => array( 'installment_count' => 3 ),
+				)
+			);
+			$other_tid               = $repo::insert_plan(
+				array(
+					'plan_group_id' => $gid,
+					'title'         => 'Yearly',
+					'type'          => 3,
+					'status'        => 'draft',
+					'data'          => array( 'installment_count' => 3 ),
+				)
+			);
+			$GLOBALS['metadata'][51] = array(
+				'_subscrpt_enabled'          => '',
+				'_subscrpt_one_time_enabled' => 'yes',
+			);
+			$before                  = $GLOBALS['metadata'][51];
+			$record                  = $controller->create_relation(
+				new WP_REST_Request(
+					array(
+						'plan_id' => $tid,
+						'oid'     => 51,
+						'vid'     => 0,
+						'type'    => 1,
+						'status'  => 'draft',
+						'data'    => array( 'regular_price' => '10.00' ),
+					)
+				)
+			);
+			$kept                    = $controller->create_relation(
+				new WP_REST_Request(
+					array(
+						'plan_id' => $tid,
+						'oid'     => 52,
+						'vid'     => 0,
+						'type'    => 1,
+						'status'  => 'hidden',
+						'data'    => array( 'regular_price' => '8.00' ),
+					)
+				)
+			);
+			$other                   = $controller->create_relation(
+				new WP_REST_Request(
+					array(
+						'plan_id' => $other_tid,
+						'oid'     => 51,
+						'vid'     => 0,
+						'type'    => 1,
+						'status'  => 'draft',
+						'data'    => array( 'regular_price' => '12.00' ),
+					)
+				)
+			);
+			$controller->update_term(
+				new WP_REST_Request(
+					array(
+						'id'    => $tid,
+						'title' => 'Monthly plan',
+					)
+				)
+			);
+			$while_draft          = $GLOBALS['metadata'][51];
+			$while_draft_relation = $repo::get_relation( $record['id'] );
+			$while_draft_group    = $repo::get_group( $gid );
+			$controller->update_term(
+				new WP_REST_Request(
+					array(
+						'id'     => $tid,
+						'status' => 'active',
+					)
+				)
+			);
+			print json_encode(
+				array(
+					'before'               => $before,
+					'while_draft'          => $while_draft,
+					'while_draft_relation' => $while_draft_relation,
+					'while_draft_group'    => $while_draft_group,
+					'active'               => $GLOBALS['metadata'][51],
+					'term'                 => $repo::get_plan( $tid ),
+					'group'                => $repo::get_group( $gid ),
+					'relation'             => $repo::get_relation( $record['id'] ),
+					'other_relation'       => $repo::get_relation( $kept['id'] ),
+					'other_term'           => $repo::get_plan( $other_tid ),
+					'other_term_relation'  => $repo::get_relation( $other['id'] ),
 				)
 			);
 			exit;

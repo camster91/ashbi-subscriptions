@@ -81,7 +81,9 @@ jobs:
       - name: Report inherited WordPress coding-standard debt
         run: |
           composer install --prefer-dist --no-interaction --no-progress
-          vendor/bin/phpcs --report=summary
+          # Inherited warnings stay in this log. They do not fail the advisory
+          # job; errors still do. The security-sensitive sniff job stays strict.
+          vendor/bin/phpcs --report=summary --runtime-set ignore_warnings_on_exit 1
 
   wordpress-integration:
     name: WordPress and WooCommerce integration (HPOS ${{ matrix.hpos }})

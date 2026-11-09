@@ -741,7 +741,7 @@
         }
       }, this);
       lines.push("Signup fee: 0. No free trial. Taxes, shipping and coupons are calculated at checkout, not included here.");
-      lines.push(intent.publish ? (intent.mode === "new" ? "Activate this plan and publish the new product after setup. Customers may purchase it." : "Activate this plan on the existing product. Its publication status, native prices and one-time settings will not change; an already published product may offer these subscriptions.") : "Create draft plan and durations. A new product stays draft; an existing product keeps its publication status. This plan is not offered to customers until activated separately.");
+      lines.push(intent.publish ? (intent.mode === "new" ? "Activate this plan and publish the new product after setup. Customers may purchase it." : "Activate this plan on the existing product. Its publication status, native prices and one-time settings will not change; an already published product may offer these subscriptions.") : "Create draft plan and durations. A new product stays draft; an existing product keeps its publication status. This plan is not offered to customers until a duration is set active, which also publishes that duration's draft product links.");
       $("#subscrpt-review-summary").text(lines.join("\n"));
       $("#subscrpt-review-confirm").prop("checked", false);
       $("#subscrpt-btn-create-reviewed").text(intent.publish ? "Activate reviewed plan" : "Create reviewed draft");
@@ -1102,7 +1102,7 @@
 
     showDone: function (productName) {
       $("#subscrpt-done-heading").text(this.intent.publish ? "Your plan is active." : "Your draft is saved.");
-      $("#subscrpt-done-summary").text(this.intent.publish ? (this.intent.mode === "new" ? "The plan is active and the new product is published. Checkout applies taxes, shipping and coupons." : "The plan is active. The existing product's publication status was not changed; storefront availability depends on that status.") : "The plan and durations are draft. A new product remains draft; an existing product's publication status was not changed. This plan is not offered to customers until activated separately.");
+      $("#subscrpt-done-summary").text(this.intent.publish ? (this.intent.mode === "new" ? "The plan is active and the new product is published. Checkout applies taxes, shipping and coupons." : "The plan is active. The existing product's publication status was not changed; storefront availability depends on that status.") : "The plan and durations are draft. A new product remains draft; an existing product's publication status was not changed. This plan is not offered to customers until a duration is set active, which also publishes that duration's draft product links.");
       if (productName) {
         $("#subscrpt-preview-prod").text(productName);
       }

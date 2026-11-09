@@ -444,7 +444,7 @@ $subscrpt_icon_plan = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 						</div>
 
 						<h1 class="wpsubs-p3-heading" id="subscrpt-done-heading"><?php esc_html_e( 'Your draft is saved.', 'subscription' ); ?></h1>
-						<p class="wpsubs-p3-subtext" id="subscrpt-done-summary"><?php esc_html_e( 'The plan is draft and is not offered to customers until activated separately.', 'subscription' ); ?></p>
+						<p class="wpsubs-p3-subtext" id="subscrpt-done-summary"><?php esc_html_e( 'The plan is draft and is not offered to customers until a duration is set active, which also publishes that duration\'s draft product links.', 'subscription' ); ?></p>
 
 						<p class="wpsubs-p3-what-now-label"><?php esc_html_e( 'WHAT NOW?', 'subscription' ); ?></p>
 
