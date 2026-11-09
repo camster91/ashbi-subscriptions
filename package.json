@@ -9,9 +9,13 @@
     "jsdom": "26.1.0"
   },
   "overrides": {
-    "qs": "6.16.0",
-    "simple-git": "4.0.2",
-    "js-yaml": "4.3.2"
+    "body-parser": "1.20.9",
+    "express": "4.22.3",
+    "fast-uri": "3.1.9",
+    "js-yaml": "4.3.2",
+    "qs": "6.16.2",
+    "rimraf": "6.1.4",
+    "simple-git": "4.0.2"
   },
   "scripts": {
     "env:start": "node --require ./scripts/wp-env-compat.cjs ./node_modules/@wordpress/env/bin/wp-env start",
