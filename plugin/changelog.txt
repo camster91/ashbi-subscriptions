@@ -1,5 +1,13 @@
 *** Ashbi Subscriptions Changelog ***
 
+2026-10-10 - version 2.2.0 (candidate; review pending)
+* Fix cancellation receipt accuracy, retain contractual export fields and guard admin status side effects.
+* new: Durable customer cancellation barriers, repair and private evidence export.
+* new: Opt-in approved contract snapshots and immutable order-bound acceptance.
+* fixed: Preserve renewal opt-outs and validate automatic/manual settings.
+* preserved: Update URI: false, legacy plugin identity and schema 1.6.0.
+* rollback: Retain cancellation protection and evidence; consult MIGRATION_1.6.0.md.
+
 2026-10-04 - version 2.1.2
 * fixed: Do not label cancelled, inactive or past subscription dates as upcoming renewals in admin details.
 * fixed: Prevent self-conflict at bootstrap and refuse conflicting activation cleanly.

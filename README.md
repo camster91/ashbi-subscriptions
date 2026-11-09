@@ -17,6 +17,12 @@ data and an exact database/package rollback rehearsal. Docker-backed gateway
 tests, gateway sandbox validation, and per-site client-clone reconciliation
 remain release gates.
 
+Merchant cancellation: open a subscription from **Ashbi Subscriptions**, choose
+**End subscription now** or **Schedule cancellation**, and read the saved result.
+A pending payment confirmation still needs review. Contact-form and email messages
+require a merchant to verify and act; saving a message does not cancel billing.
+See [merchant cancellation guidance](docs/MERCHANT_CANCELLATION.md).
+
 ## Core operating model
 
 The plugin's core responsibility is intentionally straightforward: retain a
@@ -39,7 +45,19 @@ order creation, not a requirement for a separate Ashbi payment platform.
 - Keep distributed derivative code GPL-2.0-or-later.
 - Never deploy payment lifecycle changes without automated integration tests and a staged renewal test.
 
-## Current release candidate
+## Parallel community-directory candidate
+
+A separately built community variant uses
+`ashbi-subscriptions/ashbi-subscriptions.php`, its own `ashbi-subscriptions`
+translation domain, and no Update URI header. It is not the GitHub in-place
+replacement ZIP and is not WordPress.org approved or hosted. Storage, hooks,
+REST namespaces, legacy aliases, and billing logic are preserved; deactivate
+Core/the GitHub fork before activating Community. Do not run them together.
+See [community package contracts and switching gates](docs/COMMUNITY_PACKAGE.md)
+for the exact build, English-only translation boundary, local verification,
+and pending real WordPress/Plugin Check/approval gates.
+
+## Current GitHub release candidate
 
 The plugin keeps the `subscription/` directory and `subscription.php` basename
 so it can replace the public plugin in place without changing WordPress's plugin
@@ -92,10 +110,14 @@ disabled, or not classified as sandbox/offline.
 
 ## Documentation
 
+- [Small-store workflow review and merchant procedure](docs/SMALL_STORE_REVIEW.md)
+- [Cancellation confirmation review filter](docs/CANCELLATION_REVIEW_FILTER.md)
 - [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
 - [Feature matrix](docs/FEATURE_MATRIX.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Security and payments](docs/SECURITY.md)
+- [Customer cancellation receipts](docs/PERSISTENT_CANCELLATION_RECEIPTS.md)
+- [Simple checkout consent and account routes](docs/SIMPLE_CONSENT_ACCOUNT_ROUTES.md)
 - [Database migration 1.5.0](docs/MIGRATION_1.5.0.md)
 - [Per-site staging rehearsal and rollback](docs/SITE_REHEARSAL_RUNBOOK.md)
 - [Public release checklist](docs/PUBLIC_RELEASE_CHECKLIST.md)

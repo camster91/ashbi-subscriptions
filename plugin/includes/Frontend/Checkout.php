@@ -83,10 +83,10 @@ class Checkout {
 			// Plan items are created by Frontend\PlanCheckout on `subscrpt_product_checkout`.
 			// below (resolution order: tied plan first, else classic meta). Skipping.
 			// them here keeps the classic path from creating a second subscription.
-			if ( $product->is_type( 'simple' ) && ! $order_item->get_meta( '_subscrpt_plan_id' ) ) {
+			if ( ( $product->is_type( 'simple' ) || $product->is_type( 'variation' ) ) && ! $order_item->get_meta( '_subscrpt_plan_id' ) ) {
 				// A plan product bought as One-Time carries no plan id — it is not a.
 				// subscription, so never record one for it.
-				$is_one_time = function_exists( 'subscrpt_product_has_plan' ) && subscrpt_product_has_plan( $product->get_id() );
+				$is_one_time = function_exists( 'subscrpt_product_has_plan' ) && subscrpt_product_has_plan( $order_item->get_product_id(), $variation_id );
 
 				if ( $product->is_enabled() && ! $is_one_time ) {
 					$renew_requested       = ! empty( $order_item->get_meta( '_renew_subscrpt' ) );
@@ -98,14 +98,15 @@ class Checkout {
 						throw new \Exception( esc_html__( 'The selected subscription cannot be renewed from this checkout.', 'subscription' ) );
 					}
 
-					$timing_option = $product->get_timing_option();
-					$trial         = $product->get_trial();
+					$frozen_contract = $order_item->get_meta( '_ashbi_contract_plan' );
+					$timing_option = is_array( $frozen_contract ) ? $frozen_contract['plan']['type'] : $product->get_timing_option();
+					$trial         = is_array( $frozen_contract ) ? $frozen_contract['plan']['trial'] : $product->get_trial();
 
 					wc_update_order_item_meta(
 						$order_item->get_id(),
 						'_subscrpt_meta',
 						array(
-							'time'  => 1,
+							'time'  => is_array( $frozen_contract ) ? $frozen_contract['plan']['time'] : $product->get_timing_per(),
 							'type'  => $timing_option,
 							'trial' => $trial,
 						)
@@ -129,7 +130,14 @@ class Checkout {
 					if ( $selected_subscription_id ) {
 						// product related.
 						update_post_meta( $selected_subscription_id, '_subscrpt_timing_option', $timing_option );
-						update_post_meta( $selected_subscription_id, '_subscrpt_price', $product->get_price() );
+						if ( is_array( $frozen_contract ) || $variation_id ) {
+							update_post_meta( $selected_subscription_id, '_subscrpt_timing_per', is_array( $frozen_contract ) ? (int) $frozen_contract['plan']['time'] : $product->get_timing_per() );
+						}
+						if ( $variation_id ) {
+							update_post_meta( $selected_subscription_id, '_subscrpt_product_id', $order_item->get_product_id() );
+							update_post_meta( $selected_subscription_id, '_subscrpt_variation_id', $variation_id );
+						}
+						update_post_meta( $selected_subscription_id, '_subscrpt_price', is_array( $frozen_contract ) ? $frozen_contract['plan']['price'] : $product->get_price() );
 						update_post_meta( $selected_subscription_id, '_subscrpt_user_cancel', $product->get_meta( '_subscrpt_user_cancel' ) );
 
 						// order related.

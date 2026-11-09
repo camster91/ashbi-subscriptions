@@ -7,6 +7,8 @@
 
 define( 'CONSENT_FIXTURE_BOOTSTRAP_ONLY', true );
 require __DIR__ . '/renewal-consent.php';
+// The common fixture loads real CancellationEvidence with healthy empty barrier
+// storage; deferred dispatch must still pass its production cancellation guard.
 $GLOBALS['consent_options']  = array(
 	'wp_subscription_renewal_process'   => 'auto',
 	'wp_subscription_stripe_auto_renew' => '1',

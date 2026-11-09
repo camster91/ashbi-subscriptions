@@ -15,8 +15,14 @@ if ( ! isset( $date_filter ) ) {
 if ( ! isset( $renewal_due ) ) {
 	$renewal_due = 0;
 }
+if ( ! isset( $cancellation_review ) ) {
+	$cancellation_review = false;
+}
+if ( ! isset( $review_error ) ) {
+	$review_error = '';
+}
 
-$filters_active = ! empty( $status ) || ! empty( $date_filter ) || ! empty( $search ) || ! empty( $renewal_due );
+$filters_active = ! empty( $status ) || ! empty( $date_filter ) || ! empty( $search ) || ! empty( $renewal_due ) || $cancellation_review;
 
 // The last twelve of the store's months, counted back from the 1st: stepping.
 // back from today skips a month on the 29th–31st (31 Oct − 1 month is 1 Oct).
@@ -38,6 +44,11 @@ for ( $i = 0; $i < 12; $i++ ) {
 		)
 	);
 	?>
+	<?php if ( $review_error ) : ?>
+		<div class="notice notice-error" role="alert"><p><?php echo esc_html( $review_error ); ?></p></div>
+	<?php elseif ( $cancellation_review ) : ?>
+		<div class="notice notice-warning" role="status"><p><?php esc_html_e( 'These subscriptions have recorded cancellation requests without confirmed results. Open each subscription and review its cancellation history and payment provider outcome. Contact-form messages and emails are not included in this view.', 'subscription' ); ?></p></div>
+	<?php endif; ?>
 
 	<form method="post" id="subscriptions-form">
 		<?php wp_nonce_field( 'subscrpt_list_action' ); ?>
@@ -132,6 +143,8 @@ for ( $i = 0; $i < 12; $i++ ) {
 			);
 			?>
 
+			<label><input type="checkbox" name="cancellation_review" value="1" <?php checked( $cancellation_review ); ?> /> <?php esc_html_e( 'Cancellation needs review', 'subscription' ); ?></label>
+
 			<div class="wpsubs-search">
 				<div class="wpsubs-input-wrap wpsubs-input-wrap--icon-l">
 					<svg class="wpsubs-input-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
@@ -144,7 +157,7 @@ for ( $i = 0; $i < 12; $i++ ) {
 			</button>
 
 			<?php if ( $filters_active ) : ?>
-				<a href="<?php echo esc_url( remove_query_arg( array( 'subscrpt_status', 'date_filter', 's', 'title', 'paged', 'renewal_due' ) ) ); ?>" class="wpsubs-btn wpsubs-btn--outline">
+				<a href="<?php echo esc_url( remove_query_arg( array( 'subscrpt_status', 'date_filter', 's', 'title', 'paged', 'renewal_due', 'cancellation_review' ) ) ); ?>" class="wpsubs-btn wpsubs-btn--outline">
 					<?php esc_html_e( 'Clear', 'subscription' ); ?>
 				</a>
 			<?php endif; ?>
@@ -266,8 +279,8 @@ for ( $i = 0; $i < 12; $i++ ) {
 						$grace_remaining = $subscription_data['grace_period']['remaining_days'] ?? 0;
 
 						// Amount + timing. Net of any discount that carries into renewals.
-						$quantity       = $order_item ? (int) $order_item->get_quantity() : 1;
-						$amount_totals  = SpringDevs\Subscription\Illuminate\Helper::get_subscription_display_totals( $subscription_id, $order_item );
+						$quantity       = $subscription_order_item ? (int) $subscription_order_item->get_quantity() : 1;
+						$amount_totals  = SpringDevs\Subscription\Illuminate\Helper::get_subscription_display_totals( $subscription_id, $subscription_order_item );
 						$price          = '' !== ( $subscription_data['price'] ?? '' ) ? (float) $amount_totals['total'] : '';
 						$price_full     = (float) $amount_totals['full_excl'] + $amount_totals['tax'] + $amount_totals['discount_tax'];
 						$has_discount   = (bool) $amount_totals['has_discount'];
@@ -422,8 +435,15 @@ for ( $i = 0; $i < 12; $i++ ) {
 						<td colspan="8">
 							<div class="wpsubs-empty">
 								<div class="wpsubs-empty__icon">📋</div>
-								<div class="wpsubs-empty__title"><?php esc_html_e( 'No subscriptions found', 'subscription' ); ?></div>
-								<div class="wpsubs-empty__desc"><?php esc_html_e( 'Subscriptions will appear here once customers complete checkout.', 'subscription' ); ?></div>
+								<?php if ( $review_error ) : ?>
+									<div class="wpsubs-empty__title"><?php esc_html_e( 'Cancellation review unavailable', 'subscription' ); ?></div>
+								<?php elseif ( $cancellation_review ) : ?>
+									<div class="wpsubs-empty__title"><?php esc_html_e( 'No cancellation requests match these filters', 'subscription' ); ?></div>
+									<div class="wpsubs-empty__desc"><?php esc_html_e( 'Check the support inbox and contact-form submissions separately.', 'subscription' ); ?></div>
+								<?php else : ?>
+									<div class="wpsubs-empty__title"><?php esc_html_e( 'No subscriptions found', 'subscription' ); ?></div>
+									<div class="wpsubs-empty__desc"><?php esc_html_e( 'Subscriptions will appear here once customers complete checkout.', 'subscription' ); ?></div>
+								<?php endif; ?>
 							</div>
 						</td>
 					</tr>

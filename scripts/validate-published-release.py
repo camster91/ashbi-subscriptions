@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Validate the immutable public RC; never build a substitute from source."""
+"""Validate an immutable historical ZIP or an explicitly identified source candidate."""
 import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import socket
@@ -16,6 +17,48 @@ REPO = Path(__file__).resolve().parent.parent
 RELEASE_URL = ('https://github.com/camster91/ashbi-subscriptions/releases/download/'
                'v2.1.2-rc.2/ashbi-subscriptions-2.1.2-rc.2.zip')
 RELEASE_SHA256 = 'd3021e5b019cafe2e1d149277b91509d2ba106355fb53d308e90d73774b4a054'
+HISTORICAL_FIXTURE_COMMIT = '45683b68787afa784775ef6b57c01568f33ed578'
+HISTORICAL_FIXTURE_SHA256 = '3b1ba8688be765febb51bfcaea6e6db70d0b5451274b3e81e4f1ec759f397e0b'
+
+
+def read_historical_fixture(repo, revision):
+    return subprocess.check_output(['git', '-C', str(repo), 'show', revision +
+                                    ':plugin/tests/integration/security-boundaries.php'])
+
+
+def prepare_historical_fixture(output, repo, read=read_historical_fixture):
+    """Use the release-era suite, never silently skip new feature assertions."""
+    source = read(repo, HISTORICAL_FIXTURE_COMMIT)
+    if hashlib.sha256(source).hexdigest() != HISTORICAL_FIXTURE_SHA256:
+        raise ValueError('Historical fixture checksum mismatch')
+    target = output / 'historical-integration'
+    target.mkdir(parents=True, exist_ok=False)
+    (target / 'security-boundaries.php').write_bytes(source)
+    return target
+
+
+def validate_candidate_package(package, expected, plugin):
+    """Candidate bytes must match the current source, including missing/extra files."""
+    manifest = validate_package(package, expected)
+    excluded = {'assets/images/logo.png', 'assets/images/logo-title.svg',
+                'assets/images/icons/subscription-20.png', 'assets/images/icons/subscription-20-gray.png',
+                'assets/images/subscrpt-ads.png', 'assets/images/woocommerce.png', 'assets/images/icons/crown.svg'}
+    source = {}
+    for path in plugin.rglob('*'):
+        if path.is_symlink():
+            raise ValueError('Candidate source contains a symbolic link')
+        name = path.relative_to(plugin).as_posix()
+        if (not path.is_file() or '.DS_Store' in path.parts or 'tests' in path.relative_to(plugin).parts
+                or name in excluded or name.startswith(('assets/images/integrations/', 'assets/images/other_plugins/'))):
+            continue
+        source['subscription/' + name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    if manifest != source:
+        raise ValueError('Candidate ZIP does not match exact source members')
+    header = (plugin / 'subscription.php').read_text(encoding='utf-8')
+    version = re.search(r'^ \* Version: (\S+)', header, re.MULTILINE)
+    if not version:
+        raise ValueError('Candidate version is unavailable')
+    return manifest, version.group(1)
 
 
 PLUGIN_CHECK_URL = 'https://downloads.wordpress.org/plugin/plugin-check.2.1.0.zip'
@@ -72,8 +115,20 @@ def preflight(mode, inherited=None, occupied=port_in_use):
         raise RuntimeError('Refusing occupied port 8888; never stop an unknown environment')
 
 
-def prepare_environment(output, repo):
-    owned = output / 'owned-environment'
+def owned_path(output, profile='published'):
+    if profile == 'community':
+        # Stable host-derived identity, never a pointer read from writable reports.
+        identity = hashlib.sha256(str(output.resolve()).encode('utf-8')).hexdigest()
+        return output.resolve().parent / ('.ashbi-community-owned-' + identity)
+    if profile != 'published':
+        raise ValueError('Unknown package validation profile')
+    return output / 'owned-environment'
+
+
+def prepare_environment(output, repo, integration_dir=None, profile='published'):
+    if profile not in ('published', 'community'):
+        raise ValueError('Unknown package validation profile')
+    owned = owned_path(output, profile)
     owned.mkdir()  # Refuse to adopt an earlier or unknown environment.
     mu = owned / 'mu'
     mu.mkdir()
@@ -82,12 +137,13 @@ def prepare_environment(output, repo):
     shutil.copyfile(repo / 'scripts/package-validation/safety.php', mu / 'safety.php')
     config = owned / '.wp-env.json'
     config.write_text(json.dumps({
-        'plugins': [
+        'plugins': [] if profile == 'community' else [
             'https://downloads.wordpress.org/plugin/woocommerce.latest-stable.zip',
             'https://downloads.wordpress.org/plugin/woocommerce-gateway-stripe.latest-stable.zip'],
         'phpVersion': '8.2', 'port': 8888, 'testsEnvironment': False,
         'mappings': {'wp-content/mu-plugins': mu.as_posix(),
-                     'ashbi-integration': (repo / 'plugin/tests/integration').as_posix(),
+                     'wp-content/ashbi-recovery': (repo / 'tools').as_posix(),
+                     'ashbi-integration': (integration_dir or repo / 'plugin/tests/integration').as_posix(),
                      'ashbi-tools': (repo / 'scripts/package-validation').as_posix(),
                      'ashbi-release': output.as_posix()},
         'config': {'WP_ENVIRONMENT_TYPE': 'local', 'WP_DEBUG': True, 'WP_DEBUG_LOG': True,
@@ -95,11 +151,11 @@ def prepare_environment(output, repo):
     }, indent=2), encoding='utf-8')
     marker = {'id': str(uuid.uuid4()), 'config_sha256': hashlib.sha256(config.read_bytes()).hexdigest()}
     (owned / '.ashbi-owned.json').write_text(json.dumps(marker), encoding='utf-8')
-    return environment_details(output, repo)
+    return environment_details(output, repo, profile)
 
 
-def environment_details(output, repo=REPO):
-    owned = output / 'owned-environment'
+def environment_details(output, repo=REPO, profile='published'):
+    owned = owned_path(output, profile)
     config = owned / '.wp-env.json'
     marker = json.loads((owned / '.ashbi-owned.json').read_text(encoding='utf-8'))
     if (str(uuid.UUID(marker['id'])) != marker['id'] or owned.is_symlink()
@@ -119,30 +175,65 @@ def environment_details(output, repo=REPO):
                             COMPOSE_DISABLE_ENV_FILE='1')}
 
 
-def cleanup_environment(output, invoke=subprocess.run):
-    if not (output / 'owned-environment').exists():
+def cleanup_environment(output, invoke=subprocess.run, profile='published'):
+    if not owned_path(output, profile).exists():
         return
-    env = environment_details(output)
+    env = environment_details(output, profile=profile)
     invoke(env['command'] + ['cleanup', '--force'], env=env['environ'],
            check=True, timeout=180)
     shutil.rmtree(env['owned'])
 
 
-def run_environment(env, output, mode, kind, invoke=subprocess.run):
+def run_environment(env, output, mode, kind, invoke=subprocess.run, profile='published', defer_cleanup=False, target='published'):
+    if profile not in ('published', 'community'):
+        raise ValueError('Unknown package validation profile')
+    root = 'ashbi-subscriptions' if profile == 'community' else 'subscription'
+    main = root + '.php'
+    journal = []
+
+    def captured(value):
+        return value.decode('utf-8', errors='replace') if isinstance(value, bytes) else (value or '')
+
+    def record(command, result):
+        if profile != 'community':
+            return
+        journal.append({'command': command, 'exit_code': getattr(result, 'returncode', None),
+                        'timed_out': isinstance(result, subprocess.TimeoutExpired)})
+        (output / 'wp-env-commands.json').write_text(json.dumps(journal, indent=2), encoding='utf-8')
+        for stream in ('stdout', 'stderr'):
+            with (output / ('wp-env.' + stream)).open('a', encoding='utf-8') as report:
+                report.write(captured(getattr(result, stream, None)))
     def run(args, **kwargs):
         if args[0] == 'run':
             args = args[:2] + ['--'] + args[2:]
-        return invoke(env['command'] + args, env=env['environ'],
-                      timeout=600, check=kwargs.pop('check', True), **kwargs)
+        command = env['command'] + args
+        if profile == 'community':
+            kwargs.update(capture_output=True, text=True)
+        try:
+            result = invoke(command, env=env['environ'],
+                            timeout=600, check=kwargs.pop('check', True), **kwargs)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+            record(command, error)
+            raise
+        record(command, result)
+        return result
 
     try:
         run(['start'])
+        if profile == 'community':
+            # Core Requires Plugins resolves the official directory slug, not URL-derived roots.
+            for dependency in ('woocommerce', 'woocommerce-gateway-stripe'):
+                run(['run', 'cli', 'wp', 'plugin', 'install', dependency, '--activate'])
+                run(['run', 'cli', 'wp', 'plugin', 'is-active', dependency])
         run(['run', 'cli', 'wp', 'plugin', 'install', '/var/www/html/ashbi-release/candidate.zip', '--activate'])
-        run(['run', 'cli', 'wp', 'plugin', 'is-active', 'subscription'])
+        run(['run', 'cli', 'wp', 'plugin', 'is-active', root])
         run(['run', 'cli', 'wp', 'option', 'update', 'woocommerce_custom_orders_table_enabled',
              'yes' if mode == 'on' else 'no'])
         run(['run', 'cli', 'wp', 'eval-file', '/var/www/html/ashbi-tools/verify-installed.php'])
-        run(['run', 'cli', 'wp', 'eval-file', '/var/www/html/ashbi-tools/verify-update-isolation.php'])
+        if profile == 'community':
+            shutil.copyfile(output / 'installed-package.json', output / 'installed-package.before.json')
+        if profile == 'published':
+            run(['run', 'cli', 'wp', 'eval-file', '/var/www/html/ashbi-tools/verify-update-isolation.php'])
         if kind == 'plugin-check':
             run(['run', 'cli', 'wp', 'plugin', 'install',
                  '/var/www/html/ashbi-release/plugin-check.zip', '--activate'])
@@ -153,14 +244,20 @@ def run_environment(env, output, mode, kind, invoke=subprocess.run):
         if kind == 'runtime':
             try:
                 result = invoke([shutil.which('bash') or 'bash', (REPO / 'scripts/run-integration.sh').as_posix()],
-                                env=dict(os.environ, ASHBI_INTEGRATION_PLUGIN_DIR='subscription',
+                                env=dict(env['environ'], ASHBI_INTEGRATION_PLUGIN_DIR=root,
+                                         ASHBI_INTEGRATION_PLUGIN_MAIN=main,
                                          ASHBI_PLAYGROUND_HPOS_MODE=mode),
                                 check=True, capture_output=True, text=True, timeout=600)
-            except subprocess.CalledProcessError as error:
-                (output / 'integration.stdout').write_text(error.stdout or '', encoding='utf-8')
-                (output / 'integration.stderr').write_text(error.stderr or '', encoding='utf-8')
-                (output / 'integration.exit-code').write_text(str(error.returncode), encoding='utf-8')
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+                if profile != 'community' and isinstance(error, subprocess.TimeoutExpired):
+                    raise
+                (output / 'integration.stdout').write_text(captured(error.stdout), encoding='utf-8')
+                (output / 'integration.stderr').write_text(captured(error.stderr), encoding='utf-8')
+                (output / 'integration.exit-code').write_text(str(getattr(error, 'returncode', 'timeout')), encoding='utf-8')
                 raise
+            if profile == 'community':
+                (output / 'integration.stdout').write_text(result.stdout, encoding='utf-8')
+                (output / 'integration.stderr').write_text(result.stderr or '', encoding='utf-8')
             (output / 'integration.json').write_text(result.stdout, encoding='utf-8')
             (output / 'integration.exit-code').write_text(str(result.returncode), encoding='utf-8')
             response = json.loads(result.stdout)
@@ -169,12 +266,16 @@ def run_environment(env, output, mode, kind, invoke=subprocess.run):
             trace = response.get('data', {})
             if trace.get('hpos_mode') != mode or trace.get('hpos_enabled') is not (mode == 'on'):
                 raise RuntimeError('Integration callback did not verify the requested actual datastore')
+            if target == 'candidate' and (trace.get('billing_consent_readbacks') is not True
+                                          or trace.get('cancellation_mysql_contention') is not True
+                                          or trace.get('classic_variation_cart_lifecycle') is not True):
+                raise RuntimeError('Candidate integration did not verify current feature coverage')
         else:
             run(['run', 'cli', 'bash', '-c',
                  'wp plugin list-checks --format=json > /var/www/html/ashbi-release/plugin-check-checks.json'])
             # Redirect inside Docker so wp-env progress output cannot corrupt JSON.
             result = run(['run', 'cli', 'bash', '-c',
-                          'wp plugin check subscription/subscription.php --format=strict-json --fields=file,line,column,type,code,message,docs '
+                          f'wp plugin check {root}/{main} --format=strict-json --fields=file,line,column,type,code,message,docs '
                           '--require=./wp-content/plugins/plugin-check/cli.php '
                           '> /var/www/html/ashbi-release/plugin-check.stdout 2> /var/www/html/ashbi-release/plugin-check.stderr; '
                           'status=$?; printf "%s\\n" "$status" > /var/www/html/ashbi-release/plugin-check.exit-code; '
@@ -193,8 +294,11 @@ def run_environment(env, output, mode, kind, invoke=subprocess.run):
                 'format': 'strict-json; raw stdout preserved; exact no-findings success line normalized to []'}), encoding='utf-8')
             print('Plugin Check diagnostic exit status:', status, flush=True)
         run(['run', 'cli', 'wp', 'eval-file', '/var/www/html/ashbi-tools/verify-installed.php'])
+        if profile == 'community':
+            shutil.copyfile(output / 'installed-package.json', output / 'installed-package.after.json')
     finally:
-        cleanup_environment(output, invoke)
+        if not defer_cleanup:
+            cleanup_environment(output, invoke, profile=profile)
 
 
 def main():
@@ -204,6 +308,9 @@ def main():
     parser.add_argument('--hpos', choices=('off', 'on'), default='off')
     parser.add_argument('--kind', choices=('runtime', 'plugin-check'), default='runtime')
     parser.add_argument('--package', type=Path, help='Verify only: local exact public ZIP')
+    parser.add_argument('--target', choices=('published', 'candidate'), default='published')
+    parser.add_argument('--expected-sha256', help='Required checksum for a local source candidate')
+    parser.add_argument('--source-commit', help='Required exact current checkout commit for a source candidate')
     args = parser.parse_args()
     output = args.output.resolve()
     if args.operation == 'cleanup':
@@ -222,15 +329,31 @@ def main():
     if published.stdout.strip():
         raise RuntimeError('Refusing an unknown Docker environment publishing port 8888')
     output.mkdir(parents=True, exist_ok=False)
-    subprocess.run(['curl', '--fail', '--location', '--silent', '--show-error', '--max-time', '120',
-                    '--output', (output / 'candidate.zip').as_posix(), RELEASE_URL], check=True, timeout=150)
-    manifest = validate_package(output / 'candidate.zip', RELEASE_SHA256)
+    if args.target == 'candidate':
+        if (not args.package or not args.expected_sha256 or not args.source_commit
+                or not re.fullmatch('[0-9a-f]{64}', args.expected_sha256)
+                or not re.fullmatch('[0-9a-f]{40}', args.source_commit)):
+            parser.error('Candidate run requires package, expected-sha256 and source-commit')
+        actual_commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPO, text=True).strip()
+        if actual_commit != args.source_commit:
+            raise ValueError('Candidate checkout commit mismatch')
+        shutil.copyfile(args.package.resolve(), output / 'candidate.zip')
+        manifest, version = validate_candidate_package(output / 'candidate.zip', args.expected_sha256, REPO / 'plugin')
+        digest, url, fixture_dir = args.expected_sha256, None, REPO / 'plugin/tests/integration'
+    else:
+        subprocess.run(['curl', '--fail', '--location', '--silent', '--show-error', '--max-time', '120',
+                        '--output', (output / 'candidate.zip').as_posix(), RELEASE_URL], check=True, timeout=150)
+        manifest = validate_package(output / 'candidate.zip', RELEASE_SHA256)
+        digest, url, version = RELEASE_SHA256, RELEASE_URL, '2.1.2'
+        fixture_dir = prepare_historical_fixture(output, REPO)
     (output / 'members.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
     (output / 'provenance.json').write_text(json.dumps({
-        'url': RELEASE_URL, 'sha256': RELEASE_SHA256, 'installed_basename': 'subscription/subscription.php',
+        'target': args.target, 'url': url, 'sha256': digest, 'version': version,
+        'source_commit': args.source_commit if args.target == 'candidate' else HISTORICAL_FIXTURE_COMMIT,
+        'installed_basename': 'subscription/subscription.php',
         'hpos': args.hpos, 'kind': args.kind,
         'harness_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPO, text=True).strip(),
-        'fixture_sha256': hashlib.sha256((REPO / 'plugin/tests/integration/security-boundaries.php').read_bytes()).hexdigest()
+        'fixture_sha256': hashlib.sha256((fixture_dir / 'security-boundaries.php').read_bytes()).hexdigest()
     }, indent=2), encoding='utf-8')
     if args.kind == 'plugin-check':
         subprocess.run(['curl', '--fail', '--location', '--silent', '--show-error', '--max-time', '120',
@@ -239,8 +362,8 @@ def main():
             raise ValueError('Official Plugin Check checksum mismatch')
         (output / 'plugin-check-provenance.json').write_text(json.dumps({
             'url': PLUGIN_CHECK_URL, 'sha256': PLUGIN_CHECK_SHA256, 'version': '2.1.0'}), encoding='utf-8')
-    env = prepare_environment(output, REPO)
-    run_environment(env, output, args.hpos, args.kind)
+    env = prepare_environment(output, REPO, fixture_dir)
+    run_environment(env, output, args.hpos, args.kind, target=args.target)
 
 
 if __name__ == '__main__':

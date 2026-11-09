@@ -176,7 +176,11 @@
         // tears down mid-navigation.
         reported = true;
 
-        post("subscrpt_record_cancellation_feedback").then(proceed).catch(proceed);
+	    // An optional survey endpoint must not strand an authorized cancellation.
+	    Promise.race([
+	      post("subscrpt_record_cancellation_feedback"),
+	      new Promise(function (resolve) { window.setTimeout(resolve, 5000); }),
+	    ]).then(proceed).catch(proceed);
       });
     }
   });

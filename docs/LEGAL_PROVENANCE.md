@@ -36,9 +36,13 @@ redistribute premium code.
 - Give each client the corresponding source code for the version supplied.
 - Preserve license notices for Composer, JavaScript, fonts, and other assets.
 - Document every imported upstream release and every local modification.
-- Use independent Ashbi branding while retaining the legacy plugin directory,
-  main filename, text domain, hooks, slugs, option keys, and database identifiers
-  required for in-place upgrades and existing-store data compatibility.
+- The GitHub compatibility distribution uses independent Ashbi branding while
+  retaining the legacy plugin directory, main filename, text domain, hooks,
+  slugs, option keys, and database identifiers required for in-place upgrades
+  and existing-store data compatibility. The separately built community
+  directory candidate has a new basename/text domain but retains all business
+  storage/hooks/aliases; see `COMMUNITY_PACKAGE.md`. Neither variant authorizes
+  redistribution of private source or removal of legal notices.
 - Do not distribute imported upstream or third-party provider logo assets; the
   release packager excludes unused image directories and built-in integration
   cards use neutral initials for nominative compatibility references.

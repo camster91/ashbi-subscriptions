@@ -15,6 +15,13 @@ class WC_Order extends ConsentOrder {
 	public function has_status( $status ) {
 		return 'pending' === $status;
 	}
+	/** Pending invoices have no verified payment.
+	 *
+	 * @return bool
+	 */
+	public function is_paid() {
+		return false;
+	}
 	/** This offline order still needs payment.
 	 *
 	 * @return bool

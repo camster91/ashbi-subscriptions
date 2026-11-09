@@ -158,7 +158,7 @@ class MyAccount {
 					'label' => $label,
 					'class' => 'cancel',
 				);
-			} elseif ( trim( $status ) === trim( 'pe_cancelled' ) ) {
+			} elseif ( ActionController::can_reactivate_subscription( $id ) ) {
 				$label = __( 'Reactivate', 'subscription' );
 				$label = apply_filters( 'subscrpt_split_payment_button_text', $label, 'reactivate', $id, $status );
 

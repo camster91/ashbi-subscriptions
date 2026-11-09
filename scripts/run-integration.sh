@@ -2,11 +2,18 @@
 set -euo pipefail
 
 plugin_dir="${ASHBI_INTEGRATION_PLUGIN_DIR:-plugin}"
-if [[ "$plugin_dir" != plugin && "$plugin_dir" != subscription ]]; then
-	printf 'ASHBI_INTEGRATION_PLUGIN_DIR must be plugin or subscription.\n' >&2
+case "$plugin_dir" in
+	plugin|subscription) expected_main='subscription.php' ;;
+	ashbi-subscriptions) expected_main='ashbi-subscriptions.php' ;;
+	*) printf 'Unknown ASHBI_INTEGRATION_PLUGIN_DIR.\n' >&2; exit 2 ;;
+esac
+plugin_main="${ASHBI_INTEGRATION_PLUGIN_MAIN:-$expected_main}"
+if [[ "$plugin_main" != "$expected_main" ]]; then
+	printf 'Invalid integration root/main pair.\n' >&2
 	exit 2
 fi
-plugin_status_prefix="\"plugin\":\"${plugin_dir}\\\\/subscription\",\"status\":"
+plugin_slug="${plugin_main%.php}"
+plugin_status_prefix="\"plugin\":\"${plugin_dir}\\\\/${plugin_slug}\",\"status\":"
 
 cookie_jar="$(mktemp)"
 callback_cookie_jar="$(mktemp)"
@@ -59,7 +66,7 @@ for attempt in $(seq 1 60); do
 			curl --silent --show-error --max-time 30 --cookie "$cookie_jar" --cookie-jar "$cookie_jar" \
 				-H "X-WP-Nonce: $rest_nonce" \
 				--data 'status=active' \
-				"http://localhost:8888/wp-json/wp/v2/plugins/${plugin_dir}/subscription" >/dev/null || true
+				"http://localhost:8888/wp-json/wp/v2/plugins/${plugin_dir}/${plugin_slug}" >/dev/null || true
 			activation_attempted=true
 		fi
 

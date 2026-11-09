@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+<title id="title">Ashbi Subscriptions</title><desc id="desc">An ivory A and an orange return arrow on a dark square.</desc>
+<rect width="256" height="256" rx="52" fill="#211c1a"/>
+<path d="m58 184 51-115h26l51 115h-29l-10-25H95l-10 25Zm47-50h32l-16-40Z" fill="#fff8ed"/>
+<path d="M64 80a77 77 0 0 1 132 13" fill="none" stroke="#ff6a2b" stroke-width="12" stroke-linecap="round"/>
+<path d="m174 90 26 14 10-28" fill="none" stroke="#ff6a2b" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

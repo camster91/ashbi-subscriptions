@@ -46,10 +46,15 @@ $badge_mod_map = array(
 );
 $badge_mod     = $badge_mod_map[ $subscrpt_status ] ?? 'expired';
 
-$is_grace_period = isset( $subscription_data['grace_period'] );
-$grace_remaining = $subscription_data['grace_period']['remaining_days'] ?? 0;
-$grace_end_date  = $subscription_data['grace_period']['end_date'] ?? '';
-$grace_end_date  = ! empty( $grace_end_date ) ? wp_date( get_option( 'date_format' ) . ' - ' . get_option( 'time_format' ), strtotime( $grace_end_date ) ) : '';
+$cancellation_receipt = $cancellation_receipt ?? array(
+	'state'      => 'none',
+	'access_end' => 0,
+);
+$has_cancellation     = 'none' !== $cancellation_receipt['state'];
+$is_grace_period      = ! $has_cancellation && ! in_array( $subscrpt_status, array( 'pe_cancelled', 'cancelled' ), true ) && isset( $subscription_data['grace_period'] );
+$grace_remaining      = $subscription_data['grace_period']['remaining_days'] ?? 0;
+$grace_end_date       = $subscription_data['grace_period']['end_date'] ?? '';
+$grace_end_date       = ! empty( $grace_end_date ) ? wp_date( get_option( 'date_format' ) . ' - ' . get_option( 'time_format' ), strtotime( $grace_end_date ) ) : '';
 
 if ( $is_grace_period && $grace_remaining > 0 ) {
 	$badge_mod      = 'active';
@@ -75,7 +80,8 @@ $next_payment_date      = false !== $next_payment_timestamp ? wp_date( get_optio
 $has_upcoming_renewal = 'active' === $subscrpt_status
 	&& false !== $next_payment_timestamp
 	&& $next_payment_timestamp > time()
-	&& ! $is_grace_period;
+	&& ! $is_grace_period
+	&& ! $has_cancellation;
 
 $header_badge = '<span class="wpsubs-badge wpsubs-badge--' . esc_attr( $badge_mod ) . '">' . esc_html( $verbose_status );
 if ( $is_grace_period && $grace_remaining > 0 ) {
@@ -118,6 +124,31 @@ if ( $has_upcoming_renewal ) {
 		),
 		'modifier'    => 'active',
 	);
+}
+
+if ( $has_cancellation ) {
+	$state_notice = array(
+		'title'       => __( 'Cancellation saved', 'subscription' ),
+		'description' => __( 'Future renewals are blocked. Payment confirmation is pending: check the cancellation history and payment provider before closing this request.', 'subscription' ),
+		'modifier'    => 'pending',
+	);
+	if ( 'confirmed' === $cancellation_receipt['state'] ) {
+		$state_notice['description'] = __( 'Future renewals are blocked. Billing cancellation is confirmed.', 'subscription' );
+	}
+	if ( 'unavailable' === $cancellation_receipt['state'] ) {
+		$state_notice['title']       = __( 'Cancellation records unavailable', 'subscription' );
+		$state_notice['description'] = __( 'The saved cancellation result could not be verified. Refresh this page and check the cancellation history and payment provider before closing this request.', 'subscription' );
+	} elseif ( 'cancelled' === $subscrpt_status ) {
+		$state_notice['description'] .= ' ' . __( 'Access has ended.', 'subscription' );
+	} elseif ( 'pe_cancelled' === $subscrpt_status && $cancellation_receipt['access_end'] > time() ) {
+		$state_notice['description'] .= ' ' . sprintf(
+			/* translators: %s: access end in the store timezone. */
+			__( 'Access is scheduled to end on %s.', 'subscription' ),
+			wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $cancellation_receipt['access_end'] )
+		);
+	} else {
+		$state_notice['description'] .= ' ' . __( 'The access change is still pending. Refresh this page after the current operation finishes.', 'subscription' );
+	}
 }
 
 // Top summary tiles — pulled from the info rows so extension-filtered values stay.
@@ -163,9 +194,9 @@ if ( ! empty( $subscription_data['start_date'] ) ) {
 		'value' => esc_html( wp_date( get_option( 'date_format' ), strtotime( $subscription_data['start_date'] ) ) ),
 	);
 }
-// Always show the Next Payment tile; dash when there is no next date.
+// Keep the stored date visible without promising another payment after cancellation.
 $summary_tiles[] = array(
-	'label' => __( 'Next Payment', 'subscription' ),
+	'label' => $has_cancellation ? __( 'Stored renewal date', 'subscription' ) : __( 'Next Payment', 'subscription' ),
 	'value' => $next_payment_date
 		? esc_html( $next_payment_date )
 		: '-',
@@ -732,6 +763,7 @@ try {
 						<?php echo wp_kses_post( $header_badge ); ?>
 					</div>
 					<?php if ( ! empty( $actions ) ) : ?>
+						<p class="subscrpt-muted"><?php esc_html_e( 'Cancellation stops future renewals. Schedule cancellation uses the store cancellation timing; End subscription now also ends access immediately. Check the saved result for payment confirmation.', 'subscription' ); ?></p>
 						<form method="post" action="<?php echo esc_url( $form_action ); ?>" class="subscrpt-action-form">
 							<?php wp_nonce_field( 'subscrpt_order_action_nonce', 'subscrpt_order_action_nonce_field' ); ?>
 							<?php
@@ -744,7 +776,7 @@ try {
 									);
 									if ( 'cancelled' === $actions_data[ $action_slug ]['value'] ) {
 										$action_option['danger']  = true;
-										$action_option['confirm'] = __( 'Cancel this subscription? This changes its renewal status.', 'subscription' );
+										$action_option['confirm'] = __( 'End access now and stop future renewals? Any payment already in progress still needs review.', 'subscription' );
 									}
 									$action_options[] = $action_option;
 								}

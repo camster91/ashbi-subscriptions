@@ -117,6 +117,12 @@ function wc_get_logger() {
  */
 function esc_html( $text ) {
 	return $text; }
+/** Generate a fixed request identity for isolated controller actions.
+ *
+ * @return string
+ */
+function wp_generate_uuid4() {
+	return '00000000-0000-4000-8000-000000000099'; }
 /** Fixture translation.
  *
  * @param string $text Text.
@@ -150,13 +156,18 @@ set_consent_fixture_global(
 		 * @var string
 		 */
 		public $prefix = 'wp_';
+		/** Healthy local database: the barrier table exists and contains no rows.
+		 *
+		 * @var string
+		 */
+		public $last_error = '';
 		/** Return query.
 		 *
 		 * @param string $query Query.
-		 * @param mixed  $args Args.
+		 * @param mixed  ...$args Args.
 		 * @return string
 		 */
-		public function prepare( $query, $args ) {
+		public function prepare( $query, ...$args ) {
 			$GLOBALS['fixture_query_args'][] = $args;
 			return $query; }
 		/** Pretend this renewal order owns its local canonical claim.
@@ -166,6 +177,12 @@ set_consent_fixture_global(
 		 */
 		public function get_var( $query ) {
 			$GLOBALS['fixture_queries'][] = $query;
+			$this->last_error = '';
+			// Exercise the real barrier reader against healthy empty storage. Locks
+			// and the pre-existing renewal claim continue returning success below.
+			if ( 0 === strpos( $query, 'SELECT subscription_id FROM' ) ) {
+				return null;
+			}
 			return 1; }
 		/** Return the local subscription relation for direct dispatch.
 		 *
@@ -182,6 +199,7 @@ define( 'DAY_IN_SECONDS', 86400 );
 require dirname( __DIR__, 2 ) . '/plugin/includes/functions.php';
 require dirname( __DIR__, 2 ) . '/plugin/includes/Illuminate/Helper.php';
 require dirname( __DIR__, 2 ) . '/plugin/includes/Illuminate/RenewalClaim.php';
+require dirname( __DIR__, 2 ) . '/plugin/includes/Illuminate/CancellationEvidence.php';
 require dirname( __DIR__, 2 ) . '/plugin/includes/Illuminate/Gateways/Stripe/Stripe.php';
 
 /** Instrument real dispatch entry without a provider implementation. */

@@ -27,6 +27,7 @@ class Frontend {
 	 * Frontend constructor.
 	 */
 	public function __construct() {
+		new \SpringDevs\Subscription\Frontend\ContractConsent();
 		new Product();
 		// Ashbi owns the storefront plan UI, including multi-plan selectors and.
 		// per-variation terms. It is not delegated to the legacy paid plugin.
