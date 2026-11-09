@@ -4,16 +4,23 @@
   "devDependencies": {
     "@babel/parser": "^7.29.8",
     "@babel/traverse": "7.29.8",
-    "@wordpress/env": "11.15.0"
+    "@wordpress/env": "11.15.0",
+    "jquery": "3.7.1",
+    "jsdom": "26.1.0"
   },
   "overrides": {
-    "qs": "6.16.0",
-    "simple-git": "4.0.2",
-    "js-yaml": "4.3.2"
+    "body-parser": "1.20.9",
+    "express": "4.22.3",
+    "fast-uri": "3.1.9",
+    "js-yaml": "4.3.2",
+    "qs": "6.16.2",
+    "rimraf": "6.1.4",
+    "simple-git": "4.0.2"
   },
   "scripts": {
     "env:start": "node --require ./scripts/wp-env-compat.cjs ./node_modules/@wordpress/env/bin/wp-env start",
     "test:tooling": "node scripts/test-integration-tooling.cjs",
+    "test:onboarding": "node --test scripts/test-onboarding.cjs",
     "env:start:playground": "bash scripts/start-playground.sh",
     "env:stop": "bash scripts/stop-playground.sh",
     "lint:js": "node scripts/test-javascript.mjs",

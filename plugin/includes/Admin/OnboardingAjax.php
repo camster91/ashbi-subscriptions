@@ -27,6 +27,7 @@ class OnboardingAjax {
 	 */
 	public function __construct() {
 		add_action( 'wp_ajax_subscrpt_create_wizard_product', array( $this, 'create_wizard_product' ) );
+		add_action( 'wp_ajax_subscrpt_publish_wizard_product', array( $this, 'publish_wizard_product' ) );
 		add_action( 'wp_ajax_subscrpt_reset_wizard', array( $this, 'reset_wizard' ) );
 	}
 
@@ -48,7 +49,7 @@ class OnboardingAjax {
 		$product_price = isset( $_POST['product_price'] ) ? sanitize_text_field( wp_unslash( $_POST['product_price'] ) ) : '';
 
 		if ( '' === trim( $product_name ) ) {
-			wp_send_json_error( array( 'message' => __( 'Product name is required.', 'subscription' ) ) );
+			wp_send_json_error( array( 'message' => __( 'Product name is required.', 'subscription' ), 'safe_retry' => true ) );
 		}
 
 		$product = new \WC_Product_Simple();
@@ -56,7 +57,9 @@ class OnboardingAjax {
 		if ( '' !== trim( $product_price ) ) {
 			$product->set_regular_price( wc_format_decimal( $product_price ) );
 		}
-		$product->set_status( 'publish' );
+		// Creation is always staged, even for older wizard clients.
+		$product->set_status( 'draft' );
+		$product->update_meta_data( '_subscrpt_wizard_created_by', get_current_user_id() );
 		$product_id = $product->save();
 
 		if ( ! $product_id ) {
@@ -68,8 +71,33 @@ class OnboardingAjax {
 				'product_id'    => $product_id,
 				'product_name'  => $product_name,
 				'product_price' => $product_price,
+				'product_status' => wc_get_product( $product_id )->get_status(),
 			)
 		);
+	}
+
+	/**
+	 * Publish an explicitly confirmed new wizard product, never a linked existing one.
+	 *
+	 * @return void Sends JSON.
+	 */
+	public function publish_wizard_product() {
+		check_ajax_referer( 'subscrpt_onboarding_wizard', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'subscription' ) ), 403 );
+		}
+		$product_id = isset( $_POST['product_id'] ) ? absint( $_POST['product_id'] ) : 0;
+		$confirmed  = isset( $_POST['publish_confirmed'] ) ? sanitize_text_field( wp_unslash( $_POST['publish_confirmed'] ) ) : '';
+		$product    = $product_id ? wc_get_product( $product_id ) : false;
+		if ( 'yes' !== $confirmed || ! $product || (int) $product->get_meta( '_subscrpt_wizard_created_by' ) !== get_current_user_id() ) {
+			wp_send_json_error( array( 'message' => __( 'Only an explicitly confirmed new wizard product may be published.', 'subscription' ), 'safe_retry' => true ), 400 );
+		}
+		$product->set_status( 'publish' );
+		if ( ! $product->save() ) {
+			wp_send_json_error( array( 'message' => __( 'Publication could not be confirmed. Check the product before retrying.', 'subscription' ) ), 500 );
+		}
+		$saved = wc_get_product( $product_id );
+		wp_send_json_success( array( 'product_id' => $product_id, 'product_status' => $saved ? $saved->get_status() : '' ) );
 	}
 
 	/**
